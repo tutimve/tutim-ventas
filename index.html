@@ -1262,6 +1262,9 @@ function getPedidosSeleccionados(){
 
 function marcarEnviados(pedidos){
   var ahora = new Date().toLocaleString('es-VE');
+  var verTodos=(VEND.codigo==='00'||VEND.codigo==='01');
+
+  // Actualizar estado en memoria (PEDIDOS local, para refrescar pantalla)
   for(var i=0;i<pedidos.length;i++){
     for(var j=0;j<PEDIDOS.length;j++){
       if(PEDIDOS[j].id===pedidos[i].id){
@@ -1272,8 +1275,54 @@ function marcarEnviados(pedidos){
       }
     }
   }
-  guardarLS();
-  renderHistorial();
+
+  if(verTodos){
+    // Agrupar pedidos por su vendedor REAL y guardar cada uno en su propio documento
+    var porVendedor={};
+    for(var i=0;i<pedidos.length;i++){
+      var vid=pedidos[i].vendedor;
+      if(!vid) continue;
+      if(!porVendedor[vid]) porVendedor[vid]=[];
+      porVendedor[vid].push(pedidos[i].id);
+    }
+    var vendIds=Object.keys(porVendedor);
+    var pendientes=vendIds.length;
+    if(pendientes===0){ renderHistorial(); return; }
+    for(var v=0;v<vendIds.length;v++){
+      (function(vid){
+        db.collection('vendedores').doc(vid).get().then(function(doc){
+          if(doc.exists){
+            var data=doc.data();
+            var pedsVid=[];
+            try{ pedsVid=data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
+            var idsAMarcar=porVendedor[vid];
+            for(var k=0;k<pedsVid.length;k++){
+              if(idsAMarcar.indexOf(pedsVid[k].id)>=0 || idsAMarcar.indexOf(String(pedsVid[k].id))>=0){
+                pedsVid[k].enviado=true;
+                pedsVid[k].fechaEnvio=ahora;
+              }
+            }
+            db.collection('vendedores').doc(vid).set({
+              pedidos: JSON.stringify(pedsVid),
+              visitas: data.visitas||'[]',
+              clientesNuevos: data.clientesNuevos||'[]',
+              ultimaActualizacion: new Date().toISOString()
+            }).then(function(){
+              pendientes--;
+              if(pendientes<=0) renderHistorial();
+            });
+          } else {
+            pendientes--;
+            if(pendientes<=0) renderHistorial();
+          }
+        });
+      })(vendIds[v]);
+    }
+  } else {
+    // Vendedor normal: guardar normalmente en su propio documento
+    guardarLS();
+    renderHistorial();
+  }
 }
 
 function renderPedidoCard(p){
