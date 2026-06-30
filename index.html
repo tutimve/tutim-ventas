@@ -290,11 +290,11 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <option value="03">Credito 15 dias</option>
           <option value="04">Credito 30 dias</option>
         </select></div>
-      <div class="field"><label>Facturacion</label>
+      <div class="field"><label>Tipo de Pedido</label>
         <select id="fFact">
-          <option value="fiscal">100% Factura fiscal</option>
-          <option value="nota">Solo Nota de Entrega</option>
-          <option value="mixto" selected>50% Fiscal / 50% N.Entrega</option>
+          <option value="tipo1">Tipo 1</option>
+          <option value="tipo2">Tipo 2</option>
+          <option value="tipo3" selected>Tipo 3</option>
         </select></div>
       <div class="field"><label>Promo / bonificacion</label>
         <input type="text" id="fPromo" placeholder="Ej: 67x5 gratis"></div>
@@ -378,11 +378,9 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="card-title">Precios de referencia</div>
       <div class="row-sb"><span class="k">Precio 1 - Bolsa</span><span class="v">$111.60</span></div>
       <div class="row-sb"><span class="k">Precio 2 - Bolsa</span><span class="v">$106.20</span></div>
-      <div class="row-sb precio3" style="display:none"><span class="k">Precio 3 - Bolsa</span><span class="v">$100.80</span></div>
       <div class="divider"></div>
       <div class="row-sb"><span class="k">Precio 1 - Display</span><span class="v">$74.40</span></div>
       <div class="row-sb"><span class="k">Precio 2 - Display</span><span class="v">$70.80</span></div>
-      <div class="row-sb precio3" style="display:none"><span class="k">Precio 3 - Display</span><span class="v">$67.20</span></div>
     </div>
       <div class="row-sb"><span class="k">Promo 67x5</span><span class="v">+5 unid gratis</span></div>
       <div class="row-sb"><span class="k">Desc. pronto pago (7d)</span><span class="v">5%</span></div>
@@ -490,7 +488,7 @@ var PRODUCTOS_PROFIT = [{"id": "GU9000", "nombre": "GOMA DE MASCAR SABOR A MENTA
 var WA_RESUMEN='584149157233';var WA_DETALLE='584149164433';
 var STOCK_REAL = {"GU9000":41,"GU9001":5084,"GU9010":44,"GU9011":45};
 var FP_LABELS = {"01":"Contado","02":"Credito 7 dias","03":"Credito 15 dias","04":"Credito 30 dias"};
-var FF_LABELS = {"fiscal":"100% Fiscal","nota":"Solo N.Entrega","mixto":"50% Fiscal / 50% N.Entrega"};
+var FF_LABELS = {"tipo1":"Tipo 1","tipo2":"Tipo 2","tipo3":"Tipo 3"};
 var PROD_COLORES = {"GU9000":"#1B2A6B","GU9001":"#2E44A8","GU9010":"#A32D2D","GU9011":"#C0392B"};
 
 var PRODUCTOS = PRODUCTOS_PROFIT.map(function(a) {
@@ -1076,7 +1074,7 @@ function abrirConfirmar(){
     itemsHtml+
     '<div class="divider"></div>'+
     '<div class="row-sb"><span class="k">Pago</span><span class="v">'+(FP_LABELS[fp]||fp)+'</span></div>'+
-    '<div class="row-sb"><span class="k">Facturacion</span><span class="v">'+(FF_LABELS[ff]||ff)+'</span></div>'+
+    '<div class="row-sb"><span class="k">Tipo de Pedido</span><span class="v">'+(FF_LABELS[ff]||ff)+'</span></div>'+
     '<div class="row-sb"><span class="k">Lista precio</span><span class="v">Precio '+lp+'</span></div>'+
     (promo?'<div class="row-sb"><span class="k">Promo</span><span class="v">'+promo+'</span></div>':'')+
     (obs?'<div class="row-sb"><span class="k">Obs</span><span class="v">'+obs+'</span></div>':'');
@@ -1459,6 +1457,7 @@ function enviarDetalleWA(){
     var lp=ped.listaPrecio||1;
     var esNvo=ped.cliente.esNuevo||(ped.cliente.id&&ped.cliente.id.toString().indexOf('NEW-')===0);
     lineas.push('--- PEDIDO '+(i+1)+' ---');
+    lineas.push('Vendedor: '+(ped.vendedorNombre||ped.vendedor||VEND.nombre)+' (VEND '+(ped.vendedor||VEND.codigo)+')');
     lineas.push('Cliente: '+ped.cliente.nombre+(esNvo?' (NUEVO)':''));
     lineas.push('RIF: '+ped.cliente.rif);
     if(ped.cliente.tel) lineas.push('Tel: '+ped.cliente.tel);
@@ -1615,7 +1614,7 @@ function enviarCorreo(){
     lineas.push('                        SUBTOTAL'+('      '+ped.bultos).slice(-6)+'          '+'    $'+ped.monto.toFixed(2));
     lineas.push('');
     lineas.push('Pago     : '+(ped.formaPagoL||ped.formaPago));
-    lineas.push('Fact.    : '+(ped.tipoFactL||ped.tipoFact));
+    lineas.push('Tipo     : '+(ped.tipoFactL||ped.tipoFact));
     lineas.push('Precio   : Lista '+lp);
     if(ped.promo) lineas.push('Promo    : '+ped.promo);
     if(ped.obs)   lineas.push('Obs.     : '+ped.obs);
@@ -1723,12 +1722,6 @@ function renderVisitas(){
 }
 
 function renderInv(){
-  // Mostrar precio3 solo para VEND 00 y 01
-  var verP3 = VEND && (VEND.codigo==='00' || VEND.codigo==='01');
-  var p3rows = document.querySelectorAll('.precio3');
-  for(var i=0;i<p3rows.length;i++){
-    p3rows[i].style.display = verP3 ? 'flex' : 'none';
-  }
   var maxS=1;
   for(var i=0;i<PRODUCTOS.length;i++){if(PRODUCTOS[i].stock>maxS) maxS=PRODUCTOS[i].stock;}
   var html='';
