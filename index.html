@@ -703,6 +703,29 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
+<!-- MODAL EDITAR CLIENTE -->
+<div class="modal-bg" id="mEditarCli">
+  <div class="modal">
+    <h3 id="mCliTitulo">Editar cliente</h3>
+    <div class="field"><label>Codigo</label><input type="text" id="cCodigo" disabled></div>
+    <div class="field"><label>Nombre</label><input type="text" id="cNombre" placeholder="Nombre / razon social"></div>
+    <div class="field"><label>RIF</label><input type="text" id="cRif" placeholder="J-xxxxxxxx-x"></div>
+    <div class="field"><label>Telefono</label><input type="text" id="cTel" placeholder="04xx-xxxxxxx"></div>
+    <div class="field"><label>Direccion / Ciudad</label><input type="text" id="cDir" placeholder="Ciudad o direccion"></div>
+    <div class="field"><label>Vendedor asignado (CO_VEN)</label><input type="text" id="cVen" placeholder="Ej: 01" maxlength="3"></div>
+    <div class="field"><label>Estado</label>
+      <select id="cInactivo">
+        <option value="false">Activo</option>
+        <option value="true">Inactivo</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p" onclick="guardarClienteAdmin()">Guardar</button>
+      <button class="btn btn-s" onclick="cerrarModal('mEditarCli')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL RESET -->
 <div class="modal-bg" id="mReset">
   <div class="modal">
@@ -885,7 +908,7 @@ function cargarDesdeFirebase(vendId, callback){
 }
 
 function cargarTodosFirebase(callback){
-  var vendIds=['00','01','02','03','04','05','06','07','08','09','11','12','13','14','15','16','17','18'];
+  var vendIds=['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
   try{
     // Cargar cada vendedor individualmente para asegurar que no se pierda ninguno
     var promesas=[];
@@ -897,20 +920,21 @@ function cargarTodosFirebase(callback){
       for(var i=0;i<docs.length;i++){
         var doc=docs[i];
         var vid=vendIds[i];
-        // Buscar nombre ANTES del closure para evitar el bug de var en loops
-        var vObjLoop=null;
-        for(var vi=0;vi<VENDEDORES.length;vi++){
-          if(VENDEDORES[vi].id===vid){vObjLoop=VENDEDORES[vi];break;}
-        }
-        var vNomLoop=vObjLoop?vObjLoop.nombre:'VEND '+vid;
         if(doc.exists){
           var data=doc.data();
           var peds=[];
           try{ peds=data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
           for(var j=0;j<peds.length;j++){
             if(!peds[j].vendedor) peds[j].vendedor=vid;
-            // Asignar nombre correcto usando la variable capturada fuera del closure
-            peds[j].vendedorNombre=vNomLoop;
+            // Buscar el nombre segun el codigo REAL guardado en el pedido
+            // (no segun el documento de Firestore de donde se leyo),
+            // para que el encabezado y el nombre siempre coincidan
+            var pedVid=peds[j].vendedor;
+            var vObjPed=null;
+            for(var vk=0;vk<VENDEDORES.length;vk++){
+              if(VENDEDORES[vk].id===pedVid){vObjPed=VENDEDORES[vk];break;}
+            }
+            peds[j].vendedorNombre = vObjPed ? vObjPed.nombre : ('VEND '+pedVid);
             todos.push(peds[j]);
           }
         }
@@ -940,7 +964,7 @@ function cargarTodosFirebase(callback){
 function cargarClientesNuevosTodos(){
   // Para VEND 00 y 01: cargar clientes nuevos de TODOS los vendedores
   var todos=[];
-  var vendIds=['02','03','04','05','06','07','08','09','11','12','13','14','15','16','17','18'];
+  var vendIds=['02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
   for(var i=0;i<vendIds.length;i++){
     var cv=lsGet('tc_new_'+vendIds[i],[]);
     for(var j=0;j<cv.length;j++) todos.push(cv[j]);
@@ -1060,7 +1084,7 @@ function ocultarLoading(){
 function cargarPedidosTodos(){
   // Para VEND 00 y 01: cargar pedidos de TODOS los vendedores
   var todos=[];
-  var vendIds=['00','01','02','03','04','05','06','07','08','09','11','12','13','14','15','16','17','18'];
+  var vendIds=['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
   for(var i=0;i<vendIds.length;i++){
     var vid=vendIds[i];
     var pv=lsGet('tp_'+vid,[]);
@@ -1242,7 +1266,11 @@ function verificarLogin(){
     PEDIDOS=[]; VISITAS=[]; CLIENTES=[];
     VEND={codigo:v.id,nombre:v.nombre,zona:v.zona||'',tel:v.tel,clave:v.clave};
     try{ localStorage.setItem('tutim_vend', JSON.stringify(VEND)); }catch(e){}
-    mostrarApp();
+    // Recargar inventario, precios y promoción desde Firebase antes de mostrar la app
+    // (sin esto, se quedaban los valores por defecto del código y no lo guardado)
+    cargarConfigFirebase(function(){
+      mostrarApp();
+    });
   } else {
     document.getElementById('loginError').style.display='block';
     setTimeout(function(){pinActual='';actualizarPinDots();document.getElementById('loginError').style.display='none';},1200);
@@ -1539,6 +1567,7 @@ function onCambioFormaPago(){
 function esNuevo(cli){return cli&&(cli.esNuevo||(cli.id&&cli.id.toString().indexOf('NEW-')===0));}
 
 function abrirConfirmar(){
+  _pedidoYaGuardado=false; // permitir un nuevo guardado para este pedido
   var lp=parseInt(document.getElementById('listaPrecio').value)||1;
   var fp=document.getElementById('fPago').value;
   var ff=document.getElementById('fFact').value;
@@ -1619,6 +1648,7 @@ function abrirConfirmar(){
   document.getElementById('mConfirmar').classList.add('open');
 }
 
+var _pedidoYaGuardado=false;
 function crearObj(){
   var t=pedido.temp;
   var montoFinal=0,bultosFinal=0;
@@ -1646,6 +1676,8 @@ function crearObj(){
 }
 
 function soloGuardar(){
+  if(_pedidoYaGuardado){ cerrarModal('mConfirmar'); goScreen('historial'); return; }
+  _pedidoYaGuardado=true;
   PEDIDOS.unshift(crearObj());guardarLS();
   cerrarModal('mConfirmar');actualizarMetricas();
   toast('Pedido guardado');goScreen('historial');
@@ -1680,6 +1712,8 @@ function construirMsgWA(){
 }
 
 function enviarWA(){
+  if(_pedidoYaGuardado){ cerrarModal('mConfirmar'); goScreen('historial'); return; }
+  _pedidoYaGuardado=true;
   PEDIDOS.unshift(crearObj());guardarLS();
   cerrarModal('mConfirmar');actualizarMetricas();
   window.open('https://wa.me/'+WA_RESUMEN+'?text='+encodeURIComponent(construirMsgWA()),'_blank');
@@ -2621,36 +2655,46 @@ function guardarEdicion(){
       break;
     }
   }
-  // Re-guardar en el storage del vendedor del pedido
-  var pedVend = PEDIDOS[0] ? PEDIDOS[0].vendedor : VEND.codigo;
-  // Buscar el pedido editado y guardarlo en su vendedor
+  var pedEditado = null;
   for(var x=0;x<PEDIDOS.length;x++){
     if(String(PEDIDOS[x].id)===String(pedidoEditandoId)){
-      pedVend=PEDIDOS[x].vendedor; break;
+      pedEditado=PEDIDOS[x]; break;
     }
   }
-  var verTodos2=(VEND.codigo==='00'||VEND.codigo==='01');
+  if(!pedEditado){ cerrarModal('mEditarPedido'); return; }
+  var pedVend = pedEditado.vendedor;
+  var verTodos2=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
   if(verTodos2){
-    // Guardar en el storage del vendedor original
-    var pedsPropios=lsGet('tp_'+pedVend,[]);
-    for(var x=0;x<pedsPropios.length;x++){
-      if(String(pedsPropios[x].id)===String(pedidoEditandoId)){
-        for(var y=0;y<PEDIDOS.length;y++){
-          if(String(PEDIDOS[y].id)===String(pedidoEditandoId)){
-            pedsPropios[x]=PEDIDOS[y]; break;
-          }
-        }
-        break;
+    // Guardar directamente en el documento de Firebase del vendedor real del pedido
+    db.collection('vendedores').doc(pedVend).get().then(function(doc){
+      var data = doc.exists ? doc.data() : {};
+      var pedsPropios = [];
+      try{ pedsPropios = data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
+      var found=false;
+      for(var x=0;x<pedsPropios.length;x++){
+        if(String(pedsPropios[x].id)===String(pedidoEditandoId)){ pedsPropios[x]=pedEditado; found=true; break; }
       }
-    }
-    lsSet('tp_'+pedVend,pedsPropios);
-    PEDIDOS=cargarPedidosTodos();
+      if(!found) pedsPropios.push(pedEditado);
+      db.collection('vendedores').doc(pedVend).set({
+        pedidos: JSON.stringify(pedsPropios),
+        visitas: data.visitas||'[]',
+        clientesNuevos: data.clientesNuevos||'[]',
+        ultimaActualizacion: new Date().toISOString()
+      }).then(function(){
+        cargarTodosFirebase(function(todos){
+          PEDIDOS = todos;
+          cerrarModal('mEditarPedido');
+          renderHistorial();
+          toast('Pedido actualizado');
+        });
+      }).catch(function(){ toast('Error guardando la edicion en Firebase'); });
+    }).catch(function(){ toast('Error al editar: no se pudo conectar con Firebase'); });
   } else {
     guardarLS();
+    cerrarModal('mEditarPedido');
+    renderHistorial();
+    toast('Pedido actualizado');
   }
-  cerrarModal('mEditarPedido');
-  renderHistorial();
-  toast('Pedido actualizado');
 }
 
 function confirmarAnular(pid){
@@ -2662,37 +2706,51 @@ function confirmarAnular(pid){
 function ejecutarAnular(){
   var motivo = document.getElementById('motivoAnulacion').value.trim();
   if(!motivo){ toast('Indica el motivo de anulacion'); return; }
+  var pedObj = null;
   for(var i=0;i<PEDIDOS.length;i++){
     if(String(PEDIDOS[i].id)===String(pedidoAnulandoId)){
       PEDIDOS[i].anulado = true;
       PEDIDOS[i].motivoAnulacion = motivo;
       PEDIDOS[i].fechaAnulacion = new Date().toLocaleString('es-VE');
       PEDIDOS[i]._sel = false;
+      pedObj = PEDIDOS[i];
       break;
     }
   }
-  var verTodosA=(VEND.codigo==='00'||VEND.codigo==='01');
+  if(!pedObj){ cerrarModal('mAnular'); return; }
+  var verTodosA=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
   if(verTodosA){
-    for(var a=0;a<PEDIDOS.length;a++){
-      if(String(PEDIDOS[a].id)===String(pedidoAnulandoId)){
-        var pvA=PEDIDOS[a].vendedor;
-        var pedsA=lsGet('tp_'+pvA,[]);
-        for(var b=0;b<pedsA.length;b++){
-          if(String(pedsA[b].id)===String(pedidoAnulandoId)){
-            pedsA[b]=PEDIDOS[a]; break;
-          }
-        }
-        lsSet('tp_'+pvA,pedsA);
-        break;
+    // Guardar directamente en el documento de Firebase del vendedor real del pedido
+    var pvA = pedObj.vendedor;
+    db.collection('vendedores').doc(pvA).get().then(function(doc){
+      var data = doc.exists ? doc.data() : {};
+      var pedsA = [];
+      try{ pedsA = data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
+      var found=false;
+      for(var b=0;b<pedsA.length;b++){
+        if(String(pedsA[b].id)===String(pedidoAnulandoId)){ pedsA[b]=pedObj; found=true; break; }
       }
-    }
-    PEDIDOS=cargarPedidosTodos();
+      if(!found) pedsA.push(pedObj);
+      db.collection('vendedores').doc(pvA).set({
+        pedidos: JSON.stringify(pedsA),
+        visitas: data.visitas||'[]',
+        clientesNuevos: data.clientesNuevos||'[]',
+        ultimaActualizacion: new Date().toISOString()
+      }).then(function(){
+        cargarTodosFirebase(function(todos){
+          PEDIDOS = todos;
+          cerrarModal('mAnular');
+          renderHistorial();
+          toast('Pedido anulado');
+        });
+      }).catch(function(){ toast('Error guardando la anulacion en Firebase'); });
+    }).catch(function(){ toast('Error al anular: no se pudo conectar con Firebase'); });
   } else {
     guardarLS();
+    cerrarModal('mAnular');
+    renderHistorial();
+    toast('Pedido anulado');
   }
-  cerrarModal('mAnular');
-  renderHistorial();
-  toast('Pedido anulado');
 }
 
 function confirmarReset(){
@@ -2704,7 +2762,7 @@ function ejecutarReset(){
   var texto=document.getElementById('resetConfirmText').value.trim();
   if(texto!=='CONFIRMAR'){toast('Escribe CONFIRMAR para continuar');return;}
   // Borrar pedidos de todos los vendedores
-  var vendIds=['00','01','02','03','04','05','06','07','08','09','11','12','13','14','15','16','17','18'];
+  var vendIds=['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
   for(var i=0;i<vendIds.length;i++){
     try{localStorage.removeItem('tp_'+vendIds[i]);}catch(e){}
     try{localStorage.removeItem('tv_'+vendIds[i]);}catch(e){}
@@ -2804,7 +2862,7 @@ function renderReportes(){
     '<div class="metric"><div class="num" style="font-size:22px">'+totPedidos+'</div><div class="lbl">Pedidos</div></div>'+
     '<div class="metric"><div class="num" style="font-size:22px">'+totBultos+'</div><div class="lbl">Bultos</div></div>'+
     '<div class="metric"><div class="num" style="font-size:22px;color:var(--verde)">$'+totMonto.toFixed(0)+'</div><div class="lbl">Monto total</div></div>'+
-    '<div class="metric"><div class="num" style="font-size:22px;color:var(--ambar)">'+clientesRepeat+'</div><div class="lbl">Clientes con 2+ pedidos</div></div>'+
+    '<div class="metric"><div class="num" style="font-size:22px;color:var(--ambar)">'+clientesRepeat+'</div><div class="lbl">Clientes con Recompra</div></div>'+
     '</div>';
 
   // Reporte 2: Por vendedor
@@ -2849,7 +2907,7 @@ function renderReportes(){
           '<div class="metric" style="padding:8px"><div class="num" style="font-size:18px">'+vd.pedidos+'</div><div class="lbl">Pedidos</div></div>'+
           '<div class="metric" style="padding:8px"><div class="num" style="font-size:18px">'+vd.bultos+'</div><div class="lbl">Bultos</div></div>'+
           '<div class="metric" style="padding:8px"><div class="num" style="font-size:16px;color:var(--verde)">$'+vd.monto.toFixed(0)+'</div><div class="lbl">Monto</div></div>'+
-          '<div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--ambar)">'+cliRepeat2+'</div><div class="lbl">Cli. repetidos</div></div>'+
+          '<div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--ambar)">'+cliRepeat2+'</div><div class="lbl">Cli. Recompra</div></div>'+
         '</div>'+
         '</div>';
     }
@@ -2897,7 +2955,7 @@ function rptConstruirTexto(){
     var rep=Object.keys(vd.clientes).filter(function(k){return vd.clientes[k]>1;}).length;
     lineas.push('--- VEND '+vid2+' - '+vd.nombre+' ---');
     lineas.push('  Pedidos: '+vd.pedidos+' | Bultos: '+vd.bultos+' | Monto: $'+vd.monto.toFixed(2));
-    lineas.push('  Clientes con 2+ pedidos: '+rep);
+    lineas.push('  Clientes con Recompra: '+rep);
     lineas.push('');
   }
   return lineas.join(N);
@@ -2936,7 +2994,7 @@ function rptExcel(){
   var xls='<html><head><meta charset="UTF-8"><style>th{background:#1B2A6B;color:#fff;padding:7px 10px}td{padding:6px 10px;border-bottom:1px solid #eee}</style></head><body>'+
     '<h2>REPORTE TUTIM - '+periodo+'</h2>'+
     '<p><b>Total:</b> '+totP+' pedidos | '+totB+' bultos | $'+totM.toFixed(2)+'</p>'+
-    '<table><tr><th>Cod</th><th>Vendedor</th><th>Pedidos</th><th>Bultos</th><th>Monto</th><th>Cli. Repetidos</th></tr>'+filas+
+    '<table><tr><th>Cod</th><th>Vendedor</th><th>Pedidos</th><th>Bultos</th><th>Monto</th><th>Cli. Recompra</th></tr>'+filas+
     '<tr style="background:#E8EBF8"><td colspan="2" style="font-weight:bold">TOTAL</td><td style="text-align:center;font-weight:bold">'+totP+'</td><td style="text-align:center;font-weight:bold">'+totB+'</td><td style="text-align:right;font-weight:bold;color:#1B2A6B">$'+totM.toFixed(2)+'</td><td></td></tr>'+
     '</table></body></html>';
   var blob=new Blob([xls],{type:'application/vnd.ms-excel'});
@@ -3442,13 +3500,56 @@ function renderAdminCli(){
   var html='';
   for(var i=0;i<lista.length;i++){
     var c=lista[i];
-    html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:13px">' +
-      '<span style="font-weight:600;color:var(--azul)">'+c.id+'</span> — '+c.nombre+
-      '<div style="font-size:11px;color:#888">'+c.rif+(c.vendedor?' | VEND '+c.vendedor:'')+'</div>' +
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borde);font-size:13px">' +
+      '<div style="flex:1">' +
+        '<span style="font-weight:600;color:var(--azul)">'+c.id+'</span> — '+c.nombre+(c.inactivo?' <span style="color:var(--rojo);font-size:11px">(inactivo)</span>':'')+
+        '<div style="font-size:11px;color:#888">'+c.rif+(c.vendedor?' | VEND '+c.vendedor:'')+'</div>' +
+      '</div>' +
+      '<button onclick="editarCliente(&quot;'+c.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Editar</button>' +
     '</div>';
   }
   if(lista.length===0) html='<div style="color:#aaa;text-align:center;padding:12px">Sin resultados</div>';
   document.getElementById('adminCliList').innerHTML=html;
+}
+
+function editarCliente(id){
+  var c=CLIENTES_PROFIT.find(function(x){return x.id===id;});
+  if(!c) return;
+  document.getElementById('mCliTitulo').textContent='Editar cliente '+id;
+  document.getElementById('cCodigo').value=c.id;
+  document.getElementById('cNombre').value=c.nombre||'';
+  document.getElementById('cRif').value=c.rif||'';
+  document.getElementById('cTel').value=c.tel||'';
+  document.getElementById('cDir').value=c.dir||'';
+  document.getElementById('cVen').value=c.vendedor||'';
+  document.getElementById('cInactivo').value=c.inactivo?'true':'false';
+  document.getElementById('mEditarCli').classList.add('open');
+}
+
+function guardarClienteAdmin(){
+  var id=document.getElementById('cCodigo').value.trim();
+  var nombre=document.getElementById('cNombre').value.trim();
+  if(!id||!nombre){toast('Codigo y nombre son obligatorios');return;}
+  var c=CLIENTES_PROFIT.find(function(x){return x.id===id;});
+  if(!c) return;
+  c.nombre=nombre;
+  c.rif=document.getElementById('cRif').value.trim();
+  c.tel=document.getElementById('cTel').value.trim();
+  c.dir=document.getElementById('cDir').value.trim();
+  c.vendedor=document.getElementById('cVen').value.trim();
+  c.inactivo=(document.getElementById('cInactivo').value==='true');
+  // Guardar toda la base actualizada en Firebase
+  db.collection('config').doc('clientes').set({
+    data: JSON.stringify(CLIENTES_PROFIT),
+    actualizado: new Date().toISOString()
+  }).then(function(){
+    toast('Cliente actualizado');
+  }).catch(function(){
+    toast('Cliente actualizado localmente (error guardando en Firebase)');
+  });
+  CLIENTES=getClientesParaVendedor();
+  cerrarModal('mEditarCli');
+  renderAdminCli();
 }
 
 // ═══ PARSER DBF PARA NAVEGADOR ═══
