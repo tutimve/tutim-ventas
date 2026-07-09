@@ -749,23 +749,23 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div class="card-title">Documentacion (opcional, se puede completar despues)</div>
 
     <div class="field">
-      <label>RIF</label>
-      <input type="file" accept="image/*,application/pdf" id="ncDocRif" onchange="previewDoc('ncDocRif','ncDocRifPrev')">
+      <label>RIF <span id="ncChkRif" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
+      <input type="file" accept="image/*,application/pdf" id="ncDocRif" onchange="previewDoc('ncDocRif','ncDocRifPrev','rif');actualizarChecksDocsNC();">
       <div id="ncDocRifPrev" style="margin-top:6px"></div>
     </div>
     <div class="field">
-      <label>Registro Mercantil</label>
-      <input type="file" accept="image/*,application/pdf" id="ncDocRegistro" onchange="previewDoc('ncDocRegistro','ncDocRegistroPrev')">
+      <label>Registro Mercantil <span id="ncChkRegistro" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
+      <input type="file" accept="image/*,application/pdf" id="ncDocRegistro" onchange="previewDoc('ncDocRegistro','ncDocRegistroPrev','registro');actualizarChecksDocsNC();">
       <div id="ncDocRegistroPrev" style="margin-top:6px"></div>
     </div>
     <div class="field">
-      <label>Cedula</label>
-      <input type="file" accept="image/*,application/pdf" id="ncDocCedula" onchange="previewDoc('ncDocCedula','ncDocCedulaPrev')">
+      <label>Cedula <span id="ncChkCedula" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
+      <input type="file" accept="image/*,application/pdf" id="ncDocCedula" onchange="previewDoc('ncDocCedula','ncDocCedulaPrev','cedula');actualizarChecksDocsNC();">
       <div id="ncDocCedulaPrev" style="margin-top:6px"></div>
     </div>
     <div class="field">
-      <label>Facturas recientes (2 a 3 fotos)</label>
-      <input type="file" accept="image/*" id="ncDocFact" multiple onchange="previewFacturas()">
+      <label>Facturas recientes (minimo 2 fotos) <span id="ncChkFact" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
+      <input type="file" accept="image/*" id="ncDocFact" multiple onchange="previewFacturas('ncDocFact','ncDocFactPrev');actualizarChecksDocsNC();">
       <div id="ncDocFactPrev" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
     </div>
     <div class="field">
@@ -776,8 +776,8 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
     </div>
     <div class="field">
-      <label>Foto de la entrada del establecimiento</label>
-      <input type="file" accept="image/*" id="ncDocFoto" onchange="previewDoc('ncDocFoto','ncDocFotoPrev')">
+      <label>Foto de la entrada del establecimiento <span id="ncChkFoto" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
+      <input type="file" accept="image/*" id="ncDocFoto" onchange="previewDoc('ncDocFoto','ncDocFotoPrev','foto');actualizarChecksDocsNC();">
       <div id="ncDocFotoPrev" style="margin-top:6px"></div>
     </div>
 
@@ -877,6 +877,65 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div style="display:flex;gap:8px">
       <button class="btn" style="background:var(--rojo-c);color:var(--rojo);font-weight:600" onclick="ejecutarEliminarVisita()">Eliminar</button>
       <button class="btn btn-s" onclick="cerrarModal('mEliminarVisita')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DOCUMENTACION DE CLIENTE (nuevo o ya oficial) -->
+<div class="modal-bg" id="mDocsCliente">
+  <div class="modal">
+    <h3 id="dcTitulo">Documentacion del cliente</h3>
+    <p id="dcSubtitulo" style="font-size:12px;color:#888;margin-top:-8px;margin-bottom:10px"></p>
+
+    <div class="field"><label>Nombre</label><input type="text" id="dcNombre"></div>
+    <div class="field"><label>RIF</label><input type="text" id="dcRif"></div>
+    <div class="field"><label>Telefono</label><input type="text" id="dcTel"></div>
+    <div class="field"><label>Direccion</label><input type="text" id="dcDir"></div>
+
+    <div class="divider" style="margin:12px 0"></div>
+    <div class="card-title">Documentacion</div>
+
+    <div class="field">
+      <label>RIF (foto o documento) <span id="dcChkRif" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
+      <div id="dcArchRifExistente"></div>
+      <input type="file" accept="image/*,application/pdf" id="dcArchRif" onchange="previewDoc('dcArchRif','dcArchRifPrev','rif');actualizarChecksDocsDC();">
+      <div id="dcArchRifPrev" style="margin-top:6px"></div>
+    </div>
+    <div class="field">
+      <label>Registro Mercantil <span id="dcChkRegistro" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
+      <div id="dcArchRegistroExistente"></div>
+      <input type="file" accept="image/*,application/pdf" id="dcArchRegistro" onchange="previewDoc('dcArchRegistro','dcArchRegistroPrev','registro');actualizarChecksDocsDC();">
+      <div id="dcArchRegistroPrev" style="margin-top:6px"></div>
+    </div>
+    <div class="field">
+      <label>Cedula <span id="dcChkCedula" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
+      <div id="dcArchCedulaExistente"></div>
+      <input type="file" accept="image/*,application/pdf" id="dcArchCedula" onchange="previewDoc('dcArchCedula','dcArchCedulaPrev','cedula');actualizarChecksDocsDC();">
+      <div id="dcArchCedulaPrev" style="margin-top:6px"></div>
+    </div>
+    <div class="field">
+      <label>Facturas recientes (minimo 2 fotos) <span id="dcChkFact" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
+      <div id="dcArchFactExistente" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      <input type="file" accept="image/*" id="dcArchFact" multiple onchange="previewFacturas('dcArchFact','dcArchFactPrev');actualizarChecksDocsDC();">
+      <div id="dcArchFactPrev" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <div class="field">
+      <label>Ubicacion (link de Maps)</label>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="dcUbicacion" placeholder="Se completa solo o pega un link" style="flex:1">
+        <button type="button" class="btn btn-s btn-sm" style="white-space:nowrap" onclick="capturarUbicacionDocs()">📍 Mi ubicacion</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Foto de la entrada del establecimiento <span id="dcChkFoto" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
+      <div id="dcArchFotoExistente"></div>
+      <input type="file" accept="image/*" id="dcArchFoto" onchange="previewDoc('dcArchFoto','dcArchFotoPrev','foto');actualizarChecksDocsDC();">
+      <div id="dcArchFotoPrev" style="margin-top:6px"></div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-p" id="btnGuardarDocsCli" onclick="guardarDocsCliente()">Guardar</button>
+      <button class="btn btn-s" onclick="cerrarModal('mDocsCliente')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -1665,7 +1724,13 @@ function filtrarCli(){
       var nvoLabel=c.esNuevo?(verTodosCli&&c.creadoPorNombre?' NUEVO ('+c.creadoPorNombre.split(' ')[0]+')':' NUEVO'):'';
       var nvo=c.esNuevo?'<span class="tag tag-rosa" style="font-size:10px;margin-left:4px">'+nvoLabel+'</span>':'';
       var contactoTxt=c.contacto?' | Contacto: '+c.contacto:'';
-      html+='<div class="cli-opt '+sel+'" onclick="selCli(&quot;'+c.id+'&quot;)"><div class="cli-nom">'+c.nombre+nvo+'</div><div class="cli-det"><span style="font-weight:600;color:var(--azul)">Cod: '+c.id+'</span> | '+c.rif+(c.dir?' | '+c.dir:'')+(c.tel?' | '+c.tel:'')+contactoTxt+'</div></div>';
+      var docsCompletosCli=clienteDocsCompletos(c);
+      var tieneDocsCli=clienteTieneAlgunDoc(c);
+      var badgeDocs=docsCompletosCli?' <span class="tag tag-v" style="font-size:10px">📎 completo</span>':(tieneDocsCli?' <span class="tag tag-a" style="font-size:10px">📎 parcial</span>':'');
+      html+='<div class="cli-opt '+sel+'" style="display:flex;align-items:center;gap:6px">' +
+        '<div style="flex:1" onclick="selCli(&quot;'+c.id+'&quot;)"><div class="cli-nom">'+c.nombre+nvo+badgeDocs+'</div><div class="cli-det"><span style="font-weight:600;color:var(--azul)">Cod: '+c.id+'</span> | '+c.rif+(c.dir?' | '+c.dir:'')+(c.tel?' | '+c.tel:'')+contactoTxt+'</div></div>' +
+        '<button type="button" onclick="event.stopPropagation();abrirDocsCliente(&quot;'+c.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:6px 9px;font-size:14px;cursor:pointer;white-space:nowrap">📎</button>' +
+      '</div>';
     }
   }
   document.getElementById('listaCli').innerHTML=html;
@@ -3119,6 +3184,7 @@ function abrirModalNuevoCli(){
   ['ncDocRifPrev','ncDocRegistroPrev','ncDocCedulaPrev','ncDocFotoPrev','ncDocFactPrev'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.innerHTML='';
   });
+  actualizarChecksDocsNC();
 }
 
 function toggleDirEntrega(){
@@ -3129,11 +3195,10 @@ function toggleDirEntrega(){
 }
 
 // ═══ Documentacion del cliente nuevo: preview, ubicacion, compresion y subida ═══
-function previewDoc(inputId, previewId){
+function previewDoc(inputId, previewId, key){
   var input=document.getElementById(inputId);
   var file=input.files[0];
   var previewEl=document.getElementById(previewId);
-  var key=inputId.replace('ncDoc','').toLowerCase();
   if(!file){ ncDocsData[key]=null; previewEl.innerHTML=''; return; }
   ncDocsData[key]=file;
   if(file.type==='application/pdf'){
@@ -3143,23 +3208,22 @@ function previewDoc(inputId, previewId){
   var reader=new FileReader();
   reader.onload=function(e){
     previewEl.innerHTML='<div style="position:relative;display:inline-block"><img src="'+e.target.result+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)">'+
-      '<button type="button" onclick="quitarDoc(&quot;'+inputId+'&quot;,&quot;'+previewId+'&quot;)" style="position:absolute;top:-6px;right:-6px;background:var(--rojo);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1">×</button></div>';
+      '<button type="button" onclick="quitarDoc(&quot;'+inputId+'&quot;,&quot;'+previewId+'&quot;,&quot;'+key+'&quot;)" style="position:absolute;top:-6px;right:-6px;background:var(--rojo);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1">×</button></div>';
   };
   reader.readAsDataURL(file);
 }
 
-function quitarDoc(inputId, previewId){
+function quitarDoc(inputId, previewId, key){
   document.getElementById(inputId).value='';
-  var key=inputId.replace('ncDoc','').toLowerCase();
   ncDocsData[key]=null;
   document.getElementById(previewId).innerHTML='';
 }
 
-function previewFacturas(){
-  var input=document.getElementById('ncDocFact');
+function previewFacturas(inputId, previewId){
+  var input=document.getElementById(inputId);
   var files=Array.prototype.slice.call(input.files).slice(0,3);
   ncDocsData.facturas=files;
-  var previewEl=document.getElementById('ncDocFactPrev');
+  var previewEl=document.getElementById(previewId);
   previewEl.innerHTML='';
   files.forEach(function(file){
     var reader=new FileReader();
@@ -3171,6 +3235,41 @@ function previewFacturas(){
     reader.readAsDataURL(file);
   });
   if(input.files.length>3) toast('Solo se usaran las primeras 3 facturas');
+}
+
+// Minimo de facturas para considerar ese requisito satisfecho
+var MIN_FACTURAS_REQUERIDAS=2;
+
+// Un cliente se considera con documentacion COMPLETA solo si tiene los 5
+// requisitos, y las facturas cuentan solo si hay al menos MIN_FACTURAS_REQUERIDAS
+function clienteDocsCompletos(c){
+  var totalFact=(c.facturasUrls?c.facturasUrls.length:0);
+  return !!(c.docRifUrl && c.docRegistroUrl && c.docCedulaUrl && c.fotoEntradaUrl && totalFact>=MIN_FACTURAS_REQUERIDAS);
+}
+function clienteTieneAlgunDoc(c){
+  return !!(c.docRifUrl||c.docRegistroUrl||c.docCedulaUrl||c.fotoEntradaUrl||(c.facturasUrls&&c.facturasUrls.length));
+}
+
+// Actualiza las marcas ✓ verdes junto a cada requisito, combinando lo que ya
+// esta subido (clienteExistente) con lo que se acaba de seleccionar (ncDocsData)
+function actualizarChecksDocs(prefix, clienteExistente){
+  var ex=clienteExistente||{};
+  function marcar(chkId, ok){
+    var el=document.getElementById(chkId);
+    if(el) el.style.display=ok?'inline':'none';
+  }
+  marcar(prefix+'ChkRif', !!(ex.docRifUrl || ncDocsData.rif));
+  marcar(prefix+'ChkRegistro', !!(ex.docRegistroUrl || ncDocsData.registro));
+  marcar(prefix+'ChkCedula', !!(ex.docCedulaUrl || ncDocsData.cedula));
+  marcar(prefix+'ChkFoto', !!(ex.fotoEntradaUrl || ncDocsData.foto));
+  var totalFact=(ex.facturasUrls?ex.facturasUrls.length:0)+(ncDocsData.facturas?ncDocsData.facturas.length:0);
+  marcar(prefix+'ChkFact', totalFact>=MIN_FACTURAS_REQUERIDAS);
+}
+function actualizarChecksDocsNC(){ actualizarChecksDocs('nc', null); }
+function actualizarChecksDocsDC(){
+  var c=null;
+  for(var i=0;i<CLIENTES.length;i++){ if(CLIENTES[i].id===dcClienteIdActual){ c=CLIENTES[i]; break; } }
+  actualizarChecksDocs('dc', c);
 }
 
 function capturarUbicacion(){
@@ -3272,6 +3371,150 @@ function finalizarNuevoCli(cli, docsOk){
   document.getElementById('paso1').classList.add('hidden');
   document.getElementById('paso2').classList.remove('hidden');
   renderProds();
+}
+
+// ═══ Documentacion de un cliente ya existente (nuevo pendiente u oficial) ═══
+// Cualquier vendedor puede: editar los datos y documentos de SUS clientes
+// nuevos mientras no se hayan sincronizado con Profit, y una vez ya son
+// oficiales, seguir agregando cualquier documento que falte.
+var dcClienteIdActual=null;
+
+function abrirDocsCliente(id){
+  var c=null;
+  for(var i=0;i<CLIENTES.length;i++){ if(CLIENTES[i].id===id){ c=CLIENTES[i]; break; } }
+  if(!c) return;
+  dcClienteIdActual=id;
+  ncDocsData={};
+  ['dcArchRif','dcArchRegistro','dcArchCedula','dcArchFoto','dcArchFact'].forEach(function(iid){
+    var el=document.getElementById(iid); if(el) el.value='';
+  });
+  ['dcArchRifPrev','dcArchRegistroPrev','dcArchCedulaPrev','dcArchFotoPrev','dcArchFactPrev'].forEach(function(iid){
+    var el=document.getElementById(iid); if(el) el.innerHTML='';
+  });
+
+  var editable=!!c.esNuevo;
+  document.getElementById('dcTitulo').textContent=editable?'Completar cliente nuevo':'Documentacion del cliente';
+  document.getElementById('dcSubtitulo').textContent='Cod: '+c.id+(editable?' — pendiente de sincronizar con Profit':' — cliente oficial de Profit');
+
+  document.getElementById('dcNombre').value=c.nombre||'';
+  document.getElementById('dcRif').value=c.rif||'';
+  document.getElementById('dcTel').value=c.tel||'';
+  document.getElementById('dcDir').value=c.dir||'';
+  document.getElementById('dcUbicacion').value=c.ubicacionMaps||'';
+  ['dcNombre','dcRif','dcTel','dcDir'].forEach(function(iid){
+    document.getElementById(iid).disabled=!editable;
+  });
+
+  function thumb(url, label){
+    return '<a href="'+url+'" target="_blank" style="text-decoration:none;display:inline-block;margin-bottom:6px"><div style="text-align:center"><img src="'+url+'" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)"><div style="font-size:10px;color:#888">'+label+' actual</div></div></a>';
+  }
+  document.getElementById('dcArchRifExistente').innerHTML=c.docRifUrl?thumb(c.docRifUrl,'RIF'):'';
+  document.getElementById('dcArchRegistroExistente').innerHTML=c.docRegistroUrl?thumb(c.docRegistroUrl,'Registro'):'';
+  document.getElementById('dcArchCedulaExistente').innerHTML=c.docCedulaUrl?thumb(c.docCedulaUrl,'Cedula'):'';
+  document.getElementById('dcArchFotoExistente').innerHTML=c.fotoEntradaUrl?thumb(c.fotoEntradaUrl,'Entrada'):'';
+  var factHtml='';
+  if(c.facturasUrls && c.facturasUrls.length){
+    c.facturasUrls.forEach(function(u,idx){ factHtml+=thumb(u,'Fact.'+(idx+1)); });
+  }
+  document.getElementById('dcArchFactExistente').innerHTML=factHtml;
+
+  actualizarChecksDocs('dc', c);
+  document.getElementById('mDocsCliente').classList.add('open');
+}
+
+function capturarUbicacionDocs(){
+  if(!navigator.geolocation){ toast('Este dispositivo no soporta ubicacion'); return; }
+  toast('Obteniendo ubicacion...');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var link='https://www.google.com/maps?q='+pos.coords.latitude+','+pos.coords.longitude;
+    document.getElementById('dcUbicacion').value=link;
+    toast('Ubicacion capturada');
+  }, function(){ toast('No se pudo obtener la ubicacion'); }, {enableHighAccuracy:true, timeout:10000});
+}
+
+function guardarDocsCliente(){
+  var id=dcClienteIdActual;
+  var c=null;
+  for(var i=0;i<CLIENTES.length;i++){ if(CLIENTES[i].id===id){ c=CLIENTES[i]; break; } }
+  if(!c){ cerrarModal('mDocsCliente'); return; }
+  var esNuevoCli=!!c.esNuevo;
+
+  if(esNuevoCli){
+    var nom=document.getElementById('dcNombre').value.trim();
+    var rif=document.getElementById('dcRif').value.trim();
+    if(!nom||!rif){ toast('Nombre y RIF son obligatorios'); return; }
+    c.nombre=nom; c.rif=rif;
+    c.tel=document.getElementById('dcTel').value.trim();
+    c.dir=document.getElementById('dcDir').value.trim();
+  }
+  c.ubicacionMaps=document.getElementById('dcUbicacion').value.trim();
+
+  var btnG=document.getElementById('btnGuardarDocsCli');
+  if(btnG){ btnG.disabled=true; btnG.textContent='Subiendo documentos...'; }
+
+  // Se usa siempre la misma carpeta base de Storage (clientes_nuevos) para no
+  // requerir reglas de seguridad adicionales, sin importar si el cliente ya
+  // es oficial de Profit o sigue pendiente.
+  var basePath='clientes_nuevos/'+id+'/';
+  var tareas=[];
+  if(ncDocsData.rif) tareas.push(subirArchivo(ncDocsData.rif, basePath+'rif_'+Date.now()).then(function(url){c.docRifUrl=url;}));
+  if(ncDocsData.registro) tareas.push(subirArchivo(ncDocsData.registro, basePath+'registro_'+Date.now()).then(function(url){c.docRegistroUrl=url;}));
+  if(ncDocsData.cedula) tareas.push(subirArchivo(ncDocsData.cedula, basePath+'cedula_'+Date.now()).then(function(url){c.docCedulaUrl=url;}));
+  if(ncDocsData.foto) tareas.push(subirArchivo(ncDocsData.foto, basePath+'foto_entrada_'+Date.now()).then(function(url){c.fotoEntradaUrl=url;}));
+  if(ncDocsData.facturas && ncDocsData.facturas.length){
+    if(!c.facturasUrls) c.facturasUrls=[];
+    ncDocsData.facturas.forEach(function(file, idx){
+      tareas.push(subirArchivo(file, basePath+'factura_'+Date.now()+'_'+idx).then(function(url){ c.facturasUrls.push(url); }));
+    });
+  }
+
+  Promise.all(tareas).then(function(){
+    finalizarGuardadoDocsCliente(c, esNuevoCli, true);
+  }).catch(function(e){
+    console.log('Error subiendo documentos:', e);
+    finalizarGuardadoDocsCliente(c, esNuevoCli, false);
+  });
+}
+
+function finalizarGuardadoDocsCliente(c, esNuevoCli, docsOk){
+  var btnG=document.getElementById('btnGuardarDocsCli');
+  if(btnG){ btnG.disabled=false; btnG.textContent='Guardar'; }
+  if(esNuevoCli){
+    var vidDueno=c.creadoPor||VEND.codigo;
+    db.collection('vendedores').doc(vidDueno).get().then(function(doc){
+      var data=doc.exists?doc.data():{};
+      var cns=[];
+      try{ cns=data.clientesNuevos?JSON.parse(data.clientesNuevos):[]; }catch(e){}
+      var found=false;
+      for(var k=0;k<cns.length;k++){ if(cns[k].id===c.id){ cns[k]=c; found=true; break; } }
+      if(!found) cns.push(c);
+      db.collection('vendedores').doc(vidDueno).set({
+        pedidos: data.pedidos||'[]',
+        visitas: data.visitas||'[]',
+        clientesNuevos: JSON.stringify(cns),
+        ultimaActualizacion: new Date().toISOString()
+      }).then(function(){
+        toast(docsOk?'Cliente actualizado':'Guardado (algunos documentos no se subieron)');
+      }).catch(function(){ toast('Error guardando en Firebase'); });
+    }).catch(function(){ toast('Error: no se pudo conectar con Firebase'); });
+    if(vidDueno===VEND.codigo){
+      var misNuevos=lsGet('tc_new_'+VEND.codigo,[]);
+      for(var m=0;m<misNuevos.length;m++){ if(misNuevos[m].id===c.id){ misNuevos[m]=c; break; } }
+      lsSet('tc_new_'+VEND.codigo,misNuevos);
+    }
+  } else {
+    for(var i=0;i<CLIENTES_PROFIT.length;i++){
+      if(CLIENTES_PROFIT[i].id===c.id){ CLIENTES_PROFIT[i]=c; break; }
+    }
+    db.collection('config').doc('clientes').set({
+      data: JSON.stringify(CLIENTES_PROFIT),
+      actualizado: new Date().toISOString()
+    }).then(function(){
+      toast(docsOk?'Documentos guardados':'Guardado (algunos documentos no se subieron)');
+    }).catch(function(){ toast('Documentos guardados localmente (error de Firebase)'); });
+  }
+  cerrarModal('mDocsCliente');
+  filtrarCli();
 }
 
 function actualizarMetricas(){
@@ -4307,10 +4550,12 @@ function renderAdminCli(){
   var html='';
   for(var i=0;i<lista.length;i++){
     var c=lista[i];
-    var tieneDocs=!!(c.docRifUrl||c.docRegistroUrl||c.docCedulaUrl||c.fotoEntradaUrl||(c.facturasUrls&&c.facturasUrls.length));
+    var docsCompletosAdm=clienteDocsCompletos(c);
+    var tieneDocsAdm=clienteTieneAlgunDoc(c);
+    var badgeDocsAdm=docsCompletosAdm?' <span class="tag tag-v" style="font-size:10px">📎 completo</span>':(tieneDocsAdm?' <span class="tag tag-a" style="font-size:10px">📎 parcial</span>':'');
     html+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borde);font-size:13px">' +
       '<div style="flex:1">' +
-        '<span style="font-weight:600;color:var(--azul)">'+c.id+'</span> — '+c.nombre+(c.inactivo?' <span style="color:var(--rojo);font-size:11px">(inactivo)</span>':'')+(c.esNuevo?' <span class="tag tag-rosa" style="font-size:10px">NUEVO</span>':'')+(tieneDocs?' <span class="tag tag-v" style="font-size:10px">📎 docs</span>':'')+
+        '<span style="font-weight:600;color:var(--azul)">'+c.id+'</span> — '+c.nombre+(c.inactivo?' <span style="color:var(--rojo);font-size:11px">(inactivo)</span>':'')+(c.esNuevo?' <span class="tag tag-rosa" style="font-size:10px">NUEVO</span>':'')+badgeDocsAdm+
         '<div style="font-size:11px;color:#888">'+(c.rif||'')+(c.vendedor?' | VEND '+c.vendedor:'')+'</div>' +
       '</div>' +
       '<button onclick="editarCliente(&quot;'+c.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Editar</button>' +
