@@ -200,6 +200,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 </head>
 <body>
 <div class="toast" id="toast"></div>
@@ -417,7 +418,25 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   <div class="screen" id="s-visita">
     <h2>Reportar visita</h2>
     <div class="card">
-      <div class="field"><label>Cliente visitado</label><input type="text" id="vCli" placeholder="Nombre del cliente"></div>
+      <div class="card-title">Cliente visitado</div>
+      <div class="field">
+        <input type="text" id="busqVisCli" placeholder="Buscar cliente por nombre o RIF..." oninput="filtrarVisCli()">
+      </div>
+      <div id="listaVisCli"></div>
+      <div id="visCliSel" class="hidden" style="margin-top:6px;padding:8px 10px;background:var(--azul-c);border-radius:8px;font-size:13px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600;color:var(--azul)" id="visCliSelNom"></span>
+          <button class="btn btn-s btn-sm" style="padding:3px 10px" onclick="limpiarVisCli()">Cambiar</button>
+        </div>
+      </div>
+      <div id="visCliLibreWrap" style="margin-top:8px">
+        <button class="btn btn-s btn-sm" onclick="toggleVisCliLibre()">+ No esta en la lista / escribir nombre</button>
+        <div class="field hidden" id="visCliLibreField" style="margin-top:8px">
+          <input type="text" id="visCliLibre" placeholder="Nombre del cliente o prospecto" oninput="onVisCliLibreInput()">
+        </div>
+      </div>
+    </div>
+    <div class="card">
       <div class="field"><label>Resultado</label>
         <select id="vRes">
           <option value="pedido">Tome un pedido</option>
@@ -431,8 +450,66 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="field"><label>Notas</label><textarea id="vNota" rows="2" placeholder="Detalles..."></textarea></div>
       <button class="btn btn-p" onclick="guardarVisita()">Guardar visita</button>
     </div>
-    <h2>Visitas de hoy</h2>
-    <div id="listaVis"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin visitas hoy</div></div>
+
+    <h2 id="visHistTitulo">Historial de visitas</h2>
+    <div class="card" style="padding:12px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px">
+          <label style="font-size:11px">Desde</label>
+          <input type="date" id="filtroVisDesde" onchange="renderVisitas()"
+            style="padding:8px;font-size:13px;width:100%;box-sizing:border-box">
+        </div>
+        <div style="flex:1;min-width:130px">
+          <label style="font-size:11px">Hasta</label>
+          <input type="date" id="filtroVisHasta" onchange="renderVisitas()"
+            style="padding:8px;font-size:13px;width:100%;box-sizing:border-box">
+        </div>
+        <button class="btn btn-s btn-sm" style="margin-top:16px" onclick="filtroVisHoy()">Hoy</button>
+        <button class="btn btn-s btn-sm" style="margin-top:16px" onclick="filtroVisTodo()">Todo</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:12px;color:#666;text-transform:none;letter-spacing:0">Resultado:</label>
+          <select id="filtroVisResultado" onchange="renderVisitas()" style="font-size:13px;padding:5px 8px;border:1.5px solid var(--borde);border-radius:6px">
+            <option value="todos">Todos</option>
+            <option value="pedido">Tome un pedido</option>
+            <option value="prospecto">Nuevo prospecto</option>
+            <option value="sin_pedido">Sin pedido tiene stock</option>
+            <option value="cobro">Gestion de cobro</option>
+            <option value="no_int">No interesado</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div id="filtroVisVendWrap" style="display:none;align-items:center;gap:6px">
+          <label style="font-size:12px;color:#666;text-transform:none;letter-spacing:0">Vendedor:</label>
+          <select id="filtroVisVendedor" onchange="renderVisitas()" style="font-size:13px;padding:5px 8px;border:1.5px solid var(--borde);border-radius:6px">
+            <option value="todos">Todos</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resumen -->
+    <div class="metrics" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+      <div class="metric" style="padding:8px"><div class="num" style="font-size:18px" id="visResumTot">0</div><div class="lbl">Visitas</div></div>
+      <div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--verde)" id="visResumPed">0</div><div class="lbl">Con pedido</div></div>
+      <div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--azul)" id="visResumConv">0%</div><div class="lbl">Conversion</div></div>
+    </div>
+
+    <div class="card" style="padding:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="selVisTodos" onchange="toggleSelVisTodos()" style="width:16px;height:16px"> Seleccionar todos
+        </label>
+        <span id="contSelecVis" style="font-size:12px;color:var(--azul);font-weight:600">0 seleccionados</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-g btn-sm" onclick="exportarVisitasExcel()">Excel</button>
+        <button class="btn btn-sm" style="background:#EA4335;color:#fff;font-weight:600" onclick="enviarCorreoVisitas()">&#9993; Correo</button>
+      </div>
+    </div>
+
+    <div id="listaVis"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin visitas</div></div>
   </div>
 
   <!-- INVENTARIO -->
@@ -667,8 +744,45 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <label>Direccion de Entrega</label>
       <input type="text" id="ncDirEntrega" placeholder="Direccion de entrega...">
     </div>
+
+    <div class="divider" style="margin:14px 0"></div>
+    <div class="card-title">Documentacion (opcional, se puede completar despues)</div>
+
+    <div class="field">
+      <label>RIF</label>
+      <input type="file" accept="image/*,application/pdf" id="ncDocRif" onchange="previewDoc('ncDocRif','ncDocRifPrev')">
+      <div id="ncDocRifPrev" style="margin-top:6px"></div>
+    </div>
+    <div class="field">
+      <label>Registro Mercantil</label>
+      <input type="file" accept="image/*,application/pdf" id="ncDocRegistro" onchange="previewDoc('ncDocRegistro','ncDocRegistroPrev')">
+      <div id="ncDocRegistroPrev" style="margin-top:6px"></div>
+    </div>
+    <div class="field">
+      <label>Cedula</label>
+      <input type="file" accept="image/*,application/pdf" id="ncDocCedula" onchange="previewDoc('ncDocCedula','ncDocCedulaPrev')">
+      <div id="ncDocCedulaPrev" style="margin-top:6px"></div>
+    </div>
+    <div class="field">
+      <label>Facturas recientes (2 a 3 fotos)</label>
+      <input type="file" accept="image/*" id="ncDocFact" multiple onchange="previewFacturas()">
+      <div id="ncDocFactPrev" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <div class="field">
+      <label>Ubicacion (link de Maps)</label>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="ncUbicacion" placeholder="Se completa solo o pega un link" style="flex:1">
+        <button type="button" class="btn btn-s btn-sm" style="white-space:nowrap" onclick="capturarUbicacion()">📍 Mi ubicacion</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Foto de la entrada del establecimiento</label>
+      <input type="file" accept="image/*" id="ncDocFoto" onchange="previewDoc('ncDocFoto','ncDocFotoPrev')">
+      <div id="ncDocFotoPrev" style="margin-top:6px"></div>
+    </div>
+
     <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn btn-p" onclick="guardarNuevoCli()">Guardar</button>
+      <button class="btn btn-p" id="btnGuardarNuevoCli" onclick="guardarNuevoCli()">Guardar</button>
       <button class="btn btn-s" onclick="cerrarModal('mNuevoCli')">Cancelar</button>
     </div>
   </div>
@@ -719,9 +833,50 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <option value="true">Inactivo</option>
       </select>
     </div>
+    <div id="cDocsWrap" class="hidden">
+      <div class="divider" style="margin:12px 0"></div>
+      <div class="card-title">Documentacion adjunta</div>
+      <div id="cDocsList" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-p" onclick="guardarClienteAdmin()">Guardar</button>
       <button class="btn btn-s" onclick="cerrarModal('mEditarCli')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR VISITA -->
+<div class="modal-bg" id="mEditarVisita">
+  <div class="modal">
+    <h3>Editar visita</h3>
+    <div class="field"><label>Cliente</label><input type="text" id="evCliente" placeholder="Nombre del cliente"></div>
+    <div class="field"><label>Resultado</label>
+      <select id="evResultado">
+        <option value="pedido">Tome un pedido</option>
+        <option value="prospecto">Nuevo prospecto</option>
+        <option value="sin_pedido">Sin pedido tiene stock</option>
+        <option value="cobro">Gestion de cobro</option>
+        <option value="no_int">No interesado</option>
+        <option value="otro">Otro</option>
+      </select>
+    </div>
+    <div class="field"><label>Zona / Direccion</label><input type="text" id="evZona" placeholder="Sector, calle..."></div>
+    <div class="field"><label>Notas</label><textarea id="evNotas" rows="2" placeholder="Detalles..."></textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p" onclick="guardarEdicionVisita()">Guardar</button>
+      <button class="btn btn-s" onclick="cerrarModal('mEditarVisita')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ELIMINAR VISITA -->
+<div class="modal-bg" id="mEliminarVisita">
+  <div class="modal">
+    <h3>Eliminar visita</h3>
+    <p style="font-size:13px;color:#666;margin:8px 0 16px">Esta accion no se puede deshacer. ¿Confirmas que quieres eliminar esta visita?</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:var(--rojo-c);color:var(--rojo);font-weight:600" onclick="ejecutarEliminarVisita()">Eliminar</button>
+      <button class="btn btn-s" onclick="cerrarModal('mEliminarVisita')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -842,6 +997,7 @@ var firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 var db = firebase.firestore();
+var storage = firebase.storage();
 
 // ═══ STORAGE HÍBRIDO: Firebase + localStorage backup ═══
 function lsGet(k,def){try{var v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch(e){return MEM[k]!==undefined?MEM[k]:def;}}
@@ -849,8 +1005,17 @@ function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}MEM
 
 function guardarLS(){
   var clientesNuevos=CLIENTES.filter(function(c){return c.esNuevo && c.creadoPor===VEND.codigo;});
+  var verTodosG=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+  // IMPORTANTE: para VEND 00/01/20, PEDIDOS contiene la lista combinada de TODOS
+  // los vendedores (para poder mostrar "Todos los pedidos"). Si se guardara tal
+  // cual, se copiarian los pedidos de todos los demas vendedores dentro del
+  // documento propio de este usuario, causando pedidos duplicados. Por eso aqui
+  // se filtra para guardar UNICAMENTE los pedidos que realmente pertenecen a
+  // este vendedor (los que el creo).
+  var pedidosAGuardar = verTodosG ? PEDIDOS.filter(function(p){return p.vendedor===VEND.codigo;}) : PEDIDOS;
+  var visitasAGuardar = verTodosG ? VISITAS.filter(function(v){return !v.vendedor||v.vendedor===VEND.codigo;}) : VISITAS;
   // Solo Firebase - NO guardar en localStorage para evitar duplicados
-  guardarFirebase(VEND.codigo, PEDIDOS, VISITAS, clientesNuevos);
+  guardarFirebase(VEND.codigo, pedidosAGuardar, visitasAGuardar, clientesNuevos);
   // Limpiar localStorage de pedidos para evitar duplicados
   try{
     localStorage.removeItem('tp_'+VEND.codigo);
@@ -961,8 +1126,54 @@ function cargarTodosFirebase(callback){
   }
 }
 
+function cargarTodosVisitasFirebase(callback){
+  var vendIds=['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
+  try{
+    var promesas=[];
+    for(var i=0;i<vendIds.length;i++){
+      promesas.push(db.collection('vendedores').doc(vendIds[i]).get());
+    }
+    Promise.all(promesas).then(function(docs){
+      var todas=[];
+      for(var i=0;i<docs.length;i++){
+        var doc=docs[i];
+        var vid=vendIds[i];
+        if(doc.exists){
+          var data=doc.data();
+          var vis=[];
+          try{ vis=data.visitas?JSON.parse(data.visitas):[]; }catch(e){}
+          for(var j=0;j<vis.length;j++){
+            if(!vis[j].vendedor) vis[j].vendedor=vid;
+            var visVid=vis[j].vendedor;
+            var vObjVis=null;
+            for(var vk=0;vk<VENDEDORES.length;vk++){
+              if(VENDEDORES[vk].id===visVid){vObjVis=VENDEDORES[vk];break;}
+            }
+            vis[j].vendedorNombre = vObjVis ? vObjVis.nombre : ('VEND '+visVid);
+            todas.push(vis[j]);
+          }
+        }
+      }
+      todas.sort(function(a,b){
+        var fa=fechaToISO(a.fecha)+' '+(a.hora||'');
+        var fb=fechaToISO(b.fecha)+' '+(b.hora||'');
+        return fb>fa?1:fb<fa?-1:0;
+      });
+      callback(todas);
+    }).catch(function(e){
+      console.log('Firebase error visitas todos:', e);
+      callback([]);
+    });
+  }catch(e){
+    console.log('Firebase excepcion visitas:', e);
+    callback([]);
+  }
+}
+
 function cargarClientesNuevosTodos(){
-  // Para VEND 00 y 01: cargar clientes nuevos de TODOS los vendedores
+  // Devuelve la ultima copia conocida (ver cargarClientesNuevosFirebase para la carga real)
+  if(NUEVOS_TODOS_CACHE.length>0) return NUEVOS_TODOS_CACHE;
+  // Respaldo con localStorage propio mientras llega la respuesta de Firebase
   var todos=[];
   var vendIds=['02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
   for(var i=0;i<vendIds.length;i++){
@@ -970,6 +1181,32 @@ function cargarClientesNuevosTodos(){
     for(var j=0;j<cv.length;j++) todos.push(cv[j]);
   }
   return todos;
+}
+
+var NUEVOS_TODOS_CACHE=[];
+// Trae los clientes nuevos de TODOS los vendedores directamente desde Firebase
+// (antes esto solo se leia del localStorage propio del dispositivo del admin,
+// por lo que nunca aparecian los clientes nuevos creados por otros vendedores)
+function cargarClientesNuevosFirebase(callback){
+  var vendIds=['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
+  try{
+    var promesas=[];
+    for(var i=0;i<vendIds.length;i++){
+      promesas.push(db.collection('vendedores').doc(vendIds[i]).get());
+    }
+    Promise.all(promesas).then(function(docs){
+      var todos=[];
+      for(var i=0;i<docs.length;i++){
+        if(docs[i].exists){
+          var data=docs[i].data();
+          var cns=[];
+          try{ cns=data.clientesNuevos?JSON.parse(data.clientesNuevos):[]; }catch(e){}
+          for(var j=0;j<cns.length;j++) todos.push(cns[j]);
+        }
+      }
+      callback(todos);
+    }).catch(function(e){ console.log('Error cargando clientes nuevos:', e); callback([]); });
+  }catch(e){ console.log('Excepcion cargando clientes nuevos:', e); callback([]); }
 }
 
 function getClientesParaVendedor(){
@@ -1162,12 +1399,17 @@ function mostrarApp(){
   if(verTodos){
     cargarTodosFirebase(function(todos){
       PEDIDOS=todos;
-      CLIENTES=getClientesParaVendedor();
-      VISITAS=[];
-      ocultarLoading();
-      actualizarMetricas();
-      renderStockHome();
-      renderInv();
+      cargarTodosVisitasFirebase(function(todasVis){
+        VISITAS=todasVis;
+        cargarClientesNuevosFirebase(function(cns){
+          NUEVOS_TODOS_CACHE=cns;
+          CLIENTES=getClientesParaVendedor();
+          ocultarLoading();
+          actualizarMetricas();
+          renderStockHome();
+          renderInv();
+        });
+      });
     });
   } else {
     cargarDesdeFirebase(VEND.codigo, function(peds, viss, clis){
@@ -1237,7 +1479,7 @@ function verificarLogin(){
     var vendAnterior=lsGet('tutim_vend',null);
     if(vendAnterior && vendAnterior.codigo !== cod){
       var codAnt=vendAnterior.codigo;
-      var esAdminAnt=(codAnt==='00'||codAnt==='01');
+      var esAdminAnt=(codAnt==='00'||codAnt==='01'||codAnt==='20');
       if(!esAdminAnt){
         try{localStorage.removeItem('tp_'+codAnt);}catch(e){}
         try{localStorage.removeItem('tv_'+codAnt);}catch(e){}
@@ -1334,7 +1576,40 @@ function goScreen(name){
       });
     }
   }
-  if(name==='visita') renderVisitas();
+  if(name==='visita'){
+    var ahora3=new Date();
+    var hoy3=ahora3.getFullYear()+'-'+String(ahora3.getMonth()+1).padStart(2,'0')+'-'+String(ahora3.getDate()).padStart(2,'0');
+    if(!document.getElementById('filtroVisDesde').value) document.getElementById('filtroVisDesde').value=hoy3;
+    if(!document.getElementById('filtroVisHasta').value) document.getElementById('filtroVisHasta').value=hoy3;
+    var verTodosV2=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+    var tituloVis = verTodosV2 ? 'Todas las visitas' : 'Visitas de '+VEND.nombre+' (VEND '+VEND.codigo+')';
+    var elTitV=document.getElementById('visHistTitulo'); if(elTitV) elTitV.textContent=tituloVis;
+    var vendWrapV=document.getElementById('filtroVisVendWrap');
+    if(vendWrapV) vendWrapV.style.display=verTodosV2?'flex':'none';
+    if(verTodosV2){
+      var selVendV=document.getElementById('filtroVisVendedor');
+      if(selVendV){
+        var optsVV='<option value="todos">Todos</option>';
+        var vendsEnVis={};
+        for(var pv=0;pv<VISITAS.length;pv++) vendsEnVis[VISITAS[pv].vendedor]=VISITAS[pv].vendedorNombre||('VEND '+VISITAS[pv].vendedor);
+        var vidsSortV=Object.keys(vendsEnVis).sort();
+        for(var vi=0;vi<vidsSortV.length;vi++) optsVV+='<option value="'+vidsSortV[vi]+'">VEND '+vidsSortV[vi]+' - '+vendsEnVis[vidsSortV[vi]]+'</option>';
+        selVendV.innerHTML=optsVV;
+      }
+    }
+    document.getElementById('listaVis').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Cargando visitas...</div>';
+    if(verTodosV2){
+      cargarTodosVisitasFirebase(function(todasVis){
+        VISITAS=todasVis;
+        renderVisitas();
+      });
+    } else {
+      cargarDesdeFirebase(VEND.codigo, function(peds, viss, clis){
+        VISITAS=viss.filter(function(v){ return !v.vendedor||v.vendedor===VEND.codigo; });
+        renderVisitas();
+      });
+    }
+  }
 }
 
 function resetPedido(){
@@ -1367,7 +1642,7 @@ function resetPedido(){
 function filtrarCli(){
   var q=document.getElementById('busqCli').value.toLowerCase();
   var vCod=VEND?VEND.codigo:'';
-  var verTodos=(vCod==='00'||vCod==='01');
+  var verTodos=(vCod==='00'||vCod==='01'||vCod==='20');
   var lista=[];
   for(var i=0;i<CLIENTES.length;i++){
     var c=CLIENTES[i];
@@ -1386,7 +1661,7 @@ function filtrarCli(){
     for(var i=0;i<lista.length;i++){
       var c=lista[i];
       var sel=(pedido.cliente&&pedido.cliente.id===c.id)?'sel':'';
-      var verTodosCli=(VEND.codigo==='00'||VEND.codigo==='01');
+      var verTodosCli=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
       var nvoLabel=c.esNuevo?(verTodosCli&&c.creadoPorNombre?' NUEVO ('+c.creadoPorNombre.split(' ')[0]+')':' NUEVO'):'';
       var nvo=c.esNuevo?'<span class="tag tag-rosa" style="font-size:10px;margin-left:4px">'+nvoLabel+'</span>':'';
       var contactoTxt=c.contacto?' | Contacto: '+c.contacto:'';
@@ -1982,7 +2257,7 @@ function renderHistorial(){
     document.getElementById('contSelec').textContent='0 seleccionados';
     return;
   }
-  var verTodosH=(VEND.codigo==='00'||VEND.codigo==='01');
+  var verTodosH=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
   var html='';
 
   if(verTodosH){
@@ -2276,7 +2551,7 @@ function exportarExcelDia(){
   var hoy=new Date().toLocaleDateString('es-VE');
   var pedHoy=getPedidosSeleccionados();
   if(pedHoy.length===0){toast('No hay pedidos para exportar');return;}
-  var esOficinaXls=(VEND.codigo==='00'||VEND.codigo==='01');
+  var esOficinaXls=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
   var totB=0,totM=0;
   var estilos='<style>'+
     'body{font-family:Arial,sans-serif}'+
@@ -2423,38 +2698,378 @@ function exportarExcelDia(){
   toast('Excel generado');
 }
 
+// ═══ VISITAS: buscador de cliente (real o libre) ═══
+function filtrarVisCli(){
+  var q=document.getElementById('busqVisCli').value.toLowerCase();
+  var vCod=VEND?VEND.codigo:'';
+  var verTodos=(vCod==='00'||vCod==='01'||vCod==='20');
+  if(!q){ document.getElementById('listaVisCli').innerHTML=''; return; }
+  var lista=[];
+  for(var i=0;i<CLIENTES.length;i++){
+    var c=CLIENTES[i];
+    if(!verTodos && !c.esNuevo && c.vendedor!==vCod) continue;
+    if(c.nombre.toLowerCase().indexOf(q)<0 && c.rif.toLowerCase().indexOf(q)<0) continue;
+    lista.push(c);
+  }
+  lista.sort(function(a,b){ return a.nombre<b.nombre?-1:1; });
+  if(lista.length>30) lista=lista.slice(0,30);
+  var html='';
+  if(lista.length===0){
+    html='<div style="color:#aaa;font-size:13px;padding:8px;text-align:center">Sin coincidencias. Usa "No esta en la lista" para escribirlo.</div>';
+  } else {
+    for(var i=0;i<lista.length;i++){
+      var c=lista[i];
+      html+='<div class="cli-opt" onclick="selVisCli(&quot;'+c.id+'&quot;)"><div class="cli-nom">'+c.nombre+'</div><div class="cli-det"><span style="font-weight:600;color:var(--azul)">Cod: '+c.id+'</span> | '+c.rif+(c.dir?' | '+c.dir:'')+'</div></div>';
+    }
+  }
+  document.getElementById('listaVisCli').innerHTML=html;
+}
+
+function selVisCli(id){
+  var c=null;
+  for(var i=0;i<CLIENTES.length;i++){ if(CLIENTES[i].id===id){ c=CLIENTES[i]; break; } }
+  if(!c) return;
+  visCliSeleccionado={id:c.id,nombre:c.nombre,rif:c.rif,libre:false};
+  document.getElementById('busqVisCli').value='';
+  document.getElementById('listaVisCli').innerHTML='';
+  document.getElementById('visCliLibre').value='';
+  document.getElementById('visCliLibreField').classList.add('hidden');
+  document.getElementById('visCliSelNom').textContent=c.nombre+' (Cod: '+c.id+')';
+  document.getElementById('visCliSel').classList.remove('hidden');
+}
+
+function limpiarVisCli(){
+  visCliSeleccionado=null;
+  document.getElementById('visCliSel').classList.add('hidden');
+  document.getElementById('busqVisCli').value='';
+  document.getElementById('listaVisCli').innerHTML='';
+}
+
+function toggleVisCliLibre(){
+  document.getElementById('visCliLibreField').classList.toggle('hidden');
+}
+
+function onVisCliLibreInput(){
+  var txt=document.getElementById('visCliLibre').value.trim();
+  if(txt){
+    visCliSeleccionado={id:null,nombre:txt,rif:'',libre:true};
+    document.getElementById('visCliSel').classList.add('hidden');
+  } else if(visCliSeleccionado && visCliSeleccionado.libre){
+    visCliSeleccionado=null;
+  }
+}
+
 function guardarVisita(){
-  var cli=document.getElementById('vCli').value.trim();
-  if(!cli){toast('Indica el cliente');return;}
+  var cliTxt=document.getElementById('visCliLibre').value.trim();
+  var cli = visCliSeleccionado ? visCliSeleccionado : (cliTxt?{id:null,nombre:cliTxt,rif:'',libre:true}:null);
+  if(!cli){toast('Busca un cliente o escribe su nombre');return;}
   var res=document.getElementById('vRes').value;
-  var resL={pedido:'Pedido',prospecto:'Prospecto',sin_pedido:'Sin pedido',cobro:'Cobro',no_int:'No interesado',otro:'Otro'};
   VISITAS.unshift({id:Date.now(),fecha:new Date().toLocaleDateString('es-VE'),
     hora:new Date().toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit'}),
-    cliente:cli,resultado:res,resultadoL:resL[res]||res,
+    clienteId:cli.id,cliente:cli.nombre,clienteRif:cli.rif||'',
+    resultado:res,resultadoL:RESULTADO_LABELS[res]||res,
     zona:document.getElementById('vZona').value,
-    notas:document.getElementById('vNota').value});
+    notas:document.getElementById('vNota').value,
+    vendedor:VEND.codigo,vendedorNombre:VEND.nombre});
   guardarLS();
-  document.getElementById('vCli').value='';
+  limpiarVisCli();
+  document.getElementById('visCliLibre').value='';
+  document.getElementById('visCliLibreField').classList.add('hidden');
   document.getElementById('vZona').value='';
   document.getElementById('vNota').value='';
   toast('Visita registrada');actualizarMetricas();renderVisitas();
 }
 
+// ═══ VISITAS: historial, filtros y agrupacion ═══
+function filtroVisHoy(){
+  var ahoraV=new Date();
+  var hoy=ahoraV.getFullYear()+'-'+String(ahoraV.getMonth()+1).padStart(2,'0')+'-'+String(ahoraV.getDate()).padStart(2,'0');
+  document.getElementById('filtroVisDesde').value=hoy;
+  document.getElementById('filtroVisHasta').value=hoy;
+  renderVisitas();
+}
+
+function filtroVisTodo(){
+  document.getElementById('filtroVisDesde').value='';
+  document.getElementById('filtroVisHasta').value='';
+  renderVisitas();
+}
+
+function getVisitasFiltradas(){
+  var desde=document.getElementById('filtroVisDesde').value;
+  var hasta=document.getElementById('filtroVisHasta').value;
+  var res=document.getElementById('filtroVisResultado').value;
+  var filtVend=document.getElementById('filtroVisVendedor');
+  return VISITAS.filter(function(v){
+    var fISO=fechaToISO(v.fecha);
+    if(desde && fISO<desde) return false;
+    if(hasta && fISO>hasta) return false;
+    if(res && res!=='todos' && v.resultado!==res) return false;
+    if(filtVend && filtVend.value && filtVend.value!=='todos' && v.vendedor!==filtVend.value) return false;
+    return true;
+  });
+}
+
+function getVisitasSeleccionadas(){
+  return getVisitasFiltradas().filter(function(v){ return v._sel; });
+}
+
+function toggleSelVisTodos(){
+  var checked=document.getElementById('selVisTodos').checked;
+  var boxes=document.querySelectorAll('.vis-check');
+  for(var i=0;i<boxes.length;i++){
+    boxes[i].checked=checked;
+    var vid=boxes[i].getAttribute('data-id');
+    for(var j=0;j<VISITAS.length;j++){ if(String(VISITAS[j].id)===vid){ VISITAS[j]._sel=checked; break; } }
+  }
+  actualizarContSelecVis();
+}
+
+function toggleSelVis(vid,checked){
+  for(var i=0;i<VISITAS.length;i++){ if(String(VISITAS[i].id)===vid){ VISITAS[i]._sel=checked; break; } }
+  actualizarContSelecVis();
+  var todos=document.querySelectorAll('.vis-check');
+  var all=true;
+  for(var i=0;i<todos.length;i++){ if(!todos[i].checked){ all=false; break; } }
+  document.getElementById('selVisTodos').checked=all&&todos.length>0;
+}
+
+function actualizarContSelecVis(){
+  var sel=VISITAS.filter(function(v){ return v._sel; });
+  document.getElementById('contSelecVis').textContent=sel.length+' seleccionado'+(sel.length!==1?'s':'');
+}
+
+function renderVisitaCard(v){
+  var conPedido=v.resultado==='pedido';
+  return '<div class="card" style="margin-bottom:8px;border-left:3px solid '+(conPedido?'var(--verde)':'var(--borde)')+'">'+
+    '<div style="display:flex;gap:8px">'+
+      '<input type="checkbox" class="vis-check" data-id="'+v.id+'" '+(v._sel?'checked':'')+' onchange="toggleSelVis(&quot;'+v.id+'&quot;,this.checked)" style="width:16px;height:16px;margin-top:3px">'+
+      '<div style="flex:1">'+
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'+
+          '<strong style="font-size:14px">'+v.cliente+'</strong>'+
+          '<span style="font-size:11px;color:#aaa">'+v.fecha+' '+v.hora+'</span>'+
+        '</div>'+
+        (v.clienteId?'<div style="font-size:11px;color:var(--azul);font-weight:600">Cod: '+v.clienteId+(v.clienteRif?' | '+v.clienteRif:'')+'</div>':'<div style="font-size:11px;color:#aaa">Cliente no registrado en la base</div>')+
+        '<div style="font-size:13px;margin-top:2px">'+(conPedido?'<span class="tag tag-v">'+v.resultadoL+'</span>':v.resultadoL)+'</div>'+
+        (v.zona?'<div style="font-size:12px;color:#888;margin-top:2px">📍 '+v.zona+'</div>':'')+
+        (v.notas?'<div style="font-size:12px;color:#888;margin-top:2px">'+v.notas+'</div>':'')+
+        '<div style="font-size:11px;color:#aaa;margin-top:2px">VEND '+(v.vendedor||'?')+' - '+(v.vendedorNombre||'')+'</div>'+
+        '<div style="display:flex;gap:8px;margin-top:8px">'+
+          '<button class="btn btn-s btn-sm" onclick="editarVisita(&quot;'+v.id+'&quot;)">Editar</button>'+
+          '<button class="btn btn-sm" style="background:var(--rojo-c);color:var(--rojo)" onclick="confirmarEliminarVisita(&quot;'+v.id+'&quot;)">Eliminar</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+
 function renderVisitas(){
-  var hoy=new Date().toLocaleDateString('es-VE');
-  var hoyVis=[];
-  for(var i=0;i<VISITAS.length;i++){if(VISITAS[i].fecha===hoy) hoyVis.push(VISITAS[i]);}
-  if(hoyVis.length===0){document.getElementById('listaVis').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin visitas hoy</div>';return;}
+  var lista=getVisitasFiltradas();
+  var verTodosV=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+
+  // Resumen
+  var totV=lista.length, conPed=0;
+  for(var i=0;i<lista.length;i++){ if(lista[i].resultado==='pedido') conPed++; }
+  var elTot=document.getElementById('visResumTot'); if(elTot) elTot.textContent=totV;
+  var elPed=document.getElementById('visResumPed'); if(elPed) elPed.textContent=conPed;
+  var elConv=document.getElementById('visResumConv'); if(elConv) elConv.textContent=(totV>0?Math.round(conPed/totV*100):0)+'%';
+
+  if(lista.length===0){
+    document.getElementById('listaVis').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Sin visitas en este rango</div>';
+    var selAll=document.getElementById('selVisTodos'); if(selAll) selAll.checked=false;
+    var cs=document.getElementById('contSelecVis'); if(cs) cs.textContent='0 seleccionados';
+    return;
+  }
+
   var html='';
-  for(var i=0;i<hoyVis.length;i++){
-    var v=hoyVis[i];
-    html+='<div class="card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><strong>'+v.cliente+'</strong><span style="font-size:11px;color:#aaa">'+v.hora+'</span></div>'+
-      '<div style="font-size:13px">'+v.resultadoL+'</div>'+
-      (v.zona?'<div style="font-size:12px;color:#888;margin-top:2px">'+v.zona+'</div>':'')+
-      (v.notas?'<div style="font-size:12px;color:#888;margin-top:2px">'+v.notas+'</div>':'')+
+  if(verTodosV){
+    var grupos={}, orden=[];
+    for(var i=0;i<lista.length;i++){
+      var vid=lista[i].vendedor||'??';
+      if(!grupos[vid]){grupos[vid]=[];orden.push(vid);}
+      grupos[vid].push(lista[i]);
+    }
+    for(var g=0;g<orden.length;g++){
+      var vid=orden[g];
+      var grp=grupos[vid];
+      var vNom=grp[0].vendedorNombre||('VEND '+vid);
+      var grpPed=0;
+      for(var x=0;x<grp.length;x++){ if(grp[x].resultado==='pedido') grpPed++; }
+      html+='<div style="background:var(--azul);color:#fff;border-radius:10px;padding:10px 14px;margin-bottom:8px;margin-top:'+(g>0?'16px':'0')+'px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center">'+
+          '<span style="font-size:13px;font-weight:700">VEND '+vid+' — '+vNom+'</span>'+
+          '<span style="font-size:12px;opacity:.85">'+grp.length+' visita'+(grp.length!==1?'s':'')+' · '+grpPed+' con pedido</span>'+
+        '</div>'+
       '</div>';
+      for(var p=0;p<grp.length;p++){ html+=renderVisitaCard(grp[p]); }
+    }
+  } else {
+    for(var i=0;i<lista.length;i++){ html+=renderVisitaCard(lista[i]); }
   }
   document.getElementById('listaVis').innerHTML=html;
+  actualizarContSelecVis();
+}
+
+// ═══ VISITAS: editar y eliminar ═══
+function editarVisita(vid){
+  var v=null;
+  for(var i=0;i<VISITAS.length;i++){ if(String(VISITAS[i].id)===String(vid)){ v=VISITAS[i]; break; } }
+  if(!v){toast('Visita no encontrada');return;}
+  visitaEditandoId=vid;
+  document.getElementById('evCliente').value=v.cliente;
+  document.getElementById('evResultado').value=v.resultado;
+  document.getElementById('evZona').value=v.zona||'';
+  document.getElementById('evNotas').value=v.notas||'';
+  document.getElementById('mEditarVisita').classList.add('open');
+}
+
+function guardarEdicionVisita(){
+  var v=null;
+  for(var i=0;i<VISITAS.length;i++){ if(String(VISITAS[i].id)===String(visitaEditandoId)){ v=VISITAS[i]; break; } }
+  if(!v){ cerrarModal('mEditarVisita'); return; }
+  v.cliente=document.getElementById('evCliente').value.trim()||v.cliente;
+  var res=document.getElementById('evResultado').value;
+  v.resultado=res; v.resultadoL=RESULTADO_LABELS[res]||res;
+  v.zona=document.getElementById('evZona').value;
+  v.notas=document.getElementById('evNotas').value;
+  v.editado=true; v.fechaEdicion=new Date().toLocaleString('es-VE');
+  var verTodosVE=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+  if(!verTodosVE){
+    guardarLS();
+    cerrarModal('mEditarVisita'); renderVisitas(); toast('Visita actualizada');
+    return;
+  }
+  var pvE=v.vendedor;
+  db.collection('vendedores').doc(pvE).get().then(function(doc){
+    var data=doc.exists?doc.data():{};
+    var visP=[];
+    try{ visP=data.visitas?JSON.parse(data.visitas):[]; }catch(e){}
+    var found=false;
+    for(var x=0;x<visP.length;x++){ if(String(visP[x].id)===String(visitaEditandoId)){ visP[x]=v; found=true; break; } }
+    if(!found) visP.push(v);
+    db.collection('vendedores').doc(pvE).set({
+      pedidos: data.pedidos||'[]',
+      visitas: JSON.stringify(visP),
+      clientesNuevos: data.clientesNuevos||'[]',
+      ultimaActualizacion: new Date().toISOString()
+    }).then(function(){
+      cargarTodosVisitasFirebase(function(todas){
+        VISITAS=todas;
+        cerrarModal('mEditarVisita'); renderVisitas(); toast('Visita actualizada');
+      });
+    }).catch(function(){ toast('Error guardando en Firebase'); });
+  }).catch(function(){ toast('Error al editar: no se pudo conectar con Firebase'); });
+}
+
+function confirmarEliminarVisita(vid){
+  visitaEliminandoId=vid;
+  document.getElementById('mEliminarVisita').classList.add('open');
+}
+
+function ejecutarEliminarVisita(){
+  var vid=visitaEliminandoId;
+  var vEliminada=null;
+  for(var i=0;i<VISITAS.length;i++){ if(String(VISITAS[i].id)===String(vid)){ vEliminada=VISITAS[i]; VISITAS.splice(i,1); break; } }
+  if(!vEliminada){ cerrarModal('mEliminarVisita'); return; }
+  var verTodosVD=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+  if(!verTodosVD){
+    guardarLS();
+    cerrarModal('mEliminarVisita'); renderVisitas(); toast('Visita eliminada');
+    return;
+  }
+  var pvD=vEliminada.vendedor;
+  db.collection('vendedores').doc(pvD).get().then(function(doc){
+    if(!doc.exists){ cerrarModal('mEliminarVisita'); renderVisitas(); toast('Visita eliminada'); return; }
+    var data=doc.data();
+    var visP=[];
+    try{ visP=data.visitas?JSON.parse(data.visitas):[]; }catch(e){}
+    for(var x=0;x<visP.length;x++){ if(String(visP[x].id)===String(vid)){ visP.splice(x,1); break; } }
+    db.collection('vendedores').doc(pvD).set({
+      pedidos: data.pedidos||'[]',
+      visitas: JSON.stringify(visP),
+      clientesNuevos: data.clientesNuevos||'[]',
+      ultimaActualizacion: new Date().toISOString()
+    }).then(function(){
+      cargarTodosVisitasFirebase(function(todas){
+        VISITAS=todas;
+        cerrarModal('mEliminarVisita'); renderVisitas(); toast('Visita eliminada');
+      });
+    }).catch(function(){ toast('Error guardando en Firebase'); });
+  }).catch(function(){ toast('Error al eliminar: no se pudo conectar con Firebase'); });
+}
+
+// ═══ VISITAS: exportacion ═══
+function exportarVisitasExcel(){
+  var lista=getVisitasSeleccionadas();
+  if(lista.length===0) lista=getVisitasFiltradas();
+  if(lista.length===0){toast('No hay visitas para exportar');return;}
+  var desde=document.getElementById('filtroVisDesde').value;
+  var hasta=document.getElementById('filtroVisHasta').value;
+  var periodo=desde?(desde==hasta?desde:'Del '+desde+' al '+hasta):'Todo';
+  var estilos='<style>body{font-family:Arial,sans-serif}th{background:#1B2A6B;color:#fff;padding:6px 8px;font-size:12px}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:12px}.hdr-vend{background:#1B2A6B;color:#fff;font-size:13px;font-weight:bold;padding:8px 10px}</style>';
+  var contenido='<html><head><meta charset="UTF-8">'+estilos+'</head><body>';
+  contenido+='<h2 style="color:#1B2A6B">VISITAS TUTIM - '+periodo+'</h2>';
+  var verTodosXV=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+  var porVendV={}, ordenV=[];
+  for(var i=0;i<lista.length;i++){
+    var v=lista[i]; var vid=verTodosXV?(v.vendedor||'??'):'propio';
+    if(!porVendV[vid]){porVendV[vid]={nombre:v.vendedorNombre||('VEND '+vid),visitas:[]};ordenV.push(vid);}
+    porVendV[vid].visitas.push(v);
+  }
+  ordenV.sort();
+  for(var o=0;o<ordenV.length;o++){
+    var vd=porVendV[ordenV[o]];
+    if(verTodosXV) contenido+='<table style="width:100%;margin-bottom:4px"><tr><td class="hdr-vend">VEND '+ordenV[o]+' — '+vd.nombre+'</td></tr></table>';
+    contenido+='<table style="width:100%;border-collapse:collapse;margin-bottom:16px">';
+    contenido+='<tr><th>Fecha</th><th>Hora</th><th>Cod.Cli</th><th>Cliente</th><th>Resultado</th><th>Zona</th><th>Notas</th></tr>';
+    for(var j=0;j<vd.visitas.length;j++){
+      var v=vd.visitas[j];
+      contenido+='<tr><td>'+v.fecha+'</td><td>'+v.hora+'</td><td>'+(v.clienteId||'-')+'</td><td>'+v.cliente+'</td><td>'+v.resultadoL+'</td><td>'+(v.zona||'')+'</td><td>'+(v.notas||'')+'</td></tr>';
+    }
+    contenido+='</table>';
+  }
+  contenido+='<p><b>Total:</b> '+lista.length+' visitas</p></body></html>';
+  var blob=new Blob([contenido],{type:'application/vnd.ms-excel'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='visitas_'+(desde||'todo')+'.xls';
+  a.click();
+  toast('Excel de visitas generado');
+}
+
+function enviarCorreoVisitas(){
+  var lista=getVisitasSeleccionadas();
+  if(lista.length===0) lista=getVisitasFiltradas();
+  if(lista.length===0){toast('No hay visitas para enviar');return;}
+  var desde=document.getElementById('filtroVisDesde').value;
+  var hasta=document.getElementById('filtroVisHasta').value;
+  var periodo=desde?(desde==hasta?desde:'Del '+desde+' al '+hasta):'Todo el periodo';
+  var N=nl();
+  var conPed=0;
+  for(var i=0;i<lista.length;i++){ if(lista[i].resultado==='pedido') conPed++; }
+  var lineas=[];
+  lineas.push('REPORTE DE VISITAS - TUTIM');
+  lineas.push('================================');
+  lineas.push('Periodo  : '+periodo);
+  lineas.push('Visitas  : '+lista.length);
+  lineas.push('Con pedido: '+conPed);
+  lineas.push('================================');
+  lineas.push('');
+  for(var i=0;i<lista.length;i++){
+    var v=lista[i];
+    lineas.push((i+1)+'. '+v.fecha+' '+v.hora+' - '+v.cliente+(v.clienteId?' (Cod: '+v.clienteId+')':''));
+    lineas.push('   Vendedor: '+(v.vendedorNombre||v.vendedor||VEND.nombre));
+    lineas.push('   Resultado: '+v.resultadoL);
+    if(v.zona) lineas.push('   Zona: '+v.zona);
+    if(v.notas) lineas.push('   Notas: '+v.notas);
+    lineas.push('');
+  }
+  lineas.push('Generado por Tutim Ventas App');
+  var asunto='Reporte de Visitas Tutim - '+periodo;
+  var cuerpo=lineas.join(N);
+  var gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to=grupoadj26@gmail.com&su='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo);
+  window.open(gmailUrl,'_blank');
+  toast('Abriendo Gmail...');
 }
 
 function renderInv(){
@@ -2487,6 +3102,8 @@ function renderStockHome(){
   document.getElementById('stockHome').innerHTML=html;
 }
 
+var ncDocsData = {};
+
 function abrirModalNuevoCli(){
   document.getElementById('mNuevoCli').classList.add('open');
   // Reset al abrir
@@ -2494,6 +3111,14 @@ function abrirModalNuevoCli(){
   document.getElementById('ncDirEntregaWrap').classList.add('hidden');
   document.getElementById('ncDirEntrega').value='';
   document.getElementById('ncContacto').value='';
+  document.getElementById('ncUbicacion').value='';
+  ncDocsData={};
+  ['ncDocRif','ncDocRegistro','ncDocCedula','ncDocFoto','ncDocFact'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+  ['ncDocRifPrev','ncDocRegistroPrev','ncDocCedulaPrev','ncDocFotoPrev','ncDocFactPrev'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.innerHTML='';
+  });
 }
 
 function toggleDirEntrega(){
@@ -2503,6 +3128,94 @@ function toggleDirEntrega(){
   else wrap.classList.add('hidden');
 }
 
+// ═══ Documentacion del cliente nuevo: preview, ubicacion, compresion y subida ═══
+function previewDoc(inputId, previewId){
+  var input=document.getElementById(inputId);
+  var file=input.files[0];
+  var previewEl=document.getElementById(previewId);
+  var key=inputId.replace('ncDoc','').toLowerCase();
+  if(!file){ ncDocsData[key]=null; previewEl.innerHTML=''; return; }
+  ncDocsData[key]=file;
+  if(file.type==='application/pdf'){
+    previewEl.innerHTML='<div style="font-size:12px;color:var(--azul);font-weight:600">📄 '+file.name+'</div>';
+    return;
+  }
+  var reader=new FileReader();
+  reader.onload=function(e){
+    previewEl.innerHTML='<div style="position:relative;display:inline-block"><img src="'+e.target.result+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)">'+
+      '<button type="button" onclick="quitarDoc(&quot;'+inputId+'&quot;,&quot;'+previewId+'&quot;)" style="position:absolute;top:-6px;right:-6px;background:var(--rojo);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1">×</button></div>';
+  };
+  reader.readAsDataURL(file);
+}
+
+function quitarDoc(inputId, previewId){
+  document.getElementById(inputId).value='';
+  var key=inputId.replace('ncDoc','').toLowerCase();
+  ncDocsData[key]=null;
+  document.getElementById(previewId).innerHTML='';
+}
+
+function previewFacturas(){
+  var input=document.getElementById('ncDocFact');
+  var files=Array.prototype.slice.call(input.files).slice(0,3);
+  ncDocsData.facturas=files;
+  var previewEl=document.getElementById('ncDocFactPrev');
+  previewEl.innerHTML='';
+  files.forEach(function(file){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var div=document.createElement('div');
+      div.innerHTML='<img src="'+e.target.result+'" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)">';
+      previewEl.appendChild(div);
+    };
+    reader.readAsDataURL(file);
+  });
+  if(input.files.length>3) toast('Solo se usaran las primeras 3 facturas');
+}
+
+function capturarUbicacion(){
+  if(!navigator.geolocation){ toast('Este dispositivo no soporta ubicacion'); return; }
+  toast('Obteniendo ubicacion...');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var link='https://www.google.com/maps?q='+pos.coords.latitude+','+pos.coords.longitude;
+    document.getElementById('ncUbicacion').value=link;
+    toast('Ubicacion capturada');
+  }, function(err){
+    toast('No se pudo obtener la ubicacion');
+  }, {enableHighAccuracy:true, timeout:10000});
+}
+
+// Reduce el tamano de una imagen antes de subirla (los PDF se dejan igual)
+function comprimirImagen(file, maxDim, calidad){
+  return new Promise(function(resolve){
+    if(!file.type || file.type.indexOf('image/')!==0){ resolve(file); return; }
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var w=img.width, h=img.height;
+        if(w>h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
+        else if(h>=w && h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
+        var canvas=document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        canvas.toBlob(function(blob){ resolve(blob||file); }, 'image/jpeg', calidad||0.72);
+      };
+      img.onerror=function(){ resolve(file); };
+      img.src=e.target.result;
+    };
+    reader.onerror=function(){ resolve(file); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function subirArchivo(file, path){
+  return comprimirImagen(file, 1280, 0.72).then(function(blob){
+    var ref=storage.ref().child(path);
+    return ref.put(blob).then(function(snapshot){ return snapshot.ref.getDownloadURL(); });
+  });
+}
+
 function guardarNuevoCli(){
   var nom=document.getElementById('ncNom').value.trim();
   var rif=document.getElementById('ncRif').value.trim();
@@ -2510,21 +3223,52 @@ function guardarNuevoCli(){
   var mismaDir=document.getElementById('ncMismaDir').value;
   var dirFiscal=document.getElementById('ncDir').value.trim();
   var dirEntrega=mismaDir==='si'?dirFiscal:document.getElementById('ncDirEntrega').value.trim();
-  var cli={id:'NEW-'+Date.now(),nombre:nom,rif:rif,
+  var clienteId='NEW-'+Date.now();
+  var cli={id:clienteId,nombre:nom,rif:rif,
     contacto:document.getElementById('ncContacto').value.trim(),
     tel:document.getElementById('ncTel').value.trim(),
     dir:dirFiscal,
     dirEntrega:dirEntrega,
     mismaDir:mismaDir==='si',
+    ubicacionMaps:document.getElementById('ncUbicacion').value.trim(),
     vendedor:VEND.codigo,creadoPor:VEND.codigo,
     creadoPorNombre:VEND.nombre,esNuevo:true};
+
+  var btnG=document.getElementById('btnGuardarNuevoCli');
+  if(btnG){ btnG.disabled=true; btnG.textContent='Subiendo documentos...'; }
+
+  var basePath='clientes_nuevos/'+clienteId+'/';
+  var tareas=[];
+  if(ncDocsData.rif) tareas.push(subirArchivo(ncDocsData.rif, basePath+'rif').then(function(url){cli.docRifUrl=url;}));
+  if(ncDocsData.registro) tareas.push(subirArchivo(ncDocsData.registro, basePath+'registro').then(function(url){cli.docRegistroUrl=url;}));
+  if(ncDocsData.cedula) tareas.push(subirArchivo(ncDocsData.cedula, basePath+'cedula').then(function(url){cli.docCedulaUrl=url;}));
+  if(ncDocsData.foto) tareas.push(subirArchivo(ncDocsData.foto, basePath+'foto_entrada').then(function(url){cli.fotoEntradaUrl=url;}));
+  if(ncDocsData.facturas && ncDocsData.facturas.length){
+    cli.facturasUrls=[];
+    ncDocsData.facturas.forEach(function(file, idx){
+      tareas.push(subirArchivo(file, basePath+'factura_'+(idx+1)).then(function(url){cli.facturasUrls.push(url);}));
+    });
+  }
+
+  Promise.all(tareas).then(function(){
+    finalizarNuevoCli(cli, true);
+  }).catch(function(e){
+    console.log('Error subiendo documentos:', e);
+    finalizarNuevoCli(cli, false);
+  });
+}
+
+function finalizarNuevoCli(cli, docsOk){
   CLIENTES.unshift(cli);
   // Guardar en el storage propio del vendedor
   var misMisNuevos=lsGet('tc_new_'+VEND.codigo,[]);
   misMisNuevos.unshift(cli);
   lsSet('tc_new_'+VEND.codigo,misMisNuevos);
   pedido.cliente=cli;
-  cerrarModal('mNuevoCli');toast('Cliente guardado');
+  var btnG=document.getElementById('btnGuardarNuevoCli');
+  if(btnG){ btnG.disabled=false; btnG.textContent='Guardar'; }
+  cerrarModal('mNuevoCli');
+  toast(docsOk?'Cliente guardado':'Cliente guardado (algunos documentos no se pudieron subir)');
   document.getElementById('paso1').classList.add('hidden');
   document.getElementById('paso2').classList.remove('hidden');
   renderProds();
@@ -2553,6 +3297,10 @@ function actualizarMetricas(){
 
 var pedidoEditandoId = null;
 var pedidoAnulandoId = null;
+var visCliSeleccionado = null;
+var visitaEditandoId = null;
+var visitaEliminandoId = null;
+var RESULTADO_LABELS = {pedido:'Tome un pedido',prospecto:'Nuevo prospecto',sin_pedido:'Sin pedido tiene stock',cobro:'Gestion de cobro',no_int:'No interesado',otro:'Otro'};
 
 function editarPedido(pid){
   var ped = null;
@@ -2662,39 +3410,64 @@ function guardarEdicion(){
     }
   }
   if(!pedEditado){ cerrarModal('mEditarPedido'); return; }
-  var pedVend = pedEditado.vendedor;
   var verTodos2=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
-  if(verTodos2){
-    // Guardar directamente en el documento de Firebase del vendedor real del pedido
-    db.collection('vendedores').doc(pedVend).get().then(function(doc){
-      var data = doc.exists ? doc.data() : {};
-      var pedsPropios = [];
-      try{ pedsPropios = data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
-      var found=false;
-      for(var x=0;x<pedsPropios.length;x++){
-        if(String(pedsPropios[x].id)===String(pedidoEditandoId)){ pedsPropios[x]=pedEditado; found=true; break; }
-      }
-      if(!found) pedsPropios.push(pedEditado);
-      db.collection('vendedores').doc(pedVend).set({
-        pedidos: JSON.stringify(pedsPropios),
-        visitas: data.visitas||'[]',
-        clientesNuevos: data.clientesNuevos||'[]',
-        ultimaActualizacion: new Date().toISOString()
-      }).then(function(){
-        cargarTodosFirebase(function(todos){
-          PEDIDOS = todos;
-          cerrarModal('mEditarPedido');
-          renderHistorial();
-          toast('Pedido actualizado');
-        });
-      }).catch(function(){ toast('Error guardando la edicion en Firebase'); });
-    }).catch(function(){ toast('Error al editar: no se pudo conectar con Firebase'); });
-  } else {
+  if(!verTodos2){
     guardarLS();
     cerrarModal('mEditarPedido');
     renderHistorial();
     toast('Pedido actualizado');
+    return;
   }
+  // Modo administrador: por el bug de guardado anterior, este pedido pudo
+  // haber quedado duplicado en mas de un documento de Firebase. Se revisan
+  // TODOS los vendedores, se guarda la edicion en el documento dueno real y
+  // se ELIMINAN las copias duplicadas encontradas en otros documentos.
+  var vendIdsAllE=['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
+  var promesasE = vendIdsAllE.map(function(vid){
+    return db.collection('vendedores').doc(vid).get().then(function(doc){ return {vid:vid, doc:doc}; });
+  });
+  Promise.all(promesasE).then(function(resultados){
+    var coincidencias=[];
+    for(var r=0;r<resultados.length;r++){
+      var vid=resultados[r].vid, doc=resultados[r].doc;
+      if(!doc.exists) continue;
+      var data=doc.data();
+      var peds=[];
+      try{ peds=data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
+      for(var k=0;k<peds.length;k++){
+        if(String(peds[k].id)===String(pedidoEditandoId)){
+          coincidencias.push({vid:vid, data:data, peds:peds, idx:k});
+          break;
+        }
+      }
+    }
+    if(coincidencias.length===0){
+      cerrarModal('mEditarPedido'); renderHistorial(); toast('Pedido actualizado'); return;
+    }
+    var duenoIdxE=-1;
+    for(var c=0;c<coincidencias.length;c++){ if(coincidencias[c].vid===pedEditado.vendedor){ duenoIdxE=c; break; } }
+    if(duenoIdxE===-1) duenoIdxE=0;
+    var escriturasE=[];
+    for(var c=0;c<coincidencias.length;c++){
+      var item=coincidencias[c];
+      if(c===duenoIdxE){ item.peds[item.idx]=pedEditado; }
+      else { item.peds.splice(item.idx,1); }
+      escriturasE.push(db.collection('vendedores').doc(item.vid).set({
+        pedidos: JSON.stringify(item.peds),
+        visitas: item.data.visitas||'[]',
+        clientesNuevos: item.data.clientesNuevos||'[]',
+        ultimaActualizacion: new Date().toISOString()
+      }));
+    }
+    Promise.all(escriturasE).then(function(){
+      cargarTodosFirebase(function(todos){
+        PEDIDOS = todos;
+        cerrarModal('mEditarPedido');
+        renderHistorial();
+        toast(coincidencias.length>1?('Pedido actualizado y '+(coincidencias.length-1)+' copia(s) duplicada(s) eliminada(s)'):'Pedido actualizado');
+      });
+    }).catch(function(){ toast('Error guardando cambios en Firebase'); });
+  }).catch(function(){ toast('Error al editar: no se pudo conectar con Firebase'); });
 }
 
 function confirmarAnular(pid){
@@ -2713,44 +3486,69 @@ function ejecutarAnular(){
       PEDIDOS[i].motivoAnulacion = motivo;
       PEDIDOS[i].fechaAnulacion = new Date().toLocaleString('es-VE');
       PEDIDOS[i]._sel = false;
-      pedObj = PEDIDOS[i];
-      break;
+      if(!pedObj) pedObj = PEDIDOS[i];
     }
   }
   if(!pedObj){ cerrarModal('mAnular'); return; }
   var verTodosA=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
-  if(verTodosA){
-    // Guardar directamente en el documento de Firebase del vendedor real del pedido
-    var pvA = pedObj.vendedor;
-    db.collection('vendedores').doc(pvA).get().then(function(doc){
-      var data = doc.exists ? doc.data() : {};
-      var pedsA = [];
-      try{ pedsA = data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
-      var found=false;
-      for(var b=0;b<pedsA.length;b++){
-        if(String(pedsA[b].id)===String(pedidoAnulandoId)){ pedsA[b]=pedObj; found=true; break; }
-      }
-      if(!found) pedsA.push(pedObj);
-      db.collection('vendedores').doc(pvA).set({
-        pedidos: JSON.stringify(pedsA),
-        visitas: data.visitas||'[]',
-        clientesNuevos: data.clientesNuevos||'[]',
-        ultimaActualizacion: new Date().toISOString()
-      }).then(function(){
-        cargarTodosFirebase(function(todos){
-          PEDIDOS = todos;
-          cerrarModal('mAnular');
-          renderHistorial();
-          toast('Pedido anulado');
-        });
-      }).catch(function(){ toast('Error guardando la anulacion en Firebase'); });
-    }).catch(function(){ toast('Error al anular: no se pudo conectar con Firebase'); });
-  } else {
+  if(!verTodosA){
     guardarLS();
     cerrarModal('mAnular');
     renderHistorial();
     toast('Pedido anulado');
+    return;
   }
+  // Modo administrador: por el bug de guardado anterior, este pedido pudo
+  // haber quedado duplicado en MAS DE UN documento de Firebase (su documento
+  // dueno real + copias accidentales en otros). Se revisan TODOS los
+  // vendedores, se marca como anulado en el documento dueno real y se
+  // ELIMINAN las copias duplicadas encontradas en cualquier otro documento.
+  var vendIdsAll=['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
+  var promesas = vendIdsAll.map(function(vid){
+    return db.collection('vendedores').doc(vid).get().then(function(doc){ return {vid:vid, doc:doc}; });
+  });
+  Promise.all(promesas).then(function(resultados){
+    var coincidencias=[];
+    for(var r=0;r<resultados.length;r++){
+      var vid=resultados[r].vid, doc=resultados[r].doc;
+      if(!doc.exists) continue;
+      var data=doc.data();
+      var peds=[];
+      try{ peds=data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
+      for(var k=0;k<peds.length;k++){
+        if(String(peds[k].id)===String(pedidoAnulandoId)){
+          coincidencias.push({vid:vid, data:data, peds:peds, idx:k});
+          break;
+        }
+      }
+    }
+    if(coincidencias.length===0){
+      cerrarModal('mAnular'); renderHistorial(); toast('Pedido anulado'); return;
+    }
+    var duenoIdx=-1;
+    for(var c=0;c<coincidencias.length;c++){ if(coincidencias[c].vid===pedObj.vendedor){ duenoIdx=c; break; } }
+    if(duenoIdx===-1) duenoIdx=0;
+    var escrituras=[];
+    for(var c=0;c<coincidencias.length;c++){
+      var item=coincidencias[c];
+      if(c===duenoIdx){ item.peds[item.idx]=pedObj; }
+      else { item.peds.splice(item.idx,1); }
+      escrituras.push(db.collection('vendedores').doc(item.vid).set({
+        pedidos: JSON.stringify(item.peds),
+        visitas: item.data.visitas||'[]',
+        clientesNuevos: item.data.clientesNuevos||'[]',
+        ultimaActualizacion: new Date().toISOString()
+      }));
+    }
+    Promise.all(escrituras).then(function(){
+      cargarTodosFirebase(function(todos){
+        PEDIDOS = todos;
+        cerrarModal('mAnular');
+        renderHistorial();
+        toast(coincidencias.length>1?('Pedido anulado y '+(coincidencias.length-1)+' copia(s) duplicada(s) eliminada(s)'):'Pedido anulado');
+      });
+    }).catch(function(){ toast('Error guardando cambios en Firebase'); });
+  }).catch(function(){ toast('Error al anular: no se pudo conectar con Firebase'); });
 }
 
 function confirmarReset(){
@@ -3157,7 +3955,14 @@ function adminTab(tab){
   if(tab==='inventario') renderAdminInv();
   if(tab==='precios') renderAdminPrecios();
   if(tab==='vendedores') renderAdminVend();
-  if(tab==='clientes') renderAdminCli();
+  if(tab==='clientes'){
+    document.getElementById('adminCliList').innerHTML='<div style="color:#aaa;text-align:center;padding:12px">Cargando clientes...</div>';
+    cargarClientesNuevosFirebase(function(cns){
+      NUEVOS_TODOS_CACHE=cns;
+      CLIENTES=getClientesParaVendedor();
+      renderAdminCli();
+    });
+  }
   if(tab==='historico'){
     document.getElementById('btnCargarHistorico').disabled=false;
     document.getElementById('btnCargarHistorico').textContent='Cargar Histórico en Firebase';
@@ -3491,19 +4296,22 @@ function cargarCSVVendedores(input){
 function renderAdminCli(){
   var q=(document.getElementById('adminBusqCli')||{}).value||'';
   q=q.toLowerCase();
-  var total=CLIENTES_PROFIT.length;
-  document.getElementById('adminCliInfo').textContent=total+' clientes en base de datos';
-  var lista=CLIENTES_PROFIT.filter(function(c){
+  // Combinar la base de Profit con los clientes nuevos creados por los vendedores
+  var todosCli=CLIENTES_PROFIT.concat(NUEVOS_TODOS_CACHE);
+  var total=todosCli.length;
+  document.getElementById('adminCliInfo').textContent=total+' clientes en base de datos ('+NUEVOS_TODOS_CACHE.length+' nuevos)';
+  var lista=todosCli.filter(function(c){
     if(!q) return true;
-    return c.nombre.toLowerCase().indexOf(q)>=0||c.rif.toLowerCase().indexOf(q)>=0||c.id.indexOf(q)>=0;
+    return c.nombre.toLowerCase().indexOf(q)>=0||(c.rif||'').toLowerCase().indexOf(q)>=0||c.id.indexOf(q)>=0;
   }).slice(0,50);
   var html='';
   for(var i=0;i<lista.length;i++){
     var c=lista[i];
+    var tieneDocs=!!(c.docRifUrl||c.docRegistroUrl||c.docCedulaUrl||c.fotoEntradaUrl||(c.facturasUrls&&c.facturasUrls.length));
     html+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borde);font-size:13px">' +
       '<div style="flex:1">' +
-        '<span style="font-weight:600;color:var(--azul)">'+c.id+'</span> — '+c.nombre+(c.inactivo?' <span style="color:var(--rojo);font-size:11px">(inactivo)</span>':'')+
-        '<div style="font-size:11px;color:#888">'+c.rif+(c.vendedor?' | VEND '+c.vendedor:'')+'</div>' +
+        '<span style="font-weight:600;color:var(--azul)">'+c.id+'</span> — '+c.nombre+(c.inactivo?' <span style="color:var(--rojo);font-size:11px">(inactivo)</span>':'')+(c.esNuevo?' <span class="tag tag-rosa" style="font-size:10px">NUEVO</span>':'')+(tieneDocs?' <span class="tag tag-v" style="font-size:10px">📎 docs</span>':'')+
+        '<div style="font-size:11px;color:#888">'+(c.rif||'')+(c.vendedor?' | VEND '+c.vendedor:'')+'</div>' +
       '</div>' +
       '<button onclick="editarCliente(&quot;'+c.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Editar</button>' +
     '</div>';
@@ -3514,6 +4322,7 @@ function renderAdminCli(){
 
 function editarCliente(id){
   var c=CLIENTES_PROFIT.find(function(x){return x.id===id;});
+  if(!c) c=NUEVOS_TODOS_CACHE.find(function(x){return x.id===id;});
   if(!c) return;
   document.getElementById('mCliTitulo').textContent='Editar cliente '+id;
   document.getElementById('cCodigo').value=c.id;
@@ -3523,6 +4332,20 @@ function editarCliente(id){
   document.getElementById('cDir').value=c.dir||'';
   document.getElementById('cVen').value=c.vendedor||'';
   document.getElementById('cInactivo').value=c.inactivo?'true':'false';
+  // Mostrar documentacion adjunta (si tiene)
+  var docsWrap=document.getElementById('cDocsWrap');
+  var docsList=document.getElementById('cDocsList');
+  var docsHtml='';
+  if(c.docRifUrl) docsHtml+='<a href="'+c.docRifUrl+'" target="_blank" style="text-decoration:none"><div style="text-align:center"><img src="'+c.docRifUrl+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)"><div style="font-size:10px;color:#888">RIF</div></div></a>';
+  if(c.docRegistroUrl) docsHtml+='<a href="'+c.docRegistroUrl+'" target="_blank" style="text-decoration:none"><div style="text-align:center"><img src="'+c.docRegistroUrl+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)"><div style="font-size:10px;color:#888">Registro</div></div></a>';
+  if(c.docCedulaUrl) docsHtml+='<a href="'+c.docCedulaUrl+'" target="_blank" style="text-decoration:none"><div style="text-align:center"><img src="'+c.docCedulaUrl+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)"><div style="font-size:10px;color:#888">Cedula</div></div></a>';
+  if(c.fotoEntradaUrl) docsHtml+='<a href="'+c.fotoEntradaUrl+'" target="_blank" style="text-decoration:none"><div style="text-align:center"><img src="'+c.fotoEntradaUrl+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)"><div style="font-size:10px;color:#888">Entrada</div></div></a>';
+  if(c.facturasUrls&&c.facturasUrls.length) c.facturasUrls.forEach(function(u,idx){
+    docsHtml+='<a href="'+u+'" target="_blank" style="text-decoration:none"><div style="text-align:center"><img src="'+u+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)"><div style="font-size:10px;color:#888">Fact. '+(idx+1)+'</div></div></a>';
+  });
+  if(c.ubicacionMaps) docsHtml+='<a href="'+c.ubicacionMaps+'" target="_blank" style="text-decoration:none"><div style="text-align:center;width:70px;height:70px;background:var(--azul-c);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px">📍</div><div style="font-size:10px;color:#888;text-align:center">Ubicacion</div></a>';
+  if(docsHtml){ docsList.innerHTML=docsHtml; docsWrap.classList.remove('hidden'); }
+  else { docsList.innerHTML=''; docsWrap.classList.add('hidden'); }
   document.getElementById('mEditarCli').classList.add('open');
 }
 
@@ -3530,6 +4353,38 @@ function guardarClienteAdmin(){
   var id=document.getElementById('cCodigo').value.trim();
   var nombre=document.getElementById('cNombre').value.trim();
   if(!id||!nombre){toast('Codigo y nombre son obligatorios');return;}
+  var esNuevoCli=(id.indexOf('NEW-')===0);
+  if(esNuevoCli){
+    var cn=NUEVOS_TODOS_CACHE.find(function(x){return x.id===id;});
+    if(!cn){ cerrarModal('mEditarCli'); return; }
+    cn.nombre=nombre;
+    cn.rif=document.getElementById('cRif').value.trim();
+    cn.tel=document.getElementById('cTel').value.trim();
+    cn.dir=document.getElementById('cDir').value.trim();
+    cn.vendedor=document.getElementById('cVen').value.trim();
+    cn.inactivo=(document.getElementById('cInactivo').value==='true');
+    var vidDueno=cn.creadoPor;
+    db.collection('vendedores').doc(vidDueno).get().then(function(doc){
+      var data=doc.exists?doc.data():{};
+      var cns=[];
+      try{ cns=data.clientesNuevos?JSON.parse(data.clientesNuevos):[]; }catch(e){}
+      var found=false;
+      for(var k=0;k<cns.length;k++){ if(cns[k].id===id){ cns[k]=cn; found=true; break; } }
+      if(!found) cns.push(cn);
+      db.collection('vendedores').doc(vidDueno).set({
+        pedidos: data.pedidos||'[]',
+        visitas: data.visitas||'[]',
+        clientesNuevos: JSON.stringify(cns),
+        ultimaActualizacion: new Date().toISOString()
+      }).then(function(){
+        toast('Cliente actualizado');
+      }).catch(function(){ toast('Error guardando en Firebase'); });
+    }).catch(function(){ toast('Error al guardar: no se pudo conectar con Firebase'); });
+    CLIENTES=getClientesParaVendedor();
+    cerrarModal('mEditarCli');
+    renderAdminCli();
+    return;
+  }
   var c=CLIENTES_PROFIT.find(function(x){return x.id===id;});
   if(!c) return;
   c.nombre=nombre;
@@ -3657,28 +4512,116 @@ function cargarCSVClientes(input){
 function guardarClientesBase(nuevaBase){
   if(nuevaBase.length===0){toast('No se encontraron clientes validos');return;}
   var estadoEl=document.getElementById('estadoCargaClientes');
-  if(estadoEl) estadoEl.innerHTML='<span style="color:#aaa">Guardando en Firebase...</span>';
-  // Crear mapa de clientes para lookup rápido
+  if(estadoEl) estadoEl.innerHTML='<span style="color:#aaa">Vinculando clientes nuevos por RIF...</span>';
+  // Crear mapa de clientes para lookup rápido (por codigo, para actualizar nombres en pedidos despues)
   var cliMapNuevo={};
   for(var i=0;i<nuevaBase.length;i++) cliMapNuevo[nuevaBase[i].id]=nuevaBase[i];
-  db.collection('config').doc('clientes').set({
-    data:JSON.stringify(nuevaBase),
-    actualizado:new Date().toISOString()
-  }).then(function(){
-    CLIENTES_PROFIT.length=0;
-    for(var i=0;i<nuevaBase.length;i++) CLIENTES_PROFIT.push(nuevaBase[i]);
-    CLIENTES=getClientesParaVendedor();
-    if(estadoEl) estadoEl.innerHTML='<span style="color:#aaa">Actualizando nombres en pedidos...</span>';
-    // Actualizar nombres en pedidos de Firebase
-    actualizarNombresEnPedidos(cliMapNuevo, function(actualizados){
-      toast(nuevaBase.length+' clientes cargados');
-      if(estadoEl) estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+nuevaBase.length+' clientes guardados'+(actualizados>0?' | '+actualizados+' pedidos actualizados':'')+'</span>';
-      renderAdminCli();
+
+  // Antes de guardar, vincular automaticamente por RIF los clientes "NEW-xxxx"
+  // que los vendedores crearon con los codigos oficiales recien llegados de Profit.
+  // Esto copia los documentos adjuntos al cliente oficial, reasigna sus pedidos
+  // y elimina el registro fantasma "NEW-xxxx".
+  vincularClientesNuevosPorRif(nuevaBase, function(totalVinculados){
+    if(estadoEl) estadoEl.innerHTML='<span style="color:#aaa">Guardando en Firebase...</span>';
+    db.collection('config').doc('clientes').set({
+      data:JSON.stringify(nuevaBase),
+      actualizado:new Date().toISOString()
+    }).then(function(){
+      CLIENTES_PROFIT.length=0;
+      for(var i=0;i<nuevaBase.length;i++) CLIENTES_PROFIT.push(nuevaBase[i]);
+      CLIENTES=getClientesParaVendedor();
+      if(estadoEl) estadoEl.innerHTML='<span style="color:#aaa">Actualizando nombres en pedidos...</span>';
+      // Actualizar nombres en pedidos de Firebase
+      actualizarNombresEnPedidos(cliMapNuevo, function(actualizados){
+        toast(nuevaBase.length+' clientes cargados'+(totalVinculados>0?' | '+totalVinculados+' vinculados por RIF':''));
+        if(estadoEl) estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+nuevaBase.length+' clientes guardados'+(totalVinculados>0?' | '+totalVinculados+' clientes nuevos vinculados por RIF':'')+(actualizados>0?' | '+actualizados+' pedidos actualizados':'')+'</span>';
+        // Refrescar cache de clientes nuevos (algunos pudieron desaparecer al vincularse)
+        cargarClientesNuevosFirebase(function(cns){
+          NUEVOS_TODOS_CACHE=cns;
+          CLIENTES=getClientesParaVendedor();
+          renderAdminCli();
+        });
+      });
+    }).catch(function(e){
+      if(estadoEl) estadoEl.innerHTML='<span style="color:var(--rojo)">Error guardando en Firebase</span>';
+      toast('Error al guardar');
     });
-  }).catch(function(e){
-    if(estadoEl) estadoEl.innerHTML='<span style="color:var(--rojo)">Error guardando en Firebase</span>';
-    toast('Error al guardar');
   });
+}
+
+// Normaliza un RIF/Cedula para comparar sin importar mayusculas, guiones o espacios
+function normalizarRif(rif){
+  return (rif||'').toString().toUpperCase().replace(/[^A-Z0-9]/g,'');
+}
+
+// Busca, por RIF, los clientes "NEW-xxxx" creados por los vendedores que ya
+// tienen un codigo oficial en la nueva base de Profit. Cuando encuentra una
+// coincidencia: copia los documentos adjuntos al cliente oficial, reasigna
+// los pedidos que apuntaban al codigo fantasma, y elimina ese registro.
+function vincularClientesNuevosPorRif(nuevaBase, callback){
+  var rifMap={};
+  for(var i=0;i<nuevaBase.length;i++){
+    var rn=normalizarRif(nuevaBase[i].rif);
+    if(rn) rifMap[rn]=nuevaBase[i];
+  }
+  db.collection('vendedores').get().then(function(snap){
+    var docs=snap.docs;
+    var pendientes=docs.length;
+    var totalVinculados=0;
+    if(pendientes===0){ callback(0); return; }
+    docs.forEach(function(doc){
+      var data=doc.data();
+      var cns=[];
+      try{ cns=JSON.parse(data.clientesNuevos||'[]'); }catch(e){}
+      var peds=[];
+      try{ peds=JSON.parse(data.pedidos||'[]'); }catch(e){}
+      var cambios=false;
+      var cnsRestantes=[];
+      for(var i=0;i<cns.length;i++){
+        var cn=cns[i];
+        var rn=normalizarRif(cn.rif);
+        var oficial=rn?rifMap[rn]:null;
+        if(oficial){
+          if(cn.docRifUrl) oficial.docRifUrl=cn.docRifUrl;
+          if(cn.docRegistroUrl) oficial.docRegistroUrl=cn.docRegistroUrl;
+          if(cn.docCedulaUrl) oficial.docCedulaUrl=cn.docCedulaUrl;
+          if(cn.fotoEntradaUrl) oficial.fotoEntradaUrl=cn.fotoEntradaUrl;
+          if(cn.facturasUrls && cn.facturasUrls.length) oficial.facturasUrls=cn.facturasUrls;
+          if(cn.ubicacionMaps) oficial.ubicacionMaps=cn.ubicacionMaps;
+          for(var p=0;p<peds.length;p++){
+            if(peds[p].cliente && peds[p].cliente.id===cn.id){
+              peds[p].cliente.id=oficial.id;
+              peds[p].cliente.nombre=oficial.nombre||peds[p].cliente.nombre;
+              peds[p].cliente.rif=oficial.rif||peds[p].cliente.rif;
+              peds[p].cliente.esNuevo=false;
+            }
+          }
+          totalVinculados++;
+          cambios=true;
+          // No se agrega a cnsRestantes: el registro fantasma se elimina
+        } else {
+          cnsRestantes.push(cn);
+        }
+      }
+      if(cambios){
+        doc.ref.set({
+          pedidos: JSON.stringify(peds),
+          visitas: data.visitas||'[]',
+          clientesNuevos: JSON.stringify(cnsRestantes),
+          ultimaActualizacion: new Date().toISOString()
+        }).then(function(){
+          pendientes--;
+          if(pendientes<=0) callback(totalVinculados);
+        }).catch(function(){
+          pendientes--;
+          if(pendientes<=0) callback(totalVinculados);
+        });
+      } else {
+        pendientes--;
+        if(pendientes<=0) callback(totalVinculados);
+      }
+    });
+  }).catch(function(){ callback(0); });
 }
 
 function actualizarNombresEnPedidos(cliMap, callback){
