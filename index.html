@@ -279,8 +279,8 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   <!-- INICIO -->
   <div class="screen active" id="s-inicio">
     <div class="metrics">
-      <div class="metric"><div class="num" id="mPed">0</div><div class="lbl">Pedidos hoy</div></div>
-      <div class="metric"><div class="num" id="mVis">0</div><div class="lbl">Visitas hoy</div></div>
+      <div class="metric" onclick="goScreen('historial')" style="cursor:pointer"><div class="num" id="mPed">0</div><div class="lbl">Pedidos hoy</div></div>
+      <div class="metric" onclick="goScreen('visita')" style="cursor:pointer"><div class="num" id="mVis">0</div><div class="lbl">Visitas hoy</div></div>
       <div class="metric"><div class="num" id="mBul">0</div><div class="lbl">Bultos hoy</div></div>
       <div class="metric"><div class="num" id="mMon">$0</div><div class="lbl">Total hoy</div></div>
     </div>
@@ -295,7 +295,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
     </div>
     <div class="card">
-      <div class="card-title">Ultimos pedidos</div>
+      <div class="card-title">Pedidos de hoy</div>
       <div id="ultimosPed"><div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Sin pedidos hoy</div></div>
     </div>
     <div class="card" style="background:var(--azul-c)">
@@ -527,8 +527,10 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="row-sb"><span class="k">Precio 1 - Display</span><span class="v">$74.40</span></div>
       <div class="row-sb"><span class="k">Precio 2 - Display</span><span class="v">$70.80</span></div>
     </div>
-      <div class="row-sb"><span class="k">Promo 67x5</span><span class="v">+5 unid gratis</span></div>
-      <div class="row-sb"><span class="k">Desc. pronto pago (7d)</span><span class="v">5%</span></div>
+
+    <div class="card">
+      <div class="card-title">Promociones activas</div>
+      <div id="promosActivasList"></div>
     </div>
   </div>
 
@@ -558,6 +560,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-precios" onclick="adminTab('precios')">Precios</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-vendedores" onclick="adminTab('vendedores')">Vendedores</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-clientes" onclick="adminTab('clientes')">Clientes</button>
+      <button class="btn btn-s btn-sm admin-tab-btn" id="atab-docs" onclick="adminTab('docs')">Documentacion</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-historico" onclick="adminTab('historico')">Historico</button>
     </div>
 
@@ -620,29 +623,50 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     </div>
   </div>
 
+    <!-- TAB DOCUMENTACION -->
+    <div id="adminTab-docs" style="display:none">
+      <div class="card">
+        <div class="card-title">Control de documentacion de clientes</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Clientes agregados al sistema en el rango de fechas, con el estado de sus documentos (RIF, Registro, Cedula, facturas, foto de entrada y ubicacion).</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px">
+            <label style="font-size:11px">Desde</label>
+            <input type="date" id="docsFiltroDesde" onchange="renderControlDocs()" style="padding:8px;font-size:13px;width:100%;box-sizing:border-box">
+          </div>
+          <div style="flex:1;min-width:130px">
+            <label style="font-size:11px">Hasta</label>
+            <input type="date" id="docsFiltroHasta" onchange="renderControlDocs()" style="padding:8px;font-size:13px;width:100%;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="margin-top:8px">
+          <label style="font-size:12px;color:#666;text-transform:none;letter-spacing:0">Estado:</label>
+          <select id="docsFiltroEstado" onchange="renderControlDocs()" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--borde);border-radius:6px;margin-left:6px">
+            <option value="todos">Todos</option>
+            <option value="completo">Solo completos</option>
+            <option value="incompleto">Solo incompletos</option>
+          </select>
+        </div>
+      </div>
+      <div class="metrics" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+        <div class="metric" style="padding:8px"><div class="num" style="font-size:18px" id="docsResumTotal">0</div><div class="lbl">Clientes</div></div>
+        <div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--verde)" id="docsResumCompletos">0</div><div class="lbl">Completos</div></div>
+        <div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--ambar)" id="docsResumIncompletos">0</div><div class="lbl">Incompletos</div></div>
+      </div>
+      <div id="docsControlList"></div>
+    </div>
+
     <!-- TAB HISTORICO -->
     <div id="adminTab-historico" style="display:none">
-      <div class="card">
-        <div class="card-title">Historico de Pedidos Profit</div>
-        <div id="historicoInfo" style="font-size:13px;color:#555;margin-bottom:8px">
-          <strong>159 pedidos</strong> históricos disponibles (hasta 07/07/2026)
-        </div>
-        <div id="historicoResumen" style="font-size:12px;color:#888;margin-bottom:12px">
-          1,344 bultos &nbsp;|&nbsp; $113,594.40 total
-        </div>
-        <div style="background:#FFF3CD;border-radius:8px;padding:10px;font-size:12px;color:#856404;margin-bottom:12px">
-          ⚠️ Esta acción carga el histórico en Firebase. Los pedidos aparecerán como <strong>Recibido x Oficina</strong> en el historial de cada vendedor. Solo se puede cargar una vez.
-        </div>
-        <div id="historicoEstado" style="font-size:13px;margin-bottom:8px"></div>
-        <button class="btn btn-p" onclick="cargarHistoricoProfit()" id="btnCargarHistorico">Cargar Histórico en Firebase</button>
-      </div>
       <div class="card" style="background:var(--azul-c)">
-        <div class="card-title" style="color:var(--azul)">Actualizar con nuevo archivo DBF</div>
+        <div class="card-title" style="color:var(--azul)">Actualizar historico con nuevo archivo DBF</div>
         <p style="font-size:12px;color:#666;margin-bottom:8px">Carga el archivo <strong>pedidos.DBF</strong> exportado de Profit para actualizar el histórico.</p>
         <input type="file" id="dbfPedidos" accept=".dbf,.DBF" onchange="cargarDBFPedidos(this)">
         <input type="file" id="dbfRengPed" accept=".dbf,.DBF" onchange="cargarDBFRengPed(this)" style="margin-top:8px">
         <div style="font-size:11px;color:#888;margin-top:4px">1. Selecciona pedidos.DBF &nbsp; 2. Selecciona reng_ped.DBF</div>
         <button class="btn btn-p" style="margin-top:8px" onclick="procesarDBFPedidos()" id="btnProcesarDBF" disabled>Procesar e importar</button>
+        <div id="historicoInfo" style="font-size:13px;color:#555;margin-top:10px"></div>
+        <div id="historicoEstado" style="font-size:13px;margin-top:6px"></div>
+        <button class="btn btn-p" onclick="cargarHistoricoProfit()" id="btnCargarHistorico" style="margin-top:8px" disabled>Guardar en Firebase</button>
       </div>
     </div>
 
@@ -987,6 +1011,18 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div style="display:flex;gap:8px">
       <button class="btn btn-danger" style="background:var(--rojo);color:#fff" onclick="ejecutarAnular()">Confirmar anulacion</button>
       <button class="btn btn-s" onclick="cerrarModal('mAnular')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REACTIVAR -->
+<div class="modal-bg" id="mReactivar">
+  <div class="modal">
+    <h3 style="color:var(--verde)">Reactivar pedido</h3>
+    <p style="font-size:14px;color:#555;margin-bottom:16px">El pedido volvera a quedar como <strong>Pendiente</strong>, igual que si fuera nuevo. ¿Confirmas?</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:var(--verde);color:#fff;font-weight:600" onclick="ejecutarReactivar()">Reactivar</button>
+      <button class="btn btn-s" onclick="cerrarModal('mReactivar')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -1435,6 +1471,7 @@ function mostrarApp(){
   var verTodos=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
   // Limpiar datos anteriores en pantalla primero
   PEDIDOS=[]; VISITAS=[]; CLIENTES=[];
+  goScreen('inicio');
   document.getElementById('histList').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Cargando...</div>';
   document.getElementById('ultimosPed').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Cargando...</div>';
   // Mostrar pantalla de carga
@@ -2287,6 +2324,7 @@ function renderPedidoCard(p){
     ?'<button disabled style="background:#eee;color:#aaa;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:not-allowed">Editar</button>'
     :'<button onclick="editarPedido(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Editar</button>';
   var btnAnular='<button onclick="confirmarAnular(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Anular</button>';
+  var btnReactivar=puedeReactivar(p)?'<button onclick="confirmarReactivar(&quot;'+p.id+'&quot;)" style="background:var(--verde-c);color:var(--verde);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Reactivar</button>':'';
   return '<div class="hist-card" style="border-left:3px solid '+cardBorder+';'+cardOpacity+'">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
       '<input type="checkbox" class="ped-check" data-id="'+p.id+'" '+(p._sel&&!anulado?'checked':'')+
@@ -2306,7 +2344,7 @@ function renderPedidoCard(p){
       '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
         enviadoBadge+
         (anulado
-          ?'<span class="tag tag-r">Anulado</span>'+(p.motivoAnulacion?' <span style="font-size:11px;color:var(--rojo)">'+p.motivoAnulacion+'</span>':'')
+          ?'<span class="tag tag-r">Anulado</span>'+(p.motivoAnulacion?' <span style="font-size:11px;color:var(--rojo)">'+p.motivoAnulacion+'</span>':'')+' '+btnReactivar
           :(btnEditar+btnAnular)
         )+
       '</div>' +
@@ -3155,6 +3193,34 @@ function renderInv(){
       '</div></div>';
   }
   document.getElementById('invList').innerHTML=html;
+  renderPromosActivasStock();
+}
+
+function renderPromosActivasStock(){
+  var el=document.getElementById('promosActivasList');
+  if(!el) return;
+  var html='';
+  // Promo de bolsas: bonificacion permanente por escala, siempre activa
+  html+='<div style="padding:10px 0;border-bottom:1px solid var(--borde)">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+      '<strong style="font-size:13px">Promo Bolsas</strong>'+
+      '<span class="tag tag-v" style="font-size:10px">ACTIVA</span>'+
+    '</div>'+
+    '<div style="font-size:12px;color:#666">2 btos: +5 unid &nbsp;|&nbsp; 3 btos: +9 unid &nbsp;|&nbsp; 4 btos: +18 unid &nbsp;|&nbsp; 5+ btos: 1 bulto gratis cada 5</div>'+
+  '</div>';
+  // Promo Display: depende del switch en Admin
+  html+='<div style="padding:10px 0">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+      '<strong style="font-size:13px">Promo Display</strong>'+
+      (PROMO_DISPLAY_ACTIVA
+        ?'<span class="tag tag-v" style="font-size:10px">ACTIVA</span>'
+        :'<span class="tag" style="background:#eee;color:#888;font-size:10px">INACTIVA</span>')+
+    '</div>'+
+    (PROMO_DISPLAY_ACTIVA
+      ?'<div style="font-size:12px;color:#666">1-4 btos: $3.00 &nbsp;|&nbsp; 5-9 btos: $2.95 &nbsp;|&nbsp; 10+ btos: $2.87 (precio por display)</div>'
+      :'<div style="font-size:12px;color:#aaa">Actualmente desactivada. Se activa desde Admin.</div>')+
+  '</div>';
+  el.innerHTML=html;
 }
 
 function renderStockHome(){
@@ -3250,6 +3316,101 @@ function clienteTieneAlgunDoc(c){
   return !!(c.docRifUrl||c.docRegistroUrl||c.docCedulaUrl||c.fotoEntradaUrl||(c.facturasUrls&&c.facturasUrls.length));
 }
 
+// Devuelve el dia 6 del mes actual en formato YYYY-MM-DD (punto de partida
+// pedido para el control de documentacion)
+function fechaSeisDeEsteMes(){
+  var ahora=new Date();
+  return ahora.getFullYear()+'-'+String(ahora.getMonth()+1).padStart(2,'0')+'-06';
+}
+
+// Determina la fecha en que un cliente fue agregado al sistema. Usa el campo
+// fechaCreacion si existe; si no, y el codigo todavia es "NEW-<timestamp>",
+// se deriva del propio codigo. Si es un cliente antiguo de Profit sin
+// ninguno de los dos, no aplica (no se puede saber cuando se agrego).
+function obtenerFechaCreacionCliente(c){
+  if(c.fechaCreacion){
+    var d=new Date(c.fechaCreacion);
+    if(!isNaN(d.getTime())) return d;
+  }
+  if(c.id && c.id.indexOf('NEW-')===0){
+    var ts=parseInt(c.id.substring(4),10);
+    if(!isNaN(ts)) return new Date(ts);
+  }
+  return null;
+}
+
+// Lista en español de los requisitos que le faltan a un cliente
+function obtenerFaltantesDoc(c){
+  var faltantes=[];
+  if(!c.docRifUrl) faltantes.push('RIF');
+  if(!c.docRegistroUrl) faltantes.push('Registro Mercantil');
+  if(!c.docCedulaUrl) faltantes.push('Cedula');
+  var totalFact=(c.facturasUrls?c.facturasUrls.length:0);
+  if(totalFact<MIN_FACTURAS_REQUERIDAS){
+    var faltanFact=MIN_FACTURAS_REQUERIDAS-totalFact;
+    faltantes.push(faltanFact+' factura'+(faltanFact>1?'s':'')+' mas');
+  }
+  if(!c.fotoEntradaUrl) faltantes.push('Foto de entrada');
+  if(!c.ubicacionMaps) faltantes.push('Ubicacion');
+  return faltantes;
+}
+
+function renderControlDocs(){
+  var desde=document.getElementById('docsFiltroDesde').value;
+  var hasta=document.getElementById('docsFiltroHasta').value;
+  var estadoF=document.getElementById('docsFiltroEstado').value;
+  var todosCli=CLIENTES_PROFIT.concat(NUEVOS_TODOS_CACHE);
+  var lista=[];
+  for(var i=0;i<todosCli.length;i++){
+    var c=todosCli[i];
+    var fCreacion=obtenerFechaCreacionCliente(c);
+    if(!fCreacion) continue; // cliente antiguo de Profit sin fecha conocida: no aplica a este control
+    var fISO=fCreacion.getFullYear()+'-'+String(fCreacion.getMonth()+1).padStart(2,'0')+'-'+String(fCreacion.getDate()).padStart(2,'0');
+    if(desde && fISO<desde) continue;
+    if(hasta && fISO>hasta) continue;
+    var completo=clienteDocsCompletos(c);
+    if(estadoF==='completo' && !completo) continue;
+    if(estadoF==='incompleto' && completo) continue;
+    lista.push({c:c, fISO:fISO, completo:completo});
+  }
+  lista.sort(function(a,b){ return a.fISO<b.fISO?1:(a.fISO>b.fISO?-1:0); });
+
+  var total=lista.length, completos=0;
+  for(var i=0;i<lista.length;i++){ if(lista[i].completo) completos++; }
+  document.getElementById('docsResumTotal').textContent=total;
+  document.getElementById('docsResumCompletos').textContent=completos;
+  document.getElementById('docsResumIncompletos').textContent=(total-completos);
+
+  var html='';
+  if(lista.length===0){
+    html='<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Sin clientes en este rango</div>';
+  } else {
+    for(var i=0;i<lista.length;i++){
+      var item=lista[i], c=item.c;
+      var faltantes=item.completo?[]:obtenerFaltantesDoc(c);
+      var quienCreo=c.creadoPorNombre?(' por '+c.creadoPorNombre):(c.vendedorNombre?(' | VEND '+c.vendedor+' - '+c.vendedorNombre):'');
+      html+='<div class="card" style="margin-bottom:8px;border-left:3px solid '+(item.completo?'var(--verde)':'var(--ambar)')+'">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
+          '<div>'+
+            '<strong style="font-size:14px">'+c.nombre+'</strong>'+
+            (c.esNuevo?' <span class="tag tag-rosa" style="font-size:10px">NUEVO</span>':'')+
+            '<div style="font-size:11px;color:var(--azul);font-weight:600">Cod: '+c.id+(c.rif?' | '+c.rif:'')+'</div>'+
+            '<div style="font-size:11px;color:#888">Creado: '+item.fISO+quienCreo+'</div>'+
+          '</div>'+
+          (item.completo
+            ?'<span class="tag tag-v" style="font-size:11px;white-space:nowrap">✓ Completo</span>'
+            :'<span class="tag" style="background:#FFF3CD;color:#856404;font-size:11px;white-space:nowrap">Incompleto</span>')+
+        '</div>'+
+        (faltantes.length?'<div style="font-size:12px;color:var(--rojo);margin-top:6px">Falta: '+faltantes.join(', ')+'</div>':'')+
+        '<div style="margin-top:8px">'+
+          '<button onclick="abrirDocsCliente(&quot;'+c.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Ver / Completar documentos</button>'+
+        '</div>'+
+      '</div>';
+    }
+  }
+  document.getElementById('docsControlList').innerHTML=html;
+}
+
 // Actualiza las marcas ✓ verdes junto a cada requisito, combinando lo que ya
 // esta subido (clienteExistente) con lo que se acaba de seleccionar (ncDocsData)
 function actualizarChecksDocs(prefix, clienteExistente){
@@ -3331,7 +3492,8 @@ function guardarNuevoCli(){
     mismaDir:mismaDir==='si',
     ubicacionMaps:document.getElementById('ncUbicacion').value.trim(),
     vendedor:VEND.codigo,creadoPor:VEND.codigo,
-    creadoPorNombre:VEND.nombre,esNuevo:true};
+    creadoPorNombre:VEND.nombre,esNuevo:true,
+    fechaCreacion:new Date().toISOString()};
 
   var btnG=document.getElementById('btnGuardarNuevoCli');
   if(btnG){ btnG.disabled=true; btnG.textContent='Subiendo documentos...'; }
@@ -3530,7 +3692,7 @@ function actualizarMetricas(){
     document.getElementById('ultimosPed').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Sin pedidos hoy</div>';
   } else {
     var html='';
-    for(var i=0;i<Math.min(3,pedH.length);i++){
+    for(var i=0;i<pedH.length;i++){
       var p=pedH[i];
       html+='<div class="row-sb" style="border-bottom:1px solid var(--borde)"><span style="font-size:13px;font-weight:600">'+p.cliente.nombre+'</span><span style="font-size:13px;color:var(--azul);font-weight:700">$'+p.monto.toFixed(2)+'</span></div>';
     }
@@ -3540,6 +3702,7 @@ function actualizarMetricas(){
 
 var pedidoEditandoId = null;
 var pedidoAnulandoId = null;
+var pedidoReactivandoId = null;
 var visCliSeleccionado = null;
 var visitaEditandoId = null;
 var visitaEliminandoId = null;
@@ -3792,6 +3955,99 @@ function ejecutarAnular(){
       });
     }).catch(function(){ toast('Error guardando cambios en Firebase'); });
   }).catch(function(){ toast('Error al anular: no se pudo conectar con Firebase'); });
+}
+
+function puedeReactivar(p){
+  var esAdmin=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+  return esAdmin || p.vendedor===VEND.codigo;
+}
+
+function confirmarReactivar(pid){
+  pedidoReactivandoId = pid;
+  document.getElementById('mReactivar').classList.add('open');
+}
+
+function ejecutarReactivar(){
+  var pedObj = null;
+  for(var i=0;i<PEDIDOS.length;i++){
+    if(String(PEDIDOS[i].id)===String(pedidoReactivandoId)){
+      PEDIDOS[i].anulado = false;
+      delete PEDIDOS[i].motivoAnulacion;
+      delete PEDIDOS[i].fechaAnulacion;
+      // Vuelve a quedar Pendiente, como si fuera nuevo
+      PEDIDOS[i].enviado = false;
+      delete PEDIDOS[i].fechaEnvio;
+      PEDIDOS[i].recibidoOficina = false;
+      delete PEDIDOS[i].fechaRecibidoOficina;
+      PEDIDOS[i].reactivadoPor = VEND.nombre;
+      PEDIDOS[i].fechaReactivacion = new Date().toLocaleString('es-VE');
+      if(!pedObj) pedObj = PEDIDOS[i];
+    }
+  }
+  if(!pedObj){ cerrarModal('mReactivar'); return; }
+  if(!puedeReactivar(pedObj)){
+    cerrarModal('mReactivar');
+    toast('Solo el vendedor del pedido o un administrador pueden reactivarlo');
+    return;
+  }
+  var verTodosR=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+  if(!verTodosR){
+    guardarLS();
+    cerrarModal('mReactivar');
+    renderHistorial();
+    toast('Pedido reactivado, vuelve a estar Pendiente');
+    return;
+  }
+  // Modo administrador: igual que al anular, este pedido pudo quedar
+  // duplicado en mas de un documento de Firebase. Se revisan todos los
+  // vendedores, se reactiva en el documento dueno real y se eliminan
+  // las copias duplicadas encontradas en cualquier otro documento.
+  var vendIdsAllR=['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
+  var promesasR = vendIdsAllR.map(function(vid){
+    return db.collection('vendedores').doc(vid).get().then(function(doc){ return {vid:vid, doc:doc}; });
+  });
+  Promise.all(promesasR).then(function(resultados){
+    var coincidencias=[];
+    for(var r=0;r<resultados.length;r++){
+      var vid=resultados[r].vid, doc=resultados[r].doc;
+      if(!doc.exists) continue;
+      var data=doc.data();
+      var peds=[];
+      try{ peds=data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
+      for(var k=0;k<peds.length;k++){
+        if(String(peds[k].id)===String(pedidoReactivandoId)){
+          coincidencias.push({vid:vid, data:data, peds:peds, idx:k});
+          break;
+        }
+      }
+    }
+    if(coincidencias.length===0){
+      cerrarModal('mReactivar'); renderHistorial(); toast('Pedido reactivado, vuelve a estar Pendiente'); return;
+    }
+    var duenoIdxR=-1;
+    for(var c=0;c<coincidencias.length;c++){ if(coincidencias[c].vid===pedObj.vendedor){ duenoIdxR=c; break; } }
+    if(duenoIdxR===-1) duenoIdxR=0;
+    var escriturasR=[];
+    for(var c=0;c<coincidencias.length;c++){
+      var item=coincidencias[c];
+      if(c===duenoIdxR){ item.peds[item.idx]=pedObj; }
+      else { item.peds.splice(item.idx,1); }
+      escriturasR.push(db.collection('vendedores').doc(item.vid).set({
+        pedidos: JSON.stringify(item.peds),
+        visitas: item.data.visitas||'[]',
+        clientesNuevos: item.data.clientesNuevos||'[]',
+        ultimaActualizacion: new Date().toISOString()
+      }));
+    }
+    Promise.all(escriturasR).then(function(){
+      cargarTodosFirebase(function(todos){
+        PEDIDOS = todos;
+        cerrarModal('mReactivar');
+        renderHistorial();
+        toast(coincidencias.length>1?('Pedido reactivado y '+(coincidencias.length-1)+' copia(s) duplicada(s) eliminada(s)'):'Pedido reactivado, vuelve a estar Pendiente');
+      });
+    }).catch(function(){ toast('Error guardando cambios en Firebase'); });
+  }).catch(function(){ toast('Error al reactivar: no se pudo conectar con Firebase'); });
 }
 
 function confirmarReset(){
@@ -4158,6 +4414,7 @@ function getPrecioPromoDisplay(totalDisplays, formaPago){
 function togglePromoDisplay(){
   PROMO_DISPLAY_ACTIVA=!PROMO_DISPLAY_ACTIVA;
   actualizarUIPromo();
+  renderPromosActivasStock();
   // Guardar en Firebase
   db.collection('config').doc('promo_display').set({
     activa: PROMO_DISPLAY_ACTIVA,
@@ -4186,7 +4443,7 @@ function actualizarUIPromo(){
 var vendEditandoId = null;
 
 function adminTab(tab){
-  var tabs=['inventario','precios','vendedores','clientes','historico'];
+  var tabs=['inventario','precios','vendedores','clientes','docs','historico'];
   for(var i=0;i<tabs.length;i++){
     var el=document.getElementById('adminTab-'+tabs[i]);
     if(el) el.style.display=(tabs[i]===tab)?'block':'none';
@@ -4206,9 +4463,26 @@ function adminTab(tab){
       renderAdminCli();
     });
   }
+  if(tab==='docs'){
+    var desdeElD=document.getElementById('docsFiltroDesde');
+    var hastaElD=document.getElementById('docsFiltroHasta');
+    if(desdeElD && !desdeElD.value) desdeElD.value=fechaSeisDeEsteMes();
+    if(hastaElD && !hastaElD.value){
+      var ahoraD=new Date();
+      hastaElD.value=ahoraD.getFullYear()+'-'+String(ahoraD.getMonth()+1).padStart(2,'0')+'-'+String(ahoraD.getDate()).padStart(2,'0');
+    }
+    document.getElementById('docsControlList').innerHTML='<div style="color:#aaa;text-align:center;padding:12px">Cargando clientes...</div>';
+    cargarClientesNuevosFirebase(function(cns){
+      NUEVOS_TODOS_CACHE=cns;
+      CLIENTES=getClientesParaVendedor();
+      renderControlDocs();
+    });
+  }
   if(tab==='historico'){
-    document.getElementById('btnCargarHistorico').disabled=false;
-    document.getElementById('btnCargarHistorico').textContent='Cargar Histórico en Firebase';
+    document.getElementById('btnCargarHistorico').disabled=true;
+    document.getElementById('btnCargarHistorico').textContent='Guardar en Firebase';
+    document.getElementById('historicoInfo').innerHTML='';
+    document.getElementById('historicoEstado').innerHTML='';
   }
 }
 
@@ -4387,9 +4661,10 @@ function cargarCSVPrecios(input){
 
 // --- VENDEDORES ---
 function renderAdminVend(){
+  var listaV=VENDEDORES.slice().sort(function(a,b){ return parseInt(a.id,10)-parseInt(b.id,10); });
   var html='';
-  for(var i=0;i<VENDEDORES.length;i++){
-    var v=VENDEDORES[i];
+  for(var i=0;i<listaV.length;i++){
+    var v=listaV[i];
     html+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borde)">' +
       '<div style="flex:1">' +
         '<div style="font-weight:600;font-size:13px">VEND '+v.id+' — '+v.nombre+'</div>' +
@@ -4833,6 +5108,10 @@ function vincularClientesNuevosPorRif(nuevaBase, callback){
           if(cn.fotoEntradaUrl) oficial.fotoEntradaUrl=cn.fotoEntradaUrl;
           if(cn.facturasUrls && cn.facturasUrls.length) oficial.facturasUrls=cn.facturasUrls;
           if(cn.ubicacionMaps) oficial.ubicacionMaps=cn.ubicacionMaps;
+          if(cn.fechaCreacion) oficial.fechaCreacion=cn.fechaCreacion;
+          oficial.creadoPor=cn.creadoPor;
+          oficial.creadoPorNombre=cn.creadoPorNombre;
+          oficial.fueClienteNuevo=true;
           for(var p=0;p<peds.length;p++){
             if(peds[p].cliente && peds[p].cliente.id===cn.id){
               peds[p].cliente.id=oficial.id;
@@ -5111,7 +5390,7 @@ function procesarDBFPedidos(){
   document.getElementById('historicoInfo').innerHTML = '<strong>'+total+' pedidos</strong> procesados del archivo DBF';
   toast(total+' pedidos procesados. Toca Cargar para subir a Firebase.');
   document.getElementById('btnCargarHistorico').disabled = false;
-  document.getElementById('btnCargarHistorico').textContent = 'Cargar Histórico en Firebase';
+  document.getElementById('btnCargarHistorico').textContent = 'Guardar en Firebase';
 }
 
 function parsearDBFPedidos(buffer){
