@@ -218,7 +218,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div class="field">
       <label>Codigo de vendedor</label>
       <div style="display:flex;gap:8px">
-        <input type="text" id="lCod" placeholder="Ej: 13" inputmode="numeric" 
+        <input type="text" id="lCod" placeholder="Ej: 13" inputmode="numeric" disabled
           style="font-size:18px;font-weight:700;text-align:center;letter-spacing:4px"
           oninput="onSelVend()" maxlength="3">
       </div>
@@ -1445,26 +1445,35 @@ function cargarPedidosTodos(){
 }
 
 function init(){
-  VEND=lsGet('tutim_vend',null);
-  if(VEND){
-    CLIENTES=getClientesParaVendedor();
-    var verTodos=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
-    // SOLO cargar pedidos propios del vendedor — nunca mezclar con otros
-    if(verTodos){
-      PEDIDOS=cargarPedidosTodos();
-    } else {
-      PEDIDOS=lsGet('tp_'+VEND.codigo,[]).filter(function(p){
-        // Doble verificacion: solo pedidos de este vendedor
-        return !p.vendedor || p.vendedor===VEND.codigo;
-      });
-    }
-    VISITAS=lsGet('tv_'+VEND.codigo,[]);
-    // Limpiar clave genérica antigua si existe
-    try{localStorage.removeItem('tp');localStorage.removeItem('tv');}catch(e){}
-    cargarConfigFirebase(function(){
+  var lCodEl=document.getElementById('lCod');
+  if(lCodEl) lCodEl.disabled=true;
+  // IMPORTANTE: antes esto solo se ejecutaba si ya habia una sesion guardada
+  // (VEND en localStorage). Eso significaba que un vendedor recien agregado
+  // o con la clave/PIN editada en Admin nunca se reconocia en el login,
+  // porque la app seguia comparando contra el arreglo de VENDEDORES
+  // desactualizado hasta que alguien mas lograra entrar primero. Ahora se
+  // refresca SIEMPRE, antes de permitir cualquier intento de login.
+  cargarConfigFirebase(function(){
+    if(lCodEl) lCodEl.disabled=false;
+    VEND=lsGet('tutim_vend',null);
+    if(VEND){
+      CLIENTES=getClientesParaVendedor();
+      var verTodos=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+      // SOLO cargar pedidos propios del vendedor — nunca mezclar con otros
+      if(verTodos){
+        PEDIDOS=cargarPedidosTodos();
+      } else {
+        PEDIDOS=lsGet('tp_'+VEND.codigo,[]).filter(function(p){
+          // Doble verificacion: solo pedidos de este vendedor
+          return !p.vendedor || p.vendedor===VEND.codigo;
+        });
+      }
+      VISITAS=lsGet('tv_'+VEND.codigo,[]);
+      // Limpiar clave genérica antigua si existe
+      try{localStorage.removeItem('tp');localStorage.removeItem('tv');}catch(e){}
       mostrarApp();
-    });
-  }
+    }
+  });
 }
 
 function mostrarApp(){
