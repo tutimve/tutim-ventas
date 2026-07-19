@@ -3760,9 +3760,9 @@ function renderControlDocs(){
 
   var total=lista.length, completos=0;
   for(var i=0;i<lista.length;i++){ if(lista[i].completo) completos++; }
-  document.getElementById('docsResumTotal').textContent=total;
-  document.getElementById('docsResumCompletos').textContent=completos;
-  document.getElementById('docsResumIncompletos').textContent=(total-completos);
+  document.getElementById('docsResumTotal').textContent=total; ajustarFontMetrica('docsResumTotal',18);
+  document.getElementById('docsResumCompletos').textContent=completos; ajustarFontMetrica('docsResumCompletos',18);
+  document.getElementById('docsResumIncompletos').textContent=(total-completos); ajustarFontMetrica('docsResumIncompletos',18);
 
   var html='';
   if(lista.length===0){
@@ -4120,6 +4120,26 @@ function finalizarGuardadoDocsCliente(c, esNuevoCli, docsOk){
   filtrarCli();
 }
 
+// Devuelve un tamano de fuente mas chico mientras mas largo sea el texto,
+// para que los numeros grandes no se desborden de su tarjeta. "base" es el
+// tamano normal (en px) cuando el texto es corto.
+function fontSizeParaMetrica(texto, base){
+  var b=base||28;
+  var len=String(texto).length;
+  if(len>10) return Math.round(b*0.5)+'px';
+  if(len>8) return Math.round(b*0.64)+'px';
+  if(len>6) return Math.round(b*0.78)+'px';
+  return b+'px';
+}
+
+// Ajusta el font-size de un elemento de metrica segun el largo de su propio
+// texto actual (ya asignado con textContent antes de llamar esta funcion).
+function ajustarFontMetrica(elId, base){
+  var el=document.getElementById(elId);
+  if(!el) return;
+  el.style.fontSize=fontSizeParaMetrica(el.textContent, base);
+}
+
 function actualizarMetricas(){
   var hoy=new Date().toLocaleDateString('es-VE');
   var ahoraM=new Date();
@@ -4128,14 +4148,14 @@ function actualizarMetricas(){
   for(var i=0;i<PEDIDOS.length;i++){if(PEDIDOS[i].fecha===hoy && !PEDIDOS[i].anulado){pedH.push(PEDIDOS[i]);bH+=PEDIDOS[i].bultos;mH+=PEDIDOS[i].monto;}}
   for(var i=0;i<VISITAS.length;i++){if(VISITAS[i].fecha===hoy) visH.push(VISITAS[i]);}
   for(var i=0;i<PAGOS_COBRANZA.length;i++){if(PAGOS_COBRANZA[i].fecha===hoyISO && PAGOS_COBRANZA[i].estado!=='anulado') cobH.push(PAGOS_COBRANZA[i]);}
-  document.getElementById('mPed').textContent=pedH.length;
-  document.getElementById('mVis').textContent=visH.length;
-  document.getElementById('mCob').textContent=cobH.length;
-  document.getElementById('mBul').textContent=bH;
-  document.getElementById('mMon').textContent='$'+mH.toFixed(0);
+  document.getElementById('mPed').textContent=pedH.length; ajustarFontMetrica('mPed');
+  document.getElementById('mVis').textContent=visH.length; ajustarFontMetrica('mVis');
+  document.getElementById('mCob').textContent=cobH.length; ajustarFontMetrica('mCob');
+  document.getElementById('mBul').textContent=bH; ajustarFontMetrica('mBul');
+  document.getElementById('mMon').textContent='$'+mH.toFixed(0); ajustarFontMetrica('mMon');
   var cobradoHoy=0;
   for(var i=0;i<cobH.length;i++){ if(cobH[i].estado==='confirmado') cobradoHoy+=cobH[i].montoUSD; }
-  var elCobrado=document.getElementById('mCobrado'); if(elCobrado) elCobrado.textContent='$'+formatearNumeroConMiles(cobradoHoy,2);
+  var elCobrado=document.getElementById('mCobrado'); if(elCobrado){ elCobrado.textContent='$'+formatearNumeroConMiles(cobradoHoy,2); ajustarFontMetrica('mCobrado'); }
   if(pedH.length===0){
     document.getElementById('ultimosPed').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Sin pedidos hoy</div>';
   } else {
@@ -4620,13 +4640,14 @@ function renderReportes(){
     clientesMap[cid]++;
   }
   var clientesRepeat=Object.keys(clientesMap).filter(function(k){return clientesMap[k]>1;}).length;
+  var montoTxt='$'+totMonto.toFixed(0);
 
   document.getElementById('rptResumen').innerHTML=
     '<div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:8px">'+
-    '<div class="metric"><div class="num" style="font-size:22px">'+totPedidos+'</div><div class="lbl">Pedidos</div></div>'+
-    '<div class="metric"><div class="num" style="font-size:22px">'+totBultos+'</div><div class="lbl">Bultos</div></div>'+
-    '<div class="metric"><div class="num" style="font-size:22px;color:var(--verde)">$'+totMonto.toFixed(0)+'</div><div class="lbl">Monto total</div></div>'+
-    '<div class="metric"><div class="num" style="font-size:22px;color:var(--ambar)">'+clientesRepeat+'</div><div class="lbl">Clientes con Recompra</div></div>'+
+    '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(totPedidos,22)+'">'+totPedidos+'</div><div class="lbl">Pedidos</div></div>'+
+    '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(totBultos,22)+'">'+totBultos+'</div><div class="lbl">Bultos</div></div>'+
+    '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(montoTxt,22)+';color:var(--verde)">'+montoTxt+'</div><div class="lbl">Monto total</div></div>'+
+    '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(clientesRepeat,22)+';color:var(--ambar)">'+clientesRepeat+'</div><div class="lbl">Clientes con Recompra</div></div>'+
     '</div>';
 
   // Reporte 2: Por vendedor
@@ -4658,6 +4679,7 @@ function renderReportes(){
       var vid2=vids[v];
       var vd=porVend[vid2];
       var cliRepeat2=Object.keys(vd.clientes).filter(function(k){return vd.clientes[k]>1;}).length;
+      var montoVendTxt='$'+vd.monto.toFixed(0);
       htmlVend+=
         '<div style="border:1px solid var(--borde);border-radius:10px;padding:12px;margin-bottom:8px">'+
         '<div style="background:var(--azul);color:#fff;border-radius:6px;padding:6px 10px;margin-bottom:8px;display:flex;justify-content:space-between">'+
@@ -4665,10 +4687,10 @@ function renderReportes(){
           '<span style="font-size:12px;opacity:.8">$'+vd.monto.toFixed(2)+'</span>'+
         '</div>'+
         '<div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:6px">'+
-          '<div class="metric" style="padding:8px"><div class="num" style="font-size:18px">'+vd.pedidos+'</div><div class="lbl">Pedidos</div></div>'+
-          '<div class="metric" style="padding:8px"><div class="num" style="font-size:18px">'+vd.bultos+'</div><div class="lbl">Bultos</div></div>'+
-          '<div class="metric" style="padding:8px"><div class="num" style="font-size:16px;color:var(--verde)">$'+vd.monto.toFixed(0)+'</div><div class="lbl">Monto</div></div>'+
-          '<div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--ambar)">'+cliRepeat2+'</div><div class="lbl">Cli. Recompra</div></div>'+
+          '<div class="metric" style="padding:8px"><div class="num" style="font-size:'+fontSizeParaMetrica(vd.pedidos,18)+'">'+vd.pedidos+'</div><div class="lbl">Pedidos</div></div>'+
+          '<div class="metric" style="padding:8px"><div class="num" style="font-size:'+fontSizeParaMetrica(vd.bultos,18)+'">'+vd.bultos+'</div><div class="lbl">Bultos</div></div>'+
+          '<div class="metric" style="padding:8px"><div class="num" style="font-size:'+fontSizeParaMetrica(montoVendTxt,16)+';color:var(--verde)">'+montoVendTxt+'</div><div class="lbl">Monto</div></div>'+
+          '<div class="metric" style="padding:8px"><div class="num" style="font-size:'+fontSizeParaMetrica(cliRepeat2,18)+';color:var(--ambar)">'+cliRepeat2+'</div><div class="lbl">Cli. Recompra</div></div>'+
         '</div>'+
         '</div>';
     }
@@ -6221,8 +6243,8 @@ function renderResumenCxC(){
   var totalDocs=CUENTAS_COBRAR.length;
   var totalSaldo=0;
   for(var i=0;i<CUENTAS_COBRAR.length;i++) totalSaldo+=CUENTAS_COBRAR[i].saldo;
-  var elD=document.getElementById('cxcResumDocs'); if(elD) elD.textContent=totalDocs;
-  var elS=document.getElementById('cxcResumSaldo'); if(elS) elS.textContent=totalSaldo<0?('($'+formatearNumeroConMiles(Math.abs(totalSaldo),2)+')'):('$'+formatearNumeroConMiles(totalSaldo,2));
+  var elD=document.getElementById('cxcResumDocs'); if(elD){ elD.textContent=totalDocs; ajustarFontMetrica('cxcResumDocs',18); }
+  var elS=document.getElementById('cxcResumSaldo'); if(elS){ elS.textContent=totalSaldo<0?('($'+formatearNumeroConMiles(Math.abs(totalSaldo),2)+')'):('$'+formatearNumeroConMiles(totalSaldo,2)); ajustarFontMetrica('cxcResumSaldo',18); }
   renderListaCxCAdmin();
 }
 
@@ -6428,6 +6450,7 @@ function anularPagoRechazado(pagoId){
       PAGOS_COBRANZA=pagos;
       renderPagosPendientesAdmin();
       renderHistorialCobros();
+      actualizarMetricas();
     });
   });
 }
@@ -6699,6 +6722,7 @@ function finalizarGuardadoCobro(pago, docsOk){
     pagoEditandoId=null;
     limpiarCobroCli();
     renderHistorialCobros();
+    actualizarMetricas();
   });
 }
 
@@ -6838,9 +6862,9 @@ function renderHistorialCobros(){
     if(lista[i].estado==='pendiente') pendientes++;
     if(lista[i].estado==='confirmado') montoConfirmado+=lista[i].montoUSD;
   }
-  var elT=document.getElementById('cobroResumTotal'); if(elT) elT.textContent=total;
-  var elP=document.getElementById('cobroResumPendientes'); if(elP) elP.textContent=pendientes;
-  var elM=document.getElementById('cobroResumMonto'); if(elM) elM.textContent='$'+formatearNumeroConMiles(montoConfirmado,2);
+  var elT=document.getElementById('cobroResumTotal'); if(elT){ elT.textContent=total; ajustarFontMetrica('cobroResumTotal',18); }
+  var elP=document.getElementById('cobroResumPendientes'); if(elP){ elP.textContent=pendientes; ajustarFontMetrica('cobroResumPendientes',18); }
+  var elM=document.getElementById('cobroResumMonto'); if(elM){ elM.textContent='$'+formatearNumeroConMiles(montoConfirmado,2); ajustarFontMetrica('cobroResumMonto',18); }
   var html='';
   if(lista.length===0){
     html='<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Sin pagos en este rango</div>';
@@ -6998,6 +7022,7 @@ function confirmarPagoCobranza(pagoId, saldoPendienteDeseado, observacionAjuste)
         PAGOS_COBRANZA=pagos;
         renderPagosPendientesAdmin();
         renderHistorialCobros();
+        actualizarMetricas();
       });
     });
   }).catch(function(){ toast('Error guardando en Firebase'); });
@@ -7030,6 +7055,7 @@ function borrarDiferenciaPago(pagoId){
         PAGOS_COBRANZA=pagos;
         renderPagosPendientesAdmin();
         renderHistorialCobros();
+        actualizarMetricas();
       });
     });
   }).catch(function(){ toast('Error guardando en Firebase'); });
@@ -7052,6 +7078,7 @@ function ejecutarRechazarPago(){
       PAGOS_COBRANZA=pagos;
       renderPagosPendientesAdmin();
       renderHistorialCobros();
+      actualizarMetricas();
     });
   });
 }
@@ -7090,6 +7117,7 @@ function ejecutarAnularPagoCobranza(){
         PAGOS_COBRANZA=pagos;
         renderPagosPendientesAdmin();
         renderHistorialCobros();
+        actualizarMetricas();
       });
     });
   }).catch(function(){ toast('Error guardando en Firebase'); });
