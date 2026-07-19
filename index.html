@@ -201,6 +201,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="toast" id="toast"></div>
@@ -278,17 +279,20 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 
   <!-- INICIO -->
   <div class="screen active" id="s-inicio">
-    <div class="metrics">
+    <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
       <div class="metric" onclick="goScreen('historial')" style="cursor:pointer"><div class="num" id="mPed">0</div><div class="lbl">Pedidos hoy</div></div>
       <div class="metric" onclick="goScreen('visita')" style="cursor:pointer"><div class="num" id="mVis">0</div><div class="lbl">Visitas hoy</div></div>
+      <div class="metric" onclick="goScreen('cobros')" style="cursor:pointer"><div class="num" id="mCob">0</div><div class="lbl">Pagos hoy</div></div>
       <div class="metric"><div class="num" id="mBul">0</div><div class="lbl">Bultos hoy</div></div>
       <div class="metric"><div class="num" id="mMon">$0</div><div class="lbl">Total hoy</div></div>
+      <div class="metric" onclick="goScreen('cobros')" style="cursor:pointer"><div class="num" id="mCobrado" style="color:var(--verde)">$0</div><div class="lbl">Cobrado hoy</div></div>
     </div>
     <div class="card">
       <div class="card-title">Acciones rapidas</div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <button class="btn btn-p" onclick="goScreen('pedido')">+ Nuevo pedido</button>
         <button class="btn btn-s" onclick="goScreen('visita')">Reportar visita</button>
+        <button class="btn btn-s" onclick="goScreen('cobros')">Reportar pago</button>
         <div id="btnResetWrap" style="display:none;margin-top:4px">
           <button class="btn" style="background:var(--rojo-c);color:var(--rojo);font-weight:600;border:1px solid var(--rojo)" onclick="confirmarReset()">&#9888; Reset total de pedidos</button>
         </div>
@@ -297,6 +301,10 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div class="card">
       <div class="card-title">Pedidos de hoy</div>
       <div id="ultimosPed"><div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Sin pedidos hoy</div></div>
+    </div>
+    <div class="card" onclick="goScreen('cobros')" style="cursor:pointer">
+      <div class="card-title">Pagos reportados hoy</div>
+      <div id="ultimosCobros"><div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Sin pagos hoy</div></div>
     </div>
     <div class="card" style="background:var(--azul-c)">
       <div class="card-title" style="color:var(--azul)">Stock disponible</div>
@@ -534,6 +542,99 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     </div>
   </div>
 
+  <!-- COBROS -->
+  <div class="screen" id="s-cobros">
+    <h2>Reportar pago</h2>
+
+    <div class="card">
+      <div class="card-title">Cliente</div>
+      <div class="field">
+        <input type="text" id="cobroBusqCli" placeholder="Buscar por nombre, codigo o RIF..." oninput="filtrarCobroCli()">
+      </div>
+      <div id="cobroListaCli"></div>
+      <div id="cobroCliSel" class="hidden" style="margin-top:6px;padding:8px 10px;background:var(--azul-c);border-radius:8px;font-size:13px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600;color:var(--azul)" id="cobroCliSelNom"></span>
+          <button class="btn btn-s btn-sm" style="padding:3px 10px" onclick="limpiarCobroCli()">Cambiar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="cobroDocsCard">
+      <div class="card-title">Documentos pendientes</div>
+      <div id="cobroDocsList"></div>
+    </div>
+
+    <div class="card hidden" id="cobroFormCard">
+      <div class="card-title">Datos del pago</div>
+      <div class="field"><label>Fecha del pago</label><input type="date" id="cobroFecha"></div>
+
+      <div id="cobroDepositosList"></div>
+      <button type="button" class="btn btn-s btn-sm" style="margin-bottom:10px" onclick="agregarDepositoCobro()">+ Agregar otro deposito</button>
+
+      <div class="field">
+        <label>Descuento aplicado</label>
+        <select id="cobroDescuento" onchange="calcularValidacionCobro()">
+          <option value="0">Sin descuento</option>
+          <option value="5">5%</option>
+          <option value="10">10%</option>
+          <option value="15">15%</option>
+        </select>
+      </div>
+      <div id="cobroValidacion" style="margin-bottom:10px"></div>
+      <div class="field">
+        <label>Foto(s) del comprobante</label>
+        <input type="file" accept="image/*" id="cobroComprobantes" multiple onchange="previewComprobantesCobro()">
+        <div id="cobroComprobantesPrev" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <button class="btn btn-p" id="btnGuardarCobro" onclick="guardarPagoCobro()">Reportar pago</button>
+    </div>
+
+    <h2 id="cobroHistTitulo">Historial de pagos</h2>
+    <div class="card" style="padding:12px">
+      <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+        <div class="field" style="flex:1;min-width:130px;margin-bottom:8px">
+          <label>Desde</label>
+          <input type="date" id="filtroCobroDesde" onchange="renderHistorialCobros()">
+        </div>
+        <div class="field" style="flex:1;min-width:130px;margin-bottom:8px">
+          <label>Hasta</label>
+          <input type="date" id="filtroCobroHasta" onchange="renderHistorialCobros()">
+        </div>
+        <button class="btn btn-s btn-sm" style="margin-top:22px" onclick="filtroCobroHoy()">Hoy</button>
+        <button class="btn btn-s btn-sm" style="margin-top:22px" onclick="filtroCobroTodo()">Todo</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        <div class="field" style="flex:1;min-width:130px">
+          <label>Estado</label>
+          <select id="filtroCobroEstado" onchange="renderHistorialCobros()">
+            <option value="todos">Todos</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="confirmado">Confirmado</option>
+            <option value="rechazado">Rechazado</option>
+            <option value="anulado">Anulado</option>
+          </select>
+        </div>
+        <div class="field" id="filtroCobroVendWrap" style="display:none;flex:1;min-width:130px">
+          <label>Vendedor</label>
+          <select id="filtroCobroVendedor" onchange="renderHistorialCobros()">
+            <option value="todos">Todos</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="metrics" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+      <div class="metric" style="padding:8px"><div class="num" style="font-size:18px" id="cobroResumTotal">0</div><div class="lbl">Pagos</div></div>
+      <div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--ambar)" id="cobroResumPendientes">0</div><div class="lbl">Pendientes</div></div>
+      <div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--verde)" id="cobroResumMonto">$0</div><div class="lbl">Monto confirmado</div></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn btn-g btn-sm" onclick="abrirExportarCobrosExcel()">Excel</button>
+      <button class="btn btn-sm" style="background:#EA4335;color:#fff;font-weight:600" onclick="enviarCorreoCobros()">&#9993; Correo</button>
+    </div>
+    <div id="listaCobros"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin pagos reportados</div></div>
+  </div>
+
   <!-- ADMIN -->
   <div class="screen" id="s-admin">
     <h2>Administracion</h2>
@@ -561,6 +662,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-vendedores" onclick="adminTab('vendedores')">Vendedores</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-clientes" onclick="adminTab('clientes')">Clientes</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-docs" onclick="adminTab('docs')">Documentacion</button>
+      <button class="btn btn-s btn-sm admin-tab-btn" id="atab-cxc" onclick="adminTab('cxc')">Cuentas x Cobrar</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-historico" onclick="adminTab('historico')">Historico</button>
     </div>
 
@@ -617,7 +719,13 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="card" style="background:var(--azul-c)">
         <div class="card-title" style="color:var(--azul)">Cargar desde archivo CSV</div>
         <p style="font-size:12px;color:#666;margin-bottom:8px">Acepta el archivo <strong>clientes.DBF</strong> exportado de Profit directamente, o CSV con columnas: CO_CLI, CLI_DES, RIF, TELEFONOS, CO_VEN</p>
-        <input type="file" id="csvClientes" accept=".csv,.dbf,.DBF" onchange="cargarCSVClientes(this)">
+        <div class="field"><label>Archivo clientes.DBF (o .csv)</label>
+          <input type="file" id="csvClientes" accept=".csv,.dbf,.DBF">
+        </div>
+        <div class="field"><label>Archivo clientes.FPT (opcional, trae la direccion de entrega)</label>
+          <input type="file" id="fptClientes" accept=".fpt,.FPT">
+        </div>
+        <button class="btn btn-p btn-sm" onclick="cargarCSVClientes()">Procesar archivo(s)</button>
         <div id="estadoCargaClientes" style="margin-top:8px;font-size:13px;color:#666"></div>
       </div>
     </div>
@@ -653,6 +761,36 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--ambar)" id="docsResumIncompletos">0</div><div class="lbl">Incompletos</div></div>
       </div>
       <div id="docsControlList"></div>
+    </div>
+
+    <!-- TAB CUENTAS POR COBRAR -->
+    <div id="adminTab-cxc" style="display:none">
+      <div class="card" style="background:var(--azul-c)">
+        <div class="card-title" style="color:var(--azul)">Cargar bases de Cuentas por Cobrar</div>
+        <p style="font-size:12px;color:#666;margin-bottom:8px">Sube los Excel exportados de Profit (Facturas por Numero, condicion "Sin Cancelar") de cada sistema. La app cruza ambas bases por cliente + fecha exacta, comparando la <strong>base imponible</strong> (neto − IVA). Si coincide, o si la base fiscal es 35% menor a la real, usa el documento <strong>FISCAL</strong> y crea aparte un documento con la diferencia. Los documentos de Real sin pareja se mantienen igual; los de Fiscal sin pareja en Real se descartan. Si un documento ya tenia un pago confirmado y la nueva carga todavia no lo refleja, la app respeta lo ya confirmado.</p>
+        <div class="field"><label>Base</label>
+          <input type="file" id="cxcExcelInputReal" accept=".xlsx,.xls" onchange="cargarExcelCxC(this,'real')">
+        </div>
+        <div class="field"><label>Base con IVA</label>
+          <input type="file" id="cxcExcelInputFiscal" accept=".xlsx,.xls" onchange="cargarExcelCxC(this,'fiscal')">
+        </div>
+        <div id="cxcEstadoCarga" style="font-size:13px;margin-top:8px"></div>
+      </div>
+      <div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
+        <div class="metric" style="padding:8px"><div class="num" style="font-size:18px" id="cxcResumDocs">0</div><div class="lbl">Documentos pendientes</div></div>
+        <div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--rojo)" id="cxcResumSaldo">$0</div><div class="lbl">Saldo total</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Pagos pendientes por confirmar</div>
+        <div id="cxcPagosPendientesList"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin pagos pendientes</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Todas las cuentas por cobrar</div>
+        <div class="field">
+          <input type="text" id="cxcBusqDoc" placeholder="Buscar por cliente, codigo o RIF..." oninput="renderListaCxCAdmin()">
+        </div>
+        <div id="cxcListaCompleta"></div>
+      </div>
     </div>
 
     <!-- TAB HISTORICO -->
@@ -706,13 +844,31 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <!-- Reporte 2: Por vendedor -->
     <div class="card">
       <div class="card-title">Por Vendedor</div>
-      <div class="field" style="margin-bottom:8px">
+      <div id="rptVendedorWrap" class="field" style="margin-bottom:8px">
         <label>Vendedor</label>
         <select id="rptVendedor" onchange="renderReportes()">
           <option value="todos">Todos los vendedores</option>
         </select>
       </div>
+      <div class="field" style="margin-bottom:8px">
+        <label>Cliente</label>
+        <select id="rptCliente" onchange="renderReportes()">
+          <option value="todos">Todos los clientes</option>
+        </select>
+      </div>
       <div id="rptPorVendedor"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
+    </div>
+
+    <!-- Reporte 3: Cantidades por producto y mes -->
+    <div class="card">
+      <div class="card-title">Cantidades por Producto (bultos)</div>
+      <div id="rptPorProducto" style="overflow-x:auto"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
+    </div>
+
+    <!-- Reporte 4: Lista de pedidos (click para ver detalle) -->
+    <div class="card">
+      <div class="card-title">Pedidos</div>
+      <div id="rptListaPedidos"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
     </div>
 
     <!-- Botones exportar -->
@@ -738,6 +894,9 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     </button>
     <button class="nav-btn" id="n-inventario" onclick="goScreen('inventario')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/></svg>Stock
+    </button>
+    <button class="nav-btn" id="n-cobros" onclick="goScreen('cobros')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Cobros
     </button>
     <button class="nav-btn" id="n-reportes" onclick="goScreen('reportes')" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/><path d="M7 15h2M7 18h2M13 12h4M13 15h4M13 18h4"/></svg>Reportes
@@ -824,6 +983,17 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
+<!-- MODAL DETALLE DE PEDIDO (solo lectura, usado desde Reportes) -->
+<div class="modal-bg" id="mDetallePedido">
+  <div class="modal">
+    <h3>Detalle del pedido</h3>
+    <div id="detallePedidoContenido"></div>
+    <div style="margin-top:16px">
+      <button class="btn btn-s" onclick="cerrarModal('mDetallePedido')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL NUEVO/EDITAR VENDEDOR -->
 <div class="modal-bg" id="mNuevoVend">
   <div class="modal">
@@ -850,6 +1020,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div class="field"><label>RIF</label><input type="text" id="cRif" placeholder="J-xxxxxxxx-x"></div>
     <div class="field"><label>Telefono</label><input type="text" id="cTel" placeholder="04xx-xxxxxxx"></div>
     <div class="field"><label>Direccion / Ciudad</label><input type="text" id="cDir" placeholder="Ciudad o direccion"></div>
+    <div id="cDirEntregaInfo" class="hidden" style="font-size:12px;color:#666;margin:-8px 0 12px"></div>
     <div class="field"><label>Vendedor asignado (CO_VEN)</label><input type="text" id="cVen" placeholder="Ej: 01" maxlength="3"></div>
     <div class="field"><label>Estado</label>
       <select id="cInactivo">
@@ -914,7 +1085,8 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div class="field"><label>Nombre</label><input type="text" id="dcNombre"></div>
     <div class="field"><label>RIF</label><input type="text" id="dcRif"></div>
     <div class="field"><label>Telefono</label><input type="text" id="dcTel"></div>
-    <div class="field"><label>Direccion</label><input type="text" id="dcDir"></div>
+    <div class="field"><label>Direccion Fiscal</label><input type="text" id="dcDir"></div>
+    <div class="field"><label>Direccion de Entrega (si es diferente)</label><input type="text" id="dcDirEntrega"></div>
 
     <div class="divider" style="margin:12px 0"></div>
     <div class="card-title">Documentacion</div>
@@ -924,24 +1096,40 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div id="dcArchRifExistente"></div>
       <input type="file" accept="image/*,application/pdf" id="dcArchRif" onchange="previewDoc('dcArchRif','dcArchRifPrev','rif');actualizarChecksDocsDC();">
       <div id="dcArchRifPrev" style="margin-top:6px"></div>
+      <label id="dcAprobRifWrap" class="hidden" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:12px;color:#856404;font-weight:600">
+        <input type="checkbox" id="dcAprobRif" onchange="actualizarChecksDocsDC()" style="width:15px;height:15px">
+        Aprobar sin este recaudo
+      </label>
     </div>
     <div class="field">
       <label>Registro Mercantil <span id="dcChkRegistro" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
       <div id="dcArchRegistroExistente"></div>
       <input type="file" accept="image/*,application/pdf" id="dcArchRegistro" onchange="previewDoc('dcArchRegistro','dcArchRegistroPrev','registro');actualizarChecksDocsDC();">
       <div id="dcArchRegistroPrev" style="margin-top:6px"></div>
+      <label id="dcAprobRegistroWrap" class="hidden" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:12px;color:#856404;font-weight:600">
+        <input type="checkbox" id="dcAprobRegistro" onchange="actualizarChecksDocsDC()" style="width:15px;height:15px">
+        Aprobar sin este recaudo
+      </label>
     </div>
     <div class="field">
       <label>Cedula <span id="dcChkCedula" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
       <div id="dcArchCedulaExistente"></div>
       <input type="file" accept="image/*,application/pdf" id="dcArchCedula" onchange="previewDoc('dcArchCedula','dcArchCedulaPrev','cedula');actualizarChecksDocsDC();">
       <div id="dcArchCedulaPrev" style="margin-top:6px"></div>
+      <label id="dcAprobCedulaWrap" class="hidden" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:12px;color:#856404;font-weight:600">
+        <input type="checkbox" id="dcAprobCedula" onchange="actualizarChecksDocsDC()" style="width:15px;height:15px">
+        Aprobar sin este recaudo
+      </label>
     </div>
     <div class="field">
       <label>Facturas recientes (minimo 2 fotos) <span id="dcChkFact" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
       <div id="dcArchFactExistente" style="display:flex;gap:6px;flex-wrap:wrap"></div>
       <input type="file" accept="image/*" id="dcArchFact" multiple onchange="previewFacturas('dcArchFact','dcArchFactPrev');actualizarChecksDocsDC();">
       <div id="dcArchFactPrev" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
+      <label id="dcAprobFacturasWrap" class="hidden" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:12px;color:#856404;font-weight:600">
+        <input type="checkbox" id="dcAprobFacturas" onchange="actualizarChecksDocsDC()" style="width:15px;height:15px">
+        Aprobar sin este recaudo
+      </label>
     </div>
     <div class="field">
       <label>Ubicacion (link de Maps)</label>
@@ -955,7 +1143,13 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div id="dcArchFotoExistente"></div>
       <input type="file" accept="image/*" id="dcArchFoto" onchange="previewDoc('dcArchFoto','dcArchFotoPrev','foto');actualizarChecksDocsDC();">
       <div id="dcArchFotoPrev" style="margin-top:6px"></div>
+      <label id="dcAprobFotoWrap" class="hidden" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:12px;color:#856404;font-weight:600">
+        <input type="checkbox" id="dcAprobFoto" onchange="actualizarChecksDocsDC()" style="width:15px;height:15px">
+        Aprobar sin este recaudo
+      </label>
     </div>
+
+    <div id="dcAprobacionInfo" style="font-size:11px;color:#856404;margin-bottom:8px"></div>
 
     <div style="display:flex;gap:8px;margin-top:4px">
       <button class="btn btn-p" id="btnGuardarDocsCli" onclick="guardarDocsCliente()">Guardar</button>
@@ -1023,6 +1217,95 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div style="display:flex;gap:8px">
       <button class="btn" style="background:var(--verde);color:#fff;font-weight:600" onclick="ejecutarReactivar()">Reactivar</button>
       <button class="btn btn-s" onclick="cerrarModal('mReactivar')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RECHAZAR PAGO -->
+<div class="modal-bg" id="mRechazarPago">
+  <div class="modal">
+    <h3 style="color:var(--rojo)">Rechazar pago</h3>
+    <div class="field">
+      <label>Motivo del rechazo</label>
+      <textarea id="motivoRechazoPago" rows="2" placeholder="Indica el motivo..."></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:var(--rojo);color:#fff;font-weight:600" onclick="ejecutarRechazarPago()">Confirmar rechazo</button>
+      <button class="btn btn-s" onclick="cerrarModal('mRechazarPago')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMAR PAGO (con ajuste de saldo pendiente) -->
+<div class="modal-bg" id="mConfirmarPago">
+  <div class="modal">
+    <h3 style="color:var(--verde)">Confirmar pago</h3>
+    <div id="confirmarPagoResumen" style="font-size:13px;color:#555;background:#f7f8fb;border-radius:8px;padding:10px 12px;margin-bottom:12px"></div>
+
+    <div id="confirmarPagoPreguntaWrap">
+      <p style="font-size:13px;color:#555;margin-bottom:12px">¿Deseas modificar el monto que quedaria pendiente?</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn" style="background:var(--verde);color:#fff;font-weight:600" onclick="confirmarPagoSinModificar()">No, dejar la diferencia tal cual</button>
+        <button class="btn btn-s" onclick="mostrarEdicionDiferenciaPago()">Si, quiero modificar el monto</button>
+        <button class="btn btn-s" onclick="cerrarModal('mConfirmarPago')">Cancelar</button>
+      </div>
+    </div>
+
+    <div id="confirmarPagoEdicionWrap" class="hidden">
+      <div class="field">
+        <label>Monto a dejar pendiente</label>
+        <input type="number" id="confirmarPagoSaldoPendiente" placeholder="0.00" step="0.01">
+      </div>
+      <div class="field">
+        <label>Observacion (obligatoria)</label>
+        <textarea id="confirmarPagoObservacion" rows="2" placeholder="Ej: tasa aun no aprobada, diferencia de redondeo..."></textarea>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" style="background:var(--verde);color:#fff;font-weight:600" onclick="ejecutarConfirmarPago()">Confirmar con este monto</button>
+        <button class="btn btn-s" onclick="cerrarModal('mConfirmarPago')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ANULAR PAGO -->
+<div class="modal-bg" id="mAnularPago">
+  <div class="modal">
+    <h3 style="color:var(--rojo)">Anular pago confirmado</h3>
+    <p style="font-size:14px;color:#555;margin-bottom:16px">El saldo del documento volvera a quedar como estaba antes de este pago. Esta accion no se puede deshacer. ¿Confirmas?</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:var(--rojo);color:#fff;font-weight:600" onclick="ejecutarAnularPagoCobranza()">Anular pago</button>
+      <button class="btn btn-s" onclick="cerrarModal('mAnularPago')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EXPORTAR EXCEL COBROS -->
+<div class="modal-bg" id="mExportarCobrosExcel">
+  <div class="modal">
+    <h3>Exportar a Excel</h3>
+    <div style="display:flex;gap:8px">
+      <div class="field" style="flex:1"><label>Desde</label><input type="date" id="excelCobrosDesde"></div>
+      <div class="field" style="flex:1"><label>Hasta</label><input type="date" id="excelCobrosHasta"></div>
+    </div>
+    <div class="field">
+      <label>Pagos anulados</label>
+      <select id="excelCobrosAnulados">
+        <option value="excluir">Excluir anulados</option>
+        <option value="incluir">Incluir anulados</option>
+        <option value="solo">Solo anulados</option>
+      </select>
+    </div>
+    <div class="field" id="excelCobrosSepararWrap">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px">
+        <input type="checkbox" id="excelCobrosSepararVendedor" style="width:16px;height:16px">
+        Separar por vendedor (una hoja / seccion por cada uno)
+      </label>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+      <button class="btn btn-p" onclick="ejecutarExportarCobrosExcel()">Excel (datos - numeros 100% confiables)</button>
+      <button class="btn btn-s" onclick="ejecutarExportarCobrosExcelEstilo()">Excel con estilo (vista bonita, numeros pueden variar)</button>
+      <button class="btn btn-s" onclick="cerrarModal('mExportarCobrosExcel')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -1126,7 +1409,7 @@ function guardarFirebase(vendId, pedidos, visitas, clientesNuevos){
       visitas: JSON.stringify(visitas),
       clientesNuevos: JSON.stringify(clientesNuevos),
       ultimaActualizacion: new Date().toISOString()
-    }).catch(function(e){ console.log('Firebase write error:', e); });
+    }, {merge:true}).catch(function(e){ console.log('Firebase write error:', e); });
   }catch(e){ console.log('Firebase error:', e); }
 }
 
@@ -1138,6 +1421,7 @@ function cargarDesdeFirebase(vendId, callback){
         var peds = data.pedidos ? JSON.parse(data.pedidos) : [];
         var viss = data.visitas ? JSON.parse(data.visitas) : [];
         var clis = data.clientesNuevos ? JSON.parse(data.clientesNuevos) : [];
+        var pagos = data.pagosCobranza ? JSON.parse(data.pagosCobranza) : [];
         // Enriquecer pedidos con vendedorNombre
         var vobjD=null;
         for(var vdi=0;vdi<VENDEDORES.length;vdi++){
@@ -1148,22 +1432,26 @@ function cargarDesdeFirebase(vendId, callback){
           if(!peds[pi].vendedor) peds[pi].vendedor=vendId;
           peds[pi].vendedorNombre=vNomD;
         }
+        for(var ci=0;ci<pagos.length;ci++){
+          if(!pagos[ci].vendedor) pagos[ci].vendedor=vendId;
+          pagos[ci].vendedorNombre=vNomD;
+        }
         // Actualizar también localStorage como backup
         lsSet('tp_'+vendId, peds);
         lsSet('tv_'+vendId, viss);
         lsSet('tc_new_'+vendId, clis);
-        callback(peds, viss, clis);
+        callback(peds, viss, clis, pagos);
       } else {
         // No hay datos en Firebase aún - empezar vacío
-        callback([], [], []);
+        callback([], [], [], []);
       }
     }).catch(function(e){
       console.log('Firebase read error:', e);
-      callback([], [], []);
+      callback([], [], [], []);
     });
   }catch(e){
     console.log('Firebase excepcion cargarDesde:', e);
-    callback([], [], []);
+    callback([], [], [], []);
   }
 }
 
@@ -1279,6 +1567,16 @@ function cargarClientesNuevosTodos(){
 }
 
 var NUEVOS_TODOS_CACHE=[];
+var CUENTAS_COBRAR=[];
+var CUENTAS_COBRAR_REAL=[];
+var CUENTAS_COBRAR_FISCAL=[];
+var PAGOS_COBRANZA=[];
+var PAGOS_COBRANZA_TODOS=[];
+var cobroClienteSeleccionado=null;
+var cobroDocsSeleccionados=[];
+var cobroComprobantesData=[];
+var cobroDepositos=[];
+var BANCOS_COBRO={Venezuela:'Banco de Venezuela',Banesco:'Banesco',Mercantil:'Mercantil',BNC:'BNC'};
 // Trae los clientes nuevos de TODOS los vendedores directamente desde Firebase
 // (antes esto solo se leia del localStorage propio del dispositivo del admin,
 // por lo que nunca aparecian los clientes nuevos creados por otros vendedores)
@@ -1479,7 +1777,7 @@ function init(){
 function mostrarApp(){
   var verTodos=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
   // Limpiar datos anteriores en pantalla primero
-  PEDIDOS=[]; VISITAS=[]; CLIENTES=[];
+  PEDIDOS=[]; VISITAS=[]; CLIENTES=[]; PAGOS_COBRANZA=[];
   goScreen('inicio');
   document.getElementById('histList').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Cargando...</div>';
   document.getElementById('ultimosPed').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Cargando...</div>';
@@ -1490,9 +1788,9 @@ function mostrarApp(){
   document.getElementById('hSub').textContent=VEND.nombre;
   var btnReset=document.getElementById('btnResetWrap');
   if(btnReset) btnReset.style.display=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20')?'block':'none';
-  // Mostrar pestaña de reportes solo para VEND 01
+  // Reportes ahora es visible para todos los usuarios (antes solo 01/20)
   var btnRpt=document.getElementById('n-reportes');
-  if(btnRpt) btnRpt.style.display=(VEND.codigo==='01'||VEND.codigo==='20')?'flex':'none';
+  if(btnRpt) btnRpt.style.display='flex';
   var btnAdmin=document.getElementById('n-admin');
   if(btnAdmin) btnAdmin.style.display=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20')?'flex':'none';
   // Mostrar CSV Profit solo para VEND 00 y 01
@@ -1509,18 +1807,23 @@ function mostrarApp(){
         cargarClientesNuevosFirebase(function(cns){
           NUEVOS_TODOS_CACHE=cns;
           CLIENTES=getClientesParaVendedor();
-          ocultarLoading();
-          actualizarMetricas();
-          renderStockHome();
-          renderInv();
+          cargarTodosPagosCobranzaFirebase(function(pagos){
+            PAGOS_COBRANZA=pagos;
+            PAGOS_COBRANZA_TODOS=pagos;
+            ocultarLoading();
+            actualizarMetricas();
+            renderStockHome();
+            renderInv();
+          });
         });
       });
     });
   } else {
-    cargarDesdeFirebase(VEND.codigo, function(peds, viss, clis){
+    cargarDesdeFirebase(VEND.codigo, function(peds, viss, clis, pagos){
       PEDIDOS=peds.filter(function(p){ return !p.vendedor||p.vendedor===VEND.codigo; });
       VISITAS=viss;
       CLIENTES=getClientesParaVendedor();
+      PAGOS_COBRANZA=pagos.filter(function(p){ return !p.vendedor||p.vendedor===VEND.codigo; });
       ocultarLoading();
       actualizarMetricas();
       renderStockHome();
@@ -1638,10 +1941,21 @@ function goScreen(name){
   }
   if(name==='reportes'){
     // Usar variable separada para reportes - NUNCA tocar PEDIDOS global
-    cargarTodosFirebase(function(todos){
-      RPT_PEDIDOS=todos;
-      rptFiltro('hoy');
-    });
+    var verTodosRpt=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+    var vendWrapRpt=document.getElementById('rptVendedorWrap');
+    if(vendWrapRpt) vendWrapRpt.style.display=verTodosRpt?'block':'none';
+    if(verTodosRpt){
+      cargarTodosFirebase(function(todos){
+        RPT_PEDIDOS=todos;
+        rptFiltro('hoy');
+      });
+    } else {
+      // Los vendedores regulares solo ven SUS PROPIOS pedidos en Reportes
+      cargarDesdeFirebase(VEND.codigo, function(peds, viss, clis, pagos){
+        RPT_PEDIDOS=peds.filter(function(p){ return !p.vendedor||p.vendedor===VEND.codigo; });
+        rptFiltro('hoy');
+      });
+    }
   }
   if(name==='historial'){
     var ahora2=new Date();
@@ -1712,6 +2026,39 @@ function goScreen(name){
       cargarDesdeFirebase(VEND.codigo, function(peds, viss, clis){
         VISITAS=viss.filter(function(v){ return !v.vendedor||v.vendedor===VEND.codigo; });
         renderVisitas();
+      });
+    }
+  }
+  if(name==='cobros'){
+    var ahora4=new Date();
+    var hoy4=ahora4.getFullYear()+'-'+String(ahora4.getMonth()+1).padStart(2,'0')+'-'+String(ahora4.getDate()).padStart(2,'0');
+    if(!document.getElementById('filtroCobroDesde').value) document.getElementById('filtroCobroDesde').value=hoy4;
+    if(!document.getElementById('filtroCobroHasta').value) document.getElementById('filtroCobroHasta').value=hoy4;
+    var verTodosC2=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+    var tituloCob = verTodosC2 ? 'Todos los pagos' : 'Pagos de '+VEND.nombre+' (VEND '+VEND.codigo+')';
+    var elTitC=document.getElementById('cobroHistTitulo'); if(elTitC) elTitC.textContent=tituloCob;
+    var vendWrapC=document.getElementById('filtroCobroVendWrap');
+    if(vendWrapC) vendWrapC.style.display=verTodosC2?'flex':'none';
+    document.getElementById('listaCobros').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Cargando pagos...</div>';
+    if(verTodosC2){
+      cargarTodosPagosCobranzaFirebase(function(pagos){
+        PAGOS_COBRANZA=pagos;
+        PAGOS_COBRANZA_TODOS=pagos;
+        var selVendC=document.getElementById('filtroCobroVendedor');
+        if(selVendC){
+          var optsVC='<option value="todos">Todos</option>';
+          var vendsEnCobros={};
+          for(var pv=0;pv<PAGOS_COBRANZA.length;pv++) vendsEnCobros[PAGOS_COBRANZA[pv].vendedor]=PAGOS_COBRANZA[pv].vendedorNombre||('VEND '+PAGOS_COBRANZA[pv].vendedor);
+          var vidsSortC=Object.keys(vendsEnCobros).sort();
+          for(var vi=0;vi<vidsSortC.length;vi++) optsVC+='<option value="'+vidsSortC[vi]+'">VEND '+vidsSortC[vi]+' - '+vendsEnCobros[vidsSortC[vi]]+'</option>';
+          selVendC.innerHTML=optsVC;
+        }
+        renderHistorialCobros();
+      });
+    } else {
+      cargarDesdeFirebase(VEND.codigo, function(peds, viss, clis, pagos){
+        PAGOS_COBRANZA=pagos.filter(function(p){ return !p.vendedor||p.vendedor===VEND.codigo; });
+        renderHistorialCobros();
       });
     }
   }
@@ -2089,7 +2436,7 @@ function construirMsgWA(){
     alertaNvo=['CLIENTE NUEVO - CREAR EN PROFIT ANTES DE FACTURAR','  Nombre: '+cli.nombre,'  RIF: '+cli.rif,(cli.tel?'  Tel: '+cli.tel:''),'---',''].join(N);
   }
   var partes=['PEDIDO TUTIM','---','',hoy+' - VEND '+VEND.codigo+' '+VEND.nombre+(VEND.zona?' - '+VEND.zona:''),'',
-    alertaNvo,'CLIENTE: '+'Cod: '+cli.id+' | '+cli.nombre,'RIF: '+cli.rif,(cli.tel?'Tel: '+cli.tel:''),(cli.contacto?'Contacto: '+cli.contacto:''),(cli.dir?'Dir. Fiscal: '+cli.dir:''),(cli.dirEntrega&&cli.dirEntrega!==cli.dir?'Dir. Entrega: '+cli.dirEntrega:''),'',
+    alertaNvo,'CLIENTE: '+'Cod: '+cli.id+' | '+cli.nombre,'RIF: '+cli.rif,(cli.tel?'Tel: '+cli.tel:''),(cli.contacto?'Contacto: '+cli.contacto:''),(cli.dir?'Dir. Fiscal: '+cli.dir:''),(cli.dirEntrega&&cli.dirEntrega!==cli.dir?'*DIRECCION DE DESPACHO DIFERENTE A LA FISCAL:* '+cli.dirEntrega:''),'',
     'PRODUCTOS:',lineas.join(N),'',
     'TOTAL: $'+t.monto.toFixed(2)+' ('+t.bultos+' bultos)',
     'Pago: '+t.fpL+' - Fact: '+t.ffL,'Lista precio: '+lp,
@@ -2292,7 +2639,7 @@ function marcarEnviados(pedidos){
               visitas: data.visitas||'[]',
               clientesNuevos: data.clientesNuevos||'[]',
               ultimaActualizacion: new Date().toISOString()
-            }).then(function(){
+            }, {merge:true}).then(function(){
               pendientes--;
               if(pendientes<=0) renderHistorial();
             });
@@ -2462,6 +2809,9 @@ function enviarDetalleWA(){
     lineas.push('Cliente: '+ped.cliente.nombre+(esNvo?' (NUEVO)':''));
     lineas.push('RIF: '+ped.cliente.rif);
     if(ped.cliente.tel) lineas.push('Tel: '+ped.cliente.tel);
+    if(ped.cliente.dirEntrega && ped.cliente.dirEntrega!==ped.cliente.dir){
+      lineas.push('*DIRECCION DE DESPACHO DIFERENTE A LA FISCAL:* '+ped.cliente.dirEntrega);
+    }
     lineas.push('');
     var ids=Object.keys(ped.items);
     for(var j=0;j<ids.length;j++){
@@ -2528,9 +2878,13 @@ function buildTablaHTML(ped) {
     '</tr>';
 
   var alertaNvo = esNvo ? '<div style="background:#FDE8F2;border-left:4px solid #E8509A;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:13px;color:#c0166c"><strong>CLIENTE NUEVO</strong> — Crear en Profit antes de facturar</div>' : '';
+  var alertaDirEntrega = (ped.cliente.dirEntrega && ped.cliente.dirEntrega!==ped.cliente.dir)
+    ? '<div style="background:#FFF3CD;border-left:4px solid #F0AD4E;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:13px;color:#856404"><strong>DIRECCION DE DESPACHO DIFERENTE A LA FISCAL:</strong> '+ped.cliente.dirEntrega+'</div>'
+    : '';
 
   return '<div style="background:#fff;border-radius:10px;padding:16px;margin-bottom:20px;border:1px solid #D5D9EE;font-family:Arial,sans-serif">' +
     alertaNvo +
+    alertaDirEntrega +
     '<table style="width:100%;border-collapse:collapse;margin-bottom:12px">' +
       '<tr><td style="color:#888;font-size:13px;padding:3px 0;width:100px">Cliente</td><td style="font-weight:600;font-size:14px">'+ped.cliente.nombre+'</td></tr>' +
       '<tr><td style="color:#888;font-size:13px;padding:3px 0">RIF</td><td style="font-weight:500">'+ped.cliente.rif+'</td></tr>' +
@@ -2591,6 +2945,9 @@ function enviarCorreo(){
     lineas.push('Cliente : '+ped.cliente.nombre);
     lineas.push('RIF     : '+ped.cliente.rif);
     if(ped.cliente.tel) lineas.push('Tel     : '+ped.cliente.tel);
+    if(ped.cliente.dirEntrega && ped.cliente.dirEntrega!==ped.cliente.dir){
+      lineas.push('DIRECCION DE DESPACHO DIFERENTE A LA FISCAL: '+ped.cliente.dirEntrega);
+    }
     lineas.push('');
     lineas.push('Ref.       Articulo              Btos   P.Unit    Total');
     lineas.push('---------- -------------------- ------ --------- ---------');
@@ -2706,6 +3063,9 @@ function exportarExcelDia(){
         var cdat=vd.clientes[cid2];
         var cli=cdat.cliente;
         var firstRow=true;
+        if(cli.dirEntrega && cli.dirEntrega!==cli.dir){
+          contenido+='<tr><td colspan="12" style="background:#FFF3CD;color:#856404;font-weight:bold;padding:6px 10px">DIRECCION DE DESPACHO DIFERENTE A LA FISCAL: '+cli.dirEntrega+'</td></tr>';
+        }
         for(var pp=0;pp<cdat.pedidos.length;pp++){
           var ped=cdat.pedidos[pp];
           var lp=ped.listaPrecio||1;
@@ -2764,6 +3124,9 @@ function exportarExcelDia(){
       var cli=cdat.cliente;
       var nvoTxt=esNuevo(cli)?' ✦':'';
       var firstRow=true;
+      if(cli.dirEntrega && cli.dirEntrega!==cli.dir){
+        contenido+='<tr><td colspan="12" style="background:#FFF3CD;color:#856404;font-weight:bold;padding:6px 10px">DIRECCION DE DESPACHO DIFERENTE A LA FISCAL: '+cli.dirEntrega+'</td></tr>';
+      }
       for(var pp=0;pp<cdat.pedidos.length;pp++){
         var ped=cdat.pedidos[pp];
         var lp=ped.listaPrecio||1;
@@ -3064,7 +3427,7 @@ function guardarEdicionVisita(){
       visitas: JSON.stringify(visP),
       clientesNuevos: data.clientesNuevos||'[]',
       ultimaActualizacion: new Date().toISOString()
-    }).then(function(){
+    }, {merge:true}).then(function(){
       cargarTodosVisitasFirebase(function(todas){
         VISITAS=todas;
         cerrarModal('mEditarVisita'); renderVisitas(); toast('Visita actualizada');
@@ -3101,7 +3464,7 @@ function ejecutarEliminarVisita(){
       visitas: JSON.stringify(visP),
       clientesNuevos: data.clientesNuevos||'[]',
       ultimaActualizacion: new Date().toISOString()
-    }).then(function(){
+    }, {merge:true}).then(function(){
       cargarTodosVisitasFirebase(function(todas){
         VISITAS=todas;
         cerrarModal('mEliminarVisita'); renderVisitas(); toast('Visita eliminada');
@@ -3317,12 +3680,22 @@ var MIN_FACTURAS_REQUERIDAS=2;
 
 // Un cliente se considera con documentacion COMPLETA solo si tiene los 5
 // requisitos, y las facturas cuentan solo si hay al menos MIN_FACTURAS_REQUERIDAS
+// Un requisito esta satisfecho si tiene el documento real, O si un admin
+// (01/20) lo aprobo manualmente para ese cliente en particular.
+function requisitoSatisfecho(c, tipo){
+  if(tipo==='rif') return !!(c.docRifUrl || c.aprobRif);
+  if(tipo==='registro') return !!(c.docRegistroUrl || c.aprobRegistro);
+  if(tipo==='cedula') return !!(c.docCedulaUrl || c.aprobCedula);
+  if(tipo==='facturas') return ((c.facturasUrls?c.facturasUrls.length:0)>=MIN_FACTURAS_REQUERIDAS) || !!c.aprobFacturas;
+  if(tipo==='foto') return !!(c.fotoEntradaUrl || c.aprobFoto);
+  return false;
+}
+
 function clienteDocsCompletos(c){
-  var totalFact=(c.facturasUrls?c.facturasUrls.length:0);
-  return !!(c.docRifUrl && c.docRegistroUrl && c.docCedulaUrl && c.fotoEntradaUrl && totalFact>=MIN_FACTURAS_REQUERIDAS);
+  return requisitoSatisfecho(c,'rif') && requisitoSatisfecho(c,'registro') && requisitoSatisfecho(c,'cedula') && requisitoSatisfecho(c,'facturas') && requisitoSatisfecho(c,'foto');
 }
 function clienteTieneAlgunDoc(c){
-  return !!(c.docRifUrl||c.docRegistroUrl||c.docCedulaUrl||c.fotoEntradaUrl||(c.facturasUrls&&c.facturasUrls.length));
+  return !!(c.docRifUrl||c.docRegistroUrl||c.docCedulaUrl||c.fotoEntradaUrl||(c.facturasUrls&&c.facturasUrls.length)||c.aprobRif||c.aprobRegistro||c.aprobCedula||c.aprobFacturas||c.aprobFoto);
 }
 
 // Devuelve el dia 6 del mes actual en formato YYYY-MM-DD (punto de partida
@@ -3348,18 +3721,19 @@ function obtenerFechaCreacionCliente(c){
   return null;
 }
 
-// Lista en español de los requisitos que le faltan a un cliente
+// Lista en español de los requisitos que le faltan a un cliente (ya
+// descontando los que fueron aprobados manualmente)
 function obtenerFaltantesDoc(c){
   var faltantes=[];
-  if(!c.docRifUrl) faltantes.push('RIF');
-  if(!c.docRegistroUrl) faltantes.push('Registro Mercantil');
-  if(!c.docCedulaUrl) faltantes.push('Cedula');
-  var totalFact=(c.facturasUrls?c.facturasUrls.length:0);
-  if(totalFact<MIN_FACTURAS_REQUERIDAS){
+  if(!requisitoSatisfecho(c,'rif')) faltantes.push('RIF');
+  if(!requisitoSatisfecho(c,'registro')) faltantes.push('Registro Mercantil');
+  if(!requisitoSatisfecho(c,'cedula')) faltantes.push('Cedula');
+  if(!requisitoSatisfecho(c,'facturas')){
+    var totalFact=(c.facturasUrls?c.facturasUrls.length:0);
     var faltanFact=MIN_FACTURAS_REQUERIDAS-totalFact;
     faltantes.push(faltanFact+' factura'+(faltanFact>1?'s':'')+' mas');
   }
-  if(!c.fotoEntradaUrl) faltantes.push('Foto de entrada');
+  if(!requisitoSatisfecho(c,'foto')) faltantes.push('Foto de entrada');
   if(!c.ubicacionMaps) faltantes.push('Ubicacion');
   return faltantes;
 }
@@ -3428,18 +3802,37 @@ function actualizarChecksDocs(prefix, clienteExistente){
     var el=document.getElementById(chkId);
     if(el) el.style.display=ok?'inline':'none';
   }
-  marcar(prefix+'ChkRif', !!(ex.docRifUrl || ncDocsData.rif));
-  marcar(prefix+'ChkRegistro', !!(ex.docRegistroUrl || ncDocsData.registro));
-  marcar(prefix+'ChkCedula', !!(ex.docCedulaUrl || ncDocsData.cedula));
-  marcar(prefix+'ChkFoto', !!(ex.fotoEntradaUrl || ncDocsData.foto));
+  marcar(prefix+'ChkRif', !!(ex.docRifUrl || ex.aprobRif || ncDocsData.rif));
+  marcar(prefix+'ChkRegistro', !!(ex.docRegistroUrl || ex.aprobRegistro || ncDocsData.registro));
+  marcar(prefix+'ChkCedula', !!(ex.docCedulaUrl || ex.aprobCedula || ncDocsData.cedula));
+  marcar(prefix+'ChkFoto', !!(ex.fotoEntradaUrl || ex.aprobFoto || ncDocsData.foto));
   var totalFact=(ex.facturasUrls?ex.facturasUrls.length:0)+(ncDocsData.facturas?ncDocsData.facturas.length:0);
-  marcar(prefix+'ChkFact', totalFact>=MIN_FACTURAS_REQUERIDAS);
+  marcar(prefix+'ChkFact', totalFact>=MIN_FACTURAS_REQUERIDAS || !!ex.aprobFacturas);
 }
 function actualizarChecksDocsNC(){ actualizarChecksDocs('nc', null); }
 function actualizarChecksDocsDC(){
   var c=null;
   for(var i=0;i<CLIENTES.length;i++){ if(CLIENTES[i].id===dcClienteIdActual){ c=CLIENTES[i]; break; } }
   actualizarChecksDocs('dc', c);
+  // Si se acaba de adjuntar un archivo para un requisito, ya no hace falta
+  // aprobarlo manualmente: ocultar (y desmarcar) su checkbox
+  var totalFactStaged=(c&&c.facturasUrls?c.facturasUrls.length:0)+(ncDocsData.facturas?ncDocsData.facturas.length:0);
+  var yaTieneAhora={
+    dcAprobRifWrap:!!((c&&c.docRifUrl)||ncDocsData.rif),
+    dcAprobRegistroWrap:!!((c&&c.docRegistroUrl)||ncDocsData.registro),
+    dcAprobCedulaWrap:!!((c&&c.docCedulaUrl)||ncDocsData.cedula),
+    dcAprobFacturasWrap:totalFactStaged>=MIN_FACTURAS_REQUERIDAS,
+    dcAprobFotoWrap:!!((c&&c.fotoEntradaUrl)||ncDocsData.foto)
+  };
+  for(var wrapId in yaTieneAhora){
+    var wrapEl=document.getElementById(wrapId);
+    if(!wrapEl || wrapEl.classList.contains('hidden')) continue; // solo aplica si el usuario es aprobador (ya visible)
+    if(yaTieneAhora[wrapId]){
+      wrapEl.classList.add('hidden');
+      var chkEl=wrapEl.querySelector('input[type="checkbox"]');
+      if(chkEl) chkEl.checked=false;
+    }
+  }
 }
 
 function capturarUbicacion(){
@@ -3571,8 +3964,9 @@ function abrirDocsCliente(id){
   document.getElementById('dcRif').value=c.rif||'';
   document.getElementById('dcTel').value=c.tel||'';
   document.getElementById('dcDir').value=c.dir||'';
+  document.getElementById('dcDirEntrega').value=(c.dirEntrega&&c.dirEntrega!==c.dir)?c.dirEntrega:'';
   document.getElementById('dcUbicacion').value=c.ubicacionMaps||'';
-  ['dcNombre','dcRif','dcTel','dcDir'].forEach(function(iid){
+  ['dcNombre','dcRif','dcTel','dcDir','dcDirEntrega'].forEach(function(iid){
     document.getElementById(iid).disabled=!editable;
   });
 
@@ -3590,6 +3984,22 @@ function abrirDocsCliente(id){
   document.getElementById('dcArchFactExistente').innerHTML=factHtml;
 
   actualizarChecksDocs('dc', c);
+  var esAprobador=puedeAprobarPagosCobranza();
+  var totalFactC=(c.facturasUrls?c.facturasUrls.length:0);
+  var camposAprob=[
+    {chk:'dcAprobRif', wrap:'dcAprobRifWrap', campo:'aprobRif', yaTiene:!!c.docRifUrl},
+    {chk:'dcAprobRegistro', wrap:'dcAprobRegistroWrap', campo:'aprobRegistro', yaTiene:!!c.docRegistroUrl},
+    {chk:'dcAprobCedula', wrap:'dcAprobCedulaWrap', campo:'aprobCedula', yaTiene:!!c.docCedulaUrl},
+    {chk:'dcAprobFacturas', wrap:'dcAprobFacturasWrap', campo:'aprobFacturas', yaTiene:totalFactC>=MIN_FACTURAS_REQUERIDAS},
+    {chk:'dcAprobFoto', wrap:'dcAprobFotoWrap', campo:'aprobFoto', yaTiene:!!c.fotoEntradaUrl}
+  ];
+  camposAprob.forEach(function(a){
+    var wrapEl=document.getElementById(a.wrap);
+    if(esAprobador && !a.yaTiene){ wrapEl.classList.remove('hidden'); document.getElementById(a.chk).checked=!!c[a.campo]; }
+    else { wrapEl.classList.add('hidden'); document.getElementById(a.chk).checked=a.yaTiene?false:!!c[a.campo]; }
+  });
+  var infoEl=document.getElementById('dcAprobacionInfo');
+  infoEl.textContent=(c.aprobadaPor)?('Ultima aprobacion manual: '+c.aprobadaPor+(c.fechaAprobacionDocs?(' - '+c.fechaAprobacionDocs):'')):'';
   document.getElementById('mDocsCliente').classList.add('open');
 }
 
@@ -3617,8 +4027,30 @@ function guardarDocsCliente(){
     c.nombre=nom; c.rif=rif;
     c.tel=document.getElementById('dcTel').value.trim();
     c.dir=document.getElementById('dcDir').value.trim();
+    var dirEntregaVal=document.getElementById('dcDirEntrega').value.trim();
+    c.dirEntrega=dirEntregaVal?dirEntregaVal:c.dir;
+    c.mismaDir=!dirEntregaVal;
   }
   c.ubicacionMaps=document.getElementById('dcUbicacion').value.trim();
+  if(puedeAprobarPagosCobranza()){
+    var camposAprobG=[
+      {chk:'dcAprobRif', campo:'aprobRif'},
+      {chk:'dcAprobRegistro', campo:'aprobRegistro'},
+      {chk:'dcAprobCedula', campo:'aprobCedula'},
+      {chk:'dcAprobFacturas', campo:'aprobFacturas'},
+      {chk:'dcAprobFoto', campo:'aprobFoto'}
+    ];
+    var huboCambioAprob=false;
+    camposAprobG.forEach(function(a){
+      var marcado=document.getElementById(a.chk).checked;
+      if(marcado!==!!c[a.campo]) huboCambioAprob=true;
+      if(marcado) c[a.campo]=true; else delete c[a.campo];
+    });
+    if(huboCambioAprob){
+      c.aprobadaPor=VEND.nombre;
+      c.fechaAprobacionDocs=new Date().toLocaleString('es-VE');
+    }
+  }
 
   var btnG=document.getElementById('btnGuardarDocsCli');
   if(btnG){ btnG.disabled=true; btnG.textContent='Subiendo documentos...'; }
@@ -3664,7 +4096,7 @@ function finalizarGuardadoDocsCliente(c, esNuevoCli, docsOk){
         visitas: data.visitas||'[]',
         clientesNuevos: JSON.stringify(cns),
         ultimaActualizacion: new Date().toISOString()
-      }).then(function(){
+      }, {merge:true}).then(function(){
         toast(docsOk?'Cliente actualizado':'Guardado (algunos documentos no se subieron)');
       }).catch(function(){ toast('Error guardando en Firebase'); });
     }).catch(function(){ toast('Error: no se pudo conectar con Firebase'); });
@@ -3690,13 +4122,20 @@ function finalizarGuardadoDocsCliente(c, esNuevoCli, docsOk){
 
 function actualizarMetricas(){
   var hoy=new Date().toLocaleDateString('es-VE');
-  var pedH=[],visH=[],bH=0,mH=0;
+  var ahoraM=new Date();
+  var hoyISO=ahoraM.getFullYear()+'-'+String(ahoraM.getMonth()+1).padStart(2,'0')+'-'+String(ahoraM.getDate()).padStart(2,'0');
+  var pedH=[],visH=[],cobH=[],bH=0,mH=0;
   for(var i=0;i<PEDIDOS.length;i++){if(PEDIDOS[i].fecha===hoy && !PEDIDOS[i].anulado){pedH.push(PEDIDOS[i]);bH+=PEDIDOS[i].bultos;mH+=PEDIDOS[i].monto;}}
   for(var i=0;i<VISITAS.length;i++){if(VISITAS[i].fecha===hoy) visH.push(VISITAS[i]);}
+  for(var i=0;i<PAGOS_COBRANZA.length;i++){if(PAGOS_COBRANZA[i].fecha===hoyISO && PAGOS_COBRANZA[i].estado!=='anulado') cobH.push(PAGOS_COBRANZA[i]);}
   document.getElementById('mPed').textContent=pedH.length;
   document.getElementById('mVis').textContent=visH.length;
+  document.getElementById('mCob').textContent=cobH.length;
   document.getElementById('mBul').textContent=bH;
   document.getElementById('mMon').textContent='$'+mH.toFixed(0);
+  var cobradoHoy=0;
+  for(var i=0;i<cobH.length;i++){ if(cobH[i].estado==='confirmado') cobradoHoy+=cobH[i].montoUSD; }
+  var elCobrado=document.getElementById('mCobrado'); if(elCobrado) elCobrado.textContent='$'+formatearNumeroConMiles(cobradoHoy,2);
   if(pedH.length===0){
     document.getElementById('ultimosPed').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Sin pedidos hoy</div>';
   } else {
@@ -3706,6 +4145,19 @@ function actualizarMetricas(){
       html+='<div class="row-sb" style="border-bottom:1px solid var(--borde)"><span style="font-size:13px;font-weight:600">'+p.cliente.nombre+'</span><span style="font-size:13px;color:var(--azul);font-weight:700">$'+p.monto.toFixed(2)+'</span></div>';
     }
     document.getElementById('ultimosPed').innerHTML=html;
+  }
+  var elCob=document.getElementById('ultimosCobros');
+  if(elCob){
+    if(cobH.length===0){
+      elCob.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Sin pagos hoy</div>';
+    } else {
+      var htmlC='';
+      for(var i=0;i<cobH.length;i++){
+        var c=cobH[i];
+        htmlC+='<div class="row-sb" style="border-bottom:1px solid var(--borde)"><span style="font-size:13px;font-weight:600">'+c.clienteNombre+'</span><span style="font-size:13px;color:var(--azul);font-weight:700">$'+c.montoUSD.toFixed(2)+' '+badgeEstadoCobro(c.estado)+'</span></div>';
+      }
+      elCob.innerHTML=htmlC;
+    }
   }
 }
 
@@ -3872,7 +4324,7 @@ function guardarEdicion(){
         visitas: item.data.visitas||'[]',
         clientesNuevos: item.data.clientesNuevos||'[]',
         ultimaActualizacion: new Date().toISOString()
-      }));
+      }, {merge:true}));
     }
     Promise.all(escriturasE).then(function(){
       cargarTodosFirebase(function(todos){
@@ -3953,7 +4405,7 @@ function ejecutarAnular(){
         visitas: item.data.visitas||'[]',
         clientesNuevos: item.data.clientesNuevos||'[]',
         ultimaActualizacion: new Date().toISOString()
-      }));
+      }, {merge:true}));
     }
     Promise.all(escrituras).then(function(){
       cargarTodosFirebase(function(todos){
@@ -4046,7 +4498,7 @@ function ejecutarReactivar(){
         visitas: item.data.visitas||'[]',
         clientesNuevos: item.data.clientesNuevos||'[]',
         ultimaActualizacion: new Date().toISOString()
-      }));
+      }, {merge:true}));
     }
     Promise.all(escriturasR).then(function(){
       cargarTodosFirebase(function(todos){
@@ -4089,7 +4541,7 @@ function ejecutarReset(){
         db.collection('vendedores').doc(doc.id).set({
           pedidos:'[]',visitas:'[]',clientesNuevos:'[]',
           ultimaActualizacion:new Date().toISOString()
-        });
+        }, {merge:true});
       });
     });
   }catch(e){}
@@ -4148,6 +4600,12 @@ function rptGetPedidosFiltrados(){
 function renderReportes(){
   var lista=rptGetPedidosFiltrados();
   var vendSel=document.getElementById('rptVendedor').value;
+  var cliSel=document.getElementById('rptCliente').value;
+
+  // Filtrar por vendedor (si aplica) y cliente ANTES de calcular los resumenes,
+  // para que ambos filtros afecten todo el reporte de forma consistente
+  if(vendSel!=='todos') lista=lista.filter(function(p){ return (p.vendedor||'??')===vendSel; });
+  if(cliSel!=='todos') lista=lista.filter(function(p){ return p.cliente.id===cliSel; });
 
   // Reporte 1: Resumen general
   var totPedidos=lista.length;
@@ -4172,7 +4630,7 @@ function renderReportes(){
     '</div>';
 
   // Reporte 2: Por vendedor
-  // Agrupar por vendedor
+  // Agrupar por vendedor (usando la lista YA filtrada por cliente, si aplica)
   var porVend={};
   for(var i=0;i<lista.length;i++){
     var p=lista[i];
@@ -4196,11 +4654,8 @@ function renderReportes(){
   if(vids.length===0){
     htmlVend='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin datos en este periodo</div>';
   } else {
-    // Filtrar si hay un vendedor seleccionado
-    var vidsRender = vendSel==='todos' ? vids : vids.filter(function(v){return v===vendSel;});
-
-    for(var v=0;v<vidsRender.length;v++){
-      var vid2=vidsRender[v];
+    for(var v=0;v<vids.length;v++){
+      var vid2=vids[v];
       var vd=porVend[vid2];
       var cliRepeat2=Object.keys(vd.clientes).filter(function(k){return vd.clientes[k]>1;}).length;
       htmlVend+=
@@ -4220,14 +4675,177 @@ function renderReportes(){
   }
   document.getElementById('rptPorVendedor').innerHTML=htmlVend;
 
-  // Actualizar el selector de vendedores
+  // Actualizar el selector de vendedores (a partir de TODOS los pedidos del
+  // periodo, sin aplicar todavia el filtro de vendedor, para no hacer
+  // desaparecer opciones al cambiar la seleccion)
+  var todosPeriodo=rptGetPedidosFiltrados();
+  var vendsPeriodo={};
+  for(var i=0;i<todosPeriodo.length;i++){
+    var p=todosPeriodo[i];
+    var vid=p.vendedor||'??';
+    if(!vendsPeriodo[vid]){
+      var vObjR2=null;
+      for(var vri=0;vri<VENDEDORES.length;vri++){if(VENDEDORES[vri].id===vid){vObjR2=VENDEDORES[vri];break;}}
+      vendsPeriodo[vid]=vObjR2?vObjR2.nombre:('VEND '+vid);
+    }
+  }
+  var vidsTodos=Object.keys(vendsPeriodo).sort();
   var selEl=document.getElementById('rptVendedor');
   var selVal=selEl.value;
   var optsHtml='<option value="todos">Todos los vendedores</option>';
-  for(var v=0;v<vids.length;v++){
-    optsHtml+='<option value="'+vids[v]+'"'+(vids[v]===selVal?' selected':'')+'>VEND '+vids[v]+' - '+porVend[vids[v]].nombre+'</option>';
+  for(var v=0;v<vidsTodos.length;v++){
+    optsHtml+='<option value="'+vidsTodos[v]+'"'+(vidsTodos[v]===selVal?' selected':'')+'>VEND '+vidsTodos[v]+' - '+vendsPeriodo[vidsTodos[v]]+'</option>';
   }
   selEl.innerHTML=optsHtml;
+
+  // Actualizar el selector de clientes (a partir de los pedidos del periodo,
+  // ya filtrados por vendedor si aplica, para que la lista de clientes sea
+  // relevante a lo que se esta viendo)
+  var baseParaClientes = vendSel==='todos' ? todosPeriodo : todosPeriodo.filter(function(p){return (p.vendedor||'??')===vendSel;});
+  var clisPeriodo={};
+  for(var i=0;i<baseParaClientes.length;i++){
+    var p=baseParaClientes[i];
+    if(!clisPeriodo[p.cliente.id]) clisPeriodo[p.cliente.id]=p.cliente.nombre;
+  }
+  var cidsTodos=Object.keys(clisPeriodo).sort(function(a,b){return clisPeriodo[a].localeCompare(clisPeriodo[b]);});
+  var selCliEl=document.getElementById('rptCliente');
+  var selCliVal=selCliEl.value;
+  var optsCliHtml='<option value="todos">Todos los clientes</option>';
+  for(var c=0;c<cidsTodos.length;c++){
+    optsCliHtml+='<option value="'+cidsTodos[c]+'"'+(cidsTodos[c]===selCliVal?' selected':'')+'>'+clisPeriodo[cidsTodos[c]]+' (Cod: '+cidsTodos[c]+')</option>';
+  }
+  selCliEl.innerHTML=optsCliHtml;
+
+  // Reporte 3: cantidades por producto, agrupadas por mes, con total general
+  var porMes={};
+  var totalesProducto={};
+  for(var i=0;i<lista.length;i++){
+    var p=lista[i];
+    var mesKey=fechaToISO(p.fecha).substring(0,7); // YYYY-MM
+    if(!porMes[mesKey]) porMes[mesKey]={};
+    var idsProd=Object.keys(p.items||{});
+    for(var j=0;j<idsProd.length;j++){
+      var pid=idsProd[j], qty=p.items[pid];
+      if(!qty) continue;
+      porMes[mesKey][pid]=(porMes[mesKey][pid]||0)+qty;
+      totalesProducto[pid]=(totalesProducto[pid]||0)+qty;
+    }
+  }
+  var mesesOrdenados=Object.keys(porMes).sort();
+  var nombresMes=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var htmlProd='';
+  if(mesesOrdenados.length===0){
+    htmlProd='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin datos en este periodo</div>';
+  } else {
+    htmlProd='<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">'+
+      '<tr style="background:var(--azul);color:#fff">'+
+        '<th style="padding:6px 8px;text-align:left">Mes</th>'+
+        PRODUCTOS.map(function(prod){return '<th style="padding:6px 8px;text-align:right">'+prod.nombre+'</th>';}).join('')+
+        '<th style="padding:6px 8px;text-align:right">Total</th>'+
+      '</tr>';
+    for(var m=0;m<mesesOrdenados.length;m++){
+      var mesKey=mesesOrdenados[m];
+      var partesMes=mesKey.split('-');
+      var mesLabel=nombresMes[parseInt(partesMes[1],10)-1]+' '+partesMes[0];
+      var totalMes=0;
+      for(var pi=0;pi<PRODUCTOS.length;pi++){ totalMes+=porMes[mesKey][PRODUCTOS[pi].id]||0; }
+      var celdas='';
+      for(var pi=0;pi<PRODUCTOS.length;pi++){
+        var cant=porMes[mesKey][PRODUCTOS[pi].id]||0;
+        var pct=totalMes>0?Math.round(cant/totalMes*1000)/10:0;
+        celdas+='<td style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--borde)">'+(cant||'-')+
+          (cant>0?'<div style="font-size:10px;color:#999;font-weight:400">'+pct+'%</div>':'')+
+        '</td>';
+      }
+      htmlProd+='<tr>'+
+        '<td style="padding:6px 8px;border-bottom:1px solid var(--borde);font-weight:600">'+mesLabel+'</td>'+
+        celdas+
+        '<td style="padding:6px 8px;border-bottom:1px solid var(--borde);text-align:right;font-weight:700">'+totalMes+'</td>'+
+      '</tr>';
+    }
+    var granTotal=0;
+    for(var pi=0;pi<PRODUCTOS.length;pi++){ granTotal+=totalesProducto[PRODUCTOS[pi].id]||0; }
+    var celdasTotal='';
+    for(var pi=0;pi<PRODUCTOS.length;pi++){
+      var totProd=totalesProducto[PRODUCTOS[pi].id]||0;
+      var pctTotal=granTotal>0?Math.round(totProd/granTotal*1000)/10:0;
+      celdasTotal+='<td style="padding:6px 8px;text-align:right">'+totProd+
+        (totProd>0?'<div style="font-size:10px;color:var(--azul);font-weight:600">'+pctTotal+'%</div>':'')+
+      '</td>';
+    }
+    htmlProd+='<tr style="background:#f0f0f5;font-weight:700">'+
+      '<td style="padding:6px 8px">TOTAL</td>'+
+      celdasTotal+
+      '<td style="padding:6px 8px;text-align:right;color:var(--azul)">'+granTotal+'</td>'+
+    '</tr>';
+    htmlProd+='</table>';
+  }
+  document.getElementById('rptPorProducto').innerHTML=htmlProd;
+
+  // Reporte 4: lista de pedidos individuales, mas recientes primero, con clic
+  // para ver el detalle completo
+  var listaOrdenada=lista.slice().sort(function(a,b){
+    var fa=fechaToISO(a.fecha)+' '+(a.hora||''), fb=fechaToISO(b.fecha)+' '+(b.hora||'');
+    return fa<fb?1:(fa>fb?-1:0);
+  });
+  var htmlPeds='';
+  if(listaOrdenada.length===0){
+    htmlPeds='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin pedidos en este rango</div>';
+  } else {
+    for(var i=0;i<listaOrdenada.length;i++){
+      var p=listaOrdenada[i];
+      htmlPeds+='<div onclick="verDetallePedidoRpt(&quot;'+p.id+'&quot;)" style="border-bottom:1px solid var(--borde);padding:10px 4px;cursor:pointer">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
+          '<div><strong style="font-size:13px">'+p.cliente.nombre+'</strong>'+
+          '<div style="font-size:11px;color:var(--azul);font-weight:600">Cod: '+p.cliente.id+'</div>'+
+          '<div style="font-size:11px;color:#888">'+p.fecha+' '+p.hora+' | VEND '+(p.vendedor||'??')+'</div></div>'+
+          '<div style="text-align:right"><strong style="font-size:14px;color:var(--azul)">$'+p.monto.toFixed(2)+'</strong><div style="font-size:11px;color:#888">'+p.bultos+' btos</div></div>'+
+        '</div>'+
+      '</div>';
+    }
+  }
+  document.getElementById('rptListaPedidos').innerHTML=htmlPeds;
+}
+
+function verDetallePedidoRpt(pedId){
+  var p=RPT_PEDIDOS.find(function(x){return String(x.id)===String(pedId);});
+  if(!p){ toast('Pedido no encontrado'); return; }
+  var lp=p.listaPrecio||1;
+  var itemsHtml='';
+  var ids=Object.keys(p.items||{});
+  for(var i=0;i<ids.length;i++){
+    var pid=ids[i];
+    var qty=p.items[pid];
+    if(!qty) continue;
+    var prod=null;
+    for(var j=0;j<PRODUCTOS.length;j++){ if(PRODUCTOS[j].id===pid){ prod=PRODUCTOS[j]; break; } }
+    var nombre=prod?prod.nombre:pid;
+    var precio=prod?getPrecio(prod,lp):0;
+    itemsHtml+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--borde);font-size:13px">'+
+      '<span>'+nombre+' x'+qty+'</span><span style="font-weight:600">$'+(precio*qty).toFixed(2)+'</span>'+
+    '</div>';
+  }
+  var formaPagoTxt={'01':'Contado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'}[p.formaPago]||p.formaPago||'';
+  var factTxt={'fiscal':'100% Fiscal','nota':'Solo N.Entrega','mixto':'50% Fiscal / 50% N.Entrega'}[p.tipoFact]||p.tipoFact||'';
+  var estadoTxt=p.anulado?'<span class="tag tag-r">Anulado</span>':(p.recibidoOficina?'<span class="tag tag-v">Recibido x Oficina</span>':(p.enviado?'<span class="tag tag-a">Enviado</span>':'<span class="tag" style="background:#FFF3CD;color:#856404">Pendiente</span>'));
+  var html=
+    '<div style="margin-bottom:10px">'+
+      '<strong style="font-size:15px">'+p.cliente.nombre+'</strong> '+estadoTxt+
+      '<div style="font-size:12px;color:var(--azul);font-weight:600">Cod: '+p.cliente.id+(p.cliente.rif?' | '+p.cliente.rif:'')+'</div>'+
+      '<div style="font-size:12px;color:#888">'+p.fecha+' '+p.hora+' | VEND '+(p.vendedor||'??')+' - '+(p.vendedorNombre||'')+'</div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Productos</div>'+
+    itemsHtml+
+    '<div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:700">'+
+      '<span>Total (' +p.bultos+ ' btos)</span><span style="color:var(--azul)">$'+p.monto.toFixed(2)+'</span>'+
+    '</div>'+
+    '<div style="font-size:13px;color:#555;margin-top:6px">Forma de pago: <strong>'+formaPagoTxt+'</strong></div>'+
+    '<div style="font-size:13px;color:#555">Facturacion: <strong>'+factTxt+'</strong></div>'+
+    (p.promo?'<div style="font-size:13px;color:#555">Promo: <strong>'+p.promo+'</strong></div>':'')+
+    (p.obs?'<div style="font-size:13px;color:#555;margin-top:6px">Observaciones: '+p.obs+'</div>':'')+
+    (p.anulado && p.motivoAnulacion?'<div style="font-size:13px;color:var(--rojo);margin-top:6px">Motivo de anulacion: '+p.motivoAnulacion+'</div>':'');
+  document.getElementById('detallePedidoContenido').innerHTML=html;
+  document.getElementById('mDetallePedido').classList.add('open');
 }
 
 function rptConstruirTexto(){
@@ -4356,6 +4974,9 @@ function confirmarWAPersonalizado(){
     lineas.push('Cliente: '+ped.cliente.nombre+(esNvo?' (NUEVO)':''));
     lineas.push('RIF: '+ped.cliente.rif);
     if(ped.cliente.tel) lineas.push('Tel: '+ped.cliente.tel);
+    if(ped.cliente.dirEntrega && ped.cliente.dirEntrega!==ped.cliente.dir){
+      lineas.push('*DIRECCION DE DESPACHO DIFERENTE A LA FISCAL:* '+ped.cliente.dirEntrega);
+    }
     lineas.push('');
     var ids=Object.keys(ped.items);
     for(var j=0;j<ids.length;j++){
@@ -4452,7 +5073,7 @@ function actualizarUIPromo(){
 var vendEditandoId = null;
 
 function adminTab(tab){
-  var tabs=['inventario','precios','vendedores','clientes','docs','historico'];
+  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico'];
   for(var i=0;i<tabs.length;i++){
     var el=document.getElementById('adminTab-'+tabs[i]);
     if(el) el.style.display=(tabs[i]===tab)?'block':'none';
@@ -4485,6 +5106,14 @@ function adminTab(tab){
       NUEVOS_TODOS_CACHE=cns;
       CLIENTES=getClientesParaVendedor();
       renderControlDocs();
+    });
+  }
+  if(tab==='cxc'){
+    renderResumenCxC();
+    document.getElementById('cxcPagosPendientesList').innerHTML='<div style="color:#aaa;text-align:center;padding:12px">Cargando...</div>';
+    cargarTodosPagosCobranzaFirebase(function(pagos){
+      PAGOS_COBRANZA_TODOS=pagos;
+      renderPagosPendientesAdmin();
     });
   }
   if(tab==='historico'){
@@ -4859,6 +5488,13 @@ function editarCliente(id){
   document.getElementById('cRif').value=c.rif||'';
   document.getElementById('cTel').value=c.tel||'';
   document.getElementById('cDir').value=c.dir||'';
+  var dirEntregaInfo=document.getElementById('cDirEntregaInfo');
+  if(c.dirEntrega && c.dirEntrega!==c.dir){
+    dirEntregaInfo.textContent='📦 Direccion de entrega: '+c.dirEntrega;
+    dirEntregaInfo.classList.remove('hidden');
+  } else {
+    dirEntregaInfo.classList.add('hidden');
+  }
   document.getElementById('cVen').value=c.vendedor||'';
   document.getElementById('cInactivo').value=c.inactivo?'true':'false';
   // Mostrar documentacion adjunta (si tiene)
@@ -4905,7 +5541,7 @@ function guardarClienteAdmin(){
         visitas: data.visitas||'[]',
         clientesNuevos: JSON.stringify(cns),
         ultimaActualizacion: new Date().toISOString()
-      }).then(function(){
+      }, {merge:true}).then(function(){
         toast('Cliente actualizado');
       }).catch(function(){ toast('Error guardando en Firebase'); });
     }).catch(function(){ toast('Error al guardar: no se pudo conectar con Firebase'); });
@@ -4937,7 +5573,7 @@ function guardarClienteAdmin(){
 }
 
 // ═══ PARSER DBF PARA NAVEGADOR ═══
-function parsearDBF(buffer, callback){
+function parsearDBF(buffer, fptBuffer, callback){
   var view=new DataView(buffer);
   var numRecords=view.getUint32(4,true);
   var headerSize=view.getUint16(8,true);
@@ -4957,6 +5593,22 @@ function parsearDBF(buffer, callback){
     fields.push({name:name,type:ftype,length:length});
     pos+=32;
   }
+  // Preparar lector de campos memo (.FPT). Si no se subio el archivo, los
+  // campos memo simplemente quedan vacios (no rompe el resto de la carga).
+  var fptView=null, fptBlockSize=64;
+  if(fptBuffer && fptBuffer.byteLength>8){
+    fptView=new DataView(fptBuffer);
+    fptBlockSize=fptView.getUint16(6,false)||64;
+  }
+  function leerMemo(blockNum){
+    if(!fptView || !blockNum) return '';
+    var offset=blockNum*fptBlockSize;
+    if(offset+8>fptBuffer.byteLength) return '';
+    var mlen=fptView.getUint32(offset+4,false);
+    if(mlen<=0 || offset+8+mlen>fptBuffer.byteLength) return '';
+    var bytes=new Uint8Array(fptBuffer,offset+8,mlen);
+    return new TextDecoder('latin1').decode(bytes).trim();
+  }
   // Leer registros
   var records=[];
   var recPos=headerSize;
@@ -4968,8 +5620,13 @@ function parsearDBF(buffer, callback){
     var fieldPos=recPos+1;
     for(var f=0;f<fields.length;f++){
       var fd=fields[f];
-      var bytes=new Uint8Array(buffer,fieldPos,fd.length);
-      rec[fd.name]=decoder.decode(bytes).trim();
+      if(fd.type==='M'){
+        var blockNum=(fd.length===4)?new DataView(buffer,fieldPos,4).getUint32(0,true):0;
+        rec[fd.name]=leerMemo(blockNum);
+      } else {
+        var bytes=new Uint8Array(buffer,fieldPos,fd.length);
+        rec[fd.name]=decoder.decode(bytes).trim();
+      }
       fieldPos+=fd.length;
     }
     records.push(rec);
@@ -4978,32 +5635,51 @@ function parsearDBF(buffer, callback){
   callback(fields,records);
 }
 
-function cargarCSVClientes(input){
-  var file=input.files[0]; if(!file) return;
+function cargarCSVClientes(){
+  var file=document.getElementById('csvClientes').files[0]; if(!file) { toast('Selecciona el archivo de clientes'); return; }
+  var fptFile=document.getElementById('fptClientes').files[0]; // opcional
+  var estadoEl=document.getElementById('estadoCargaClientes');
   var ext=file.name.split('.').pop().toLowerCase();
   if(ext==='dbf'){
-    // Leer como DBF binario
+    if(estadoEl) estadoEl.textContent='Leyendo archivo(s)...';
     var reader=new FileReader();
     reader.onload=function(e){
-      parsearDBF(e.target.result,function(fields,records){
-        var nuevaBase=[];
-        for(var i=0;i<records.length;i++){
-          var rec=records[i];
-          var co=rec['CO_CLI']||'';
-          var nom=rec['CLI_DES']||'';
-          if(!co||!nom||co==='0000') continue;
-          if(rec['INACTIVO']==='T') continue;
-          nuevaBase.push({
-            id:co.trim(),nombre:nom.trim(),
-            rif:(rec['RIF']||'').trim(),
-            tel:(rec['TELEFONOS']||'').trim(),
-            vendedor:(rec['CO_VEN']||'').trim(),
-            dir:(rec['CIUDAD']||'').trim(),
-            inactivo:false
-          });
-        }
-        guardarClientesBase(nuevaBase);
-      });
+      var dbfBuffer=e.target.result;
+      function procesarConMemo(fptBuffer){
+        parsearDBF(dbfBuffer,fptBuffer,function(fields,records){
+          var nuevaBase=[];
+          for(var i=0;i<records.length;i++){
+            var rec=records[i];
+            var co=rec['CO_CLI']||'';
+            var nom=rec['CLI_DES']||'';
+            if(!co||!nom||co==='0000') continue;
+            if(rec['INACTIVO']==='T') continue;
+            var cliente={
+              id:co.trim(),nombre:nom.trim(),
+              rif:(rec['RIF']||'').trim(),
+              tel:(rec['TELEFONOS']||'').trim(),
+              vendedor:(rec['CO_VEN']||'').trim(),
+              dir:(rec['CIUDAD']||'').trim(),
+              zona:(rec['CO_ZON']||'').trim(),
+              email:(rec['EMAIL']||'').trim(),
+              inactivo:false
+            };
+            // DIR_ENT2 es un campo memo (necesita el .FPT) con la direccion de entrega
+            var dirEnt=(rec['DIR_ENT2']||'').trim();
+            if(dirEnt) cliente.dirEntrega=dirEnt;
+            nuevaBase.push(cliente);
+          }
+          guardarClientesBase(nuevaBase);
+        });
+      }
+      if(fptFile){
+        var readerFpt=new FileReader();
+        readerFpt.onload=function(ef){ procesarConMemo(ef.target.result); };
+        readerFpt.onerror=function(){ toast('No se pudo leer el archivo .FPT, se continua sin direccion de entrega'); procesarConMemo(null); };
+        readerFpt.readAsArrayBuffer(fptFile);
+      } else {
+        procesarConMemo(null);
+      }
     };
     reader.readAsArrayBuffer(file);
   } else {
@@ -5018,6 +5694,8 @@ function cargarCSVClientes(input){
       var idxTel=headers.indexOf('TELEFONOS');
       var idxVen=headers.indexOf('CO_VEN');
       var idxDir=headers.indexOf('CIUDAD');
+      var idxZona=headers.indexOf('CO_ZON');
+      var idxEmail=headers.indexOf('EMAIL');
       if(idxId<0||idxNom<0){toast('CSV debe tener CO_CLI y CLI_DES');return;}
       var nuevaBase=[];
       for(var i=1;i<lines.length;i++){
@@ -5029,6 +5707,8 @@ function cargarCSVClientes(input){
           tel:idxTel>=0?cols[idxTel]:'',
           vendedor:idxVen>=0?cols[idxVen]:'',
           dir:idxDir>=0?cols[idxDir]:'',
+          zona:idxZona>=0?cols[idxZona]:'',
+          email:idxEmail>=0?cols[idxEmail]:'',
           inactivo:false
         });
       }
@@ -5118,6 +5798,16 @@ function vincularClientesNuevosPorRif(nuevaBase, callback){
           if(cn.facturasUrls && cn.facturasUrls.length) oficial.facturasUrls=cn.facturasUrls;
           if(cn.ubicacionMaps) oficial.ubicacionMaps=cn.ubicacionMaps;
           if(cn.fechaCreacion) oficial.fechaCreacion=cn.fechaCreacion;
+          if(cn.dirEntrega && cn.dirEntrega!==cn.dir) oficial.dirEntrega=cn.dirEntrega;
+          if(cn.tel) oficial.tel=cn.tel;
+          if(cn.contacto) oficial.contacto=cn.contacto;
+          if(cn.aprobRif) oficial.aprobRif=cn.aprobRif;
+          if(cn.aprobRegistro) oficial.aprobRegistro=cn.aprobRegistro;
+          if(cn.aprobCedula) oficial.aprobCedula=cn.aprobCedula;
+          if(cn.aprobFacturas) oficial.aprobFacturas=cn.aprobFacturas;
+          if(cn.aprobFoto) oficial.aprobFoto=cn.aprobFoto;
+          if(cn.aprobadaPor) oficial.aprobadaPor=cn.aprobadaPor;
+          if(cn.fechaAprobacionDocs) oficial.fechaAprobacionDocs=cn.fechaAprobacionDocs;
           oficial.creadoPor=cn.creadoPor;
           oficial.creadoPorNombre=cn.creadoPorNombre;
           oficial.fueClienteNuevo=true;
@@ -5210,7 +5900,10 @@ function cargarConfigFirebase(callback){
     db.collection('config').doc('precios').get(),
     db.collection('config').doc('vendedores').get(),
     db.collection('config').doc('clientes').get(),
-    db.collection('config').doc('promo_display').get()
+    db.collection('config').doc('promo_display').get(),
+    db.collection('config').doc('cuentas_cobrar').get(),
+    db.collection('config').doc('cuentas_cobrar_real').get(),
+    db.collection('config').doc('cuentas_cobrar_fiscal').get()
   ];
   Promise.all(promesas).then(function(docs){
     // Inventario
@@ -5278,12 +5971,1430 @@ function cargarConfigFirebase(callback){
         PROMO_DISPLAY_ACTIVA=docs[4].data().activa===true;
       }
     }catch(e){}
+    // Cuentas por cobrar (base final ya cruzada, usada por toda la app)
+    try{
+      if(docs[5].exists){
+        var cxc=JSON.parse(docs[5].data().data||'[]');
+        CUENTAS_COBRAR.length=0;
+        for(var i=0;i<cxc.length;i++) CUENTAS_COBRAR.push(cxc[i]);
+      }
+    }catch(e){}
+    // Bases crudas real y fiscal (para poder re-cruzar cuando se suba solo una)
+    try{
+      if(docs[6].exists){
+        var cxcR=JSON.parse(docs[6].data().data||'[]');
+        CUENTAS_COBRAR_REAL.length=0;
+        for(var i=0;i<cxcR.length;i++) CUENTAS_COBRAR_REAL.push(cxcR[i]);
+      }
+    }catch(e){}
+    try{
+      if(docs[7].exists){
+        var cxcF=JSON.parse(docs[7].data().data||'[]');
+        CUENTAS_COBRAR_FISCAL.length=0;
+        for(var i=0;i<cxcF.length;i++) CUENTAS_COBRAR_FISCAL.push(cxcF[i]);
+      }
+    }catch(e){}
     // Llamar callback cuando todo está listo
     if(callback) callback();
   }).catch(function(e){
     console.log('Error cargando config:', e);
     if(callback) callback();
   });
+}
+
+// ═══ COBROS: parser del Excel de Cuentas por Cobrar de Profit ═══
+function formatearFechaExcel(v){
+  if(!v && v!==0) return '';
+  var d;
+  if(v instanceof Date) d=v;
+  else if(typeof v==='number') d=new Date(Math.round((v-25569)*86400*1000));
+  else d=new Date(v);
+  if(isNaN(d.getTime())) return '';
+  var dd=String(d.getDate()).padStart(2,'0');
+  var mm=String(d.getMonth()+1).padStart(2,'0');
+  return dd+'/'+mm+'/'+d.getFullYear();
+}
+
+function parsearExcelCxC(file, callback){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var data=new Uint8Array(e.target.result);
+      var wb=XLSX.read(data,{type:'array',cellDates:true});
+      var sheet=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null});
+      var headerIdx=-1;
+      for(var i=0;i<rows.length;i++){
+        if(rows[i] && String(rows[i][0]||'').trim().toUpperCase()==='NUMERO'){ headerIdx=i; break; }
+      }
+      if(headerIdx===-1){ callback(null,'No se encontro el encabezado NUMERO en el archivo. Verifica que sea el reporte "Facturas por Numero" de Profit.'); return; }
+      var docs=[];
+      for(var i=headerIdx+1;i<rows.length;i++){
+        var r=rows[i];
+        if(!r || r[0]===null || r[0]===undefined || String(r[0]).trim()==='') continue;
+        if(String(r[0]).trim().toLowerCase().indexOf('total')>=0) continue;
+        var saldo=parseFloat(r[9])||0;
+        if(saldo<=0.009) continue; // ya cancelado, no es cuenta pendiente
+        docs.push({
+          numero:String(r[0]).trim(),
+          emision:formatearFechaExcel(r[1]),
+          vencimiento:formatearFechaExcel(r[2]),
+          clienteId:String(r[3]||'').trim(),
+          clienteNombre:String(r[4]||'').trim(),
+          vendedor:String(r[5]||'').trim(),
+          iva:parseFloat(r[6])||0,
+          otros:parseFloat(r[7])||0,
+          neto:parseFloat(r[8])||0,
+          saldo:saldo
+        });
+      }
+      callback(docs,null);
+    }catch(err){
+      callback(null,'Error leyendo el archivo: '+err.message);
+    }
+  };
+  reader.onerror=function(){ callback(null,'No se pudo leer el archivo'); };
+  reader.readAsArrayBuffer(file);
+}
+
+// Al cargar una base nueva: si un documento ya fue marcado como pagado en la
+// app (pagadoEnApp) y el saldo que trae Profit todavia coincide con el que
+// tenia ANTES de ese pago, Profit aun no lo ha reflejado -> se mantiene tal
+// cual esta en la app. Si el saldo ya cambio, se toma como la verdad.
+function reconciliarCxC(nuevosDocs, callback){
+  var actualMap={};
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){ actualMap[CUENTAS_COBRAR[i].numero]=CUENTAS_COBRAR[i]; }
+  var resultado=[];
+  var mantenidos=0;
+  for(var i=0;i<nuevosDocs.length;i++){
+    var nuevo=nuevosDocs[i];
+    var actual=actualMap[nuevo.numero];
+    if(actual && actual.abonadoEnApp && actual.saldoAntesUltimoPago!==undefined && Math.abs(nuevo.saldo-actual.saldoAntesUltimoPago)<0.01){
+      resultado.push(actual);
+      mantenidos++;
+      continue;
+    }
+    resultado.push(nuevo);
+  }
+  callback(resultado, mantenidos);
+}
+
+// El monto coincide si es igual, o si el fiscal es 35% menor al real
+// (documentos con nota/factura donde el fiscal queda sin el ajuste de IVA).
+// Devuelve 'igual', 'diferencia35' o null segun como coincidan los montos
+// La "base" (base imponible) es el monto del documento SIN el IVA: neto - iva
+function baseImponible(doc){
+  return (doc.neto||0)-(doc.iva||0);
+}
+
+function tipoCoincidenciaMontoRealFiscal(baseReal, baseFiscal){
+  var tol=Math.max(0.5, baseReal*0.01);
+  if(Math.abs(baseReal-baseFiscal)<=tol) return 'igual';
+  if(Math.abs(baseFiscal-baseReal*0.65)<=tol) return 'diferencia35';
+  return null;
+}
+
+// Cruza la base REAL con la FISCAL por cliente + fecha de emision EXACTA (si
+// la fecha no coincide, se consideran documentos distintos, no se cruzan).
+// Dentro de cada grupo (mismo cliente, misma fecha), empareja documentos
+// cuya BASE IMPONIBLE (neto - iva) coincida (igual, o base fiscal = base
+// real - 35%). Cuando hay coincidencia, se usa el documento FISCAL como el
+// que queda reflejado en la app. Si la coincidencia fue por el 35% de
+// diferencia, ademas se crea un documento adicional (mismo numero de la
+// factura fiscal + un punto, ej. "123.") con esa diferencia como su propio
+// saldo pendiente, para poder cobrarla aparte. Los documentos REAL sin
+// pareja se muestran igual, tal como vienen de su base. Los documentos
+// FISCAL que no encuentran match en Real se DESCARTAN por completo.
+function fusionarBasesRealFiscal(realDocs, fiscalDocs){
+  var fiscalPorGrupo={};
+  for(var i=0;i<fiscalDocs.length;i++){
+    var key=fiscalDocs[i].clienteId+'|'+fiscalDocs[i].emision;
+    if(!fiscalPorGrupo[key]) fiscalPorGrupo[key]=[];
+    fiscalPorGrupo[key].push(fiscalDocs[i]);
+  }
+  var usados={};
+  var resultado=[];
+  var coincidencias=0;
+
+  for(var i=0;i<realDocs.length;i++){
+    var r=realDocs[i];
+    var key=r.clienteId+'|'+r.emision;
+    var candidatos=fiscalPorGrupo[key]||[];
+    var matchIdx=-1, tipoMatch=null;
+    var baseReal=baseImponible(r);
+    for(var j=0;j<candidatos.length;j++){
+      var idKey=key+'#'+j;
+      if(usados[idKey]) continue;
+      var tipo=tipoCoincidenciaMontoRealFiscal(baseReal, baseImponible(candidatos[j]));
+      if(tipo){ matchIdx=j; tipoMatch=tipo; break; }
+    }
+    if(matchIdx>=0){
+      usados[key+'#'+matchIdx]=true;
+      var f=candidatos[matchIdx];
+      var fusionado={};
+      for(var k in f) fusionado[k]=f[k];
+      fusionado.origenBase='fiscal';
+      fusionado.tieneCruce=true;
+      resultado.push(fusionado);
+      coincidencias++;
+      if(tipoMatch==='diferencia35'){
+        var diferencia=Math.round((r.saldo-f.saldo)*100)/100;
+        if(diferencia>0.009){
+          resultado.push({
+            numero: f.numero+'.',
+            emision: f.emision,
+            vencimiento: f.vencimiento,
+            clienteId: f.clienteId,
+            clienteNombre: f.clienteNombre,
+            vendedor: f.vendedor,
+            iva: 0,
+            otros: 0,
+            neto: diferencia,
+            saldo: diferencia,
+            origenBase: 'diferencia',
+            tieneCruce: true,
+            documentoRelacionado: f.numero
+          });
+        }
+      }
+    } else {
+      var copiaR={};
+      for(var k in r) copiaR[k]=r[k];
+      copiaR.origenBase='real';
+      copiaR.tieneCruce=false;
+      resultado.push(copiaR);
+    }
+  }
+  // Los documentos FISCAL que no tuvieron ninguna coincidencia con Real se
+  // descartan (no quedan reflejados en la app).
+  var descartadosFiscal=0;
+  for(var key in fiscalPorGrupo){
+    var candidatos=fiscalPorGrupo[key];
+    for(var j=0;j<candidatos.length;j++){
+      if(!usados[key+'#'+j]) descartadosFiscal++;
+    }
+  }
+  var docsDiferencia=0;
+  for(var i=0;i<resultado.length;i++){ if(resultado[i].origenBase==='diferencia') docsDiferencia++; }
+  return {resultado:resultado, coincidencias:coincidencias, docsDiferencia:docsDiferencia, descartadosFiscal:descartadosFiscal};
+}
+
+function cargarExcelCxC(input, tipo){
+  var file=input.files[0]; if(!file) return;
+  var nombreBase=(tipo==='real'?'REAL':'FISCAL');
+  var estadoEl=document.getElementById('cxcEstadoCarga');
+  estadoEl.innerHTML='<span style="color:#aaa">Leyendo archivo '+nombreBase+'...</span>';
+  parsearExcelCxC(file,function(docs,error){
+    if(error){ estadoEl.innerHTML='<span style="color:var(--rojo)">'+error+'</span>'; return; }
+    if(!docs||docs.length===0){ estadoEl.innerHTML='<span style="color:var(--rojo)">No se encontraron documentos con saldo pendiente</span>'; return; }
+    if(tipo==='real'){ CUENTAS_COBRAR_REAL=docs; } else { CUENTAS_COBRAR_FISCAL=docs; }
+    var docConfig=(tipo==='real'?'cuentas_cobrar_real':'cuentas_cobrar_fiscal');
+    estadoEl.innerHTML='<span style="color:#aaa">Guardando base '+nombreBase+'...</span>';
+    db.collection('config').doc(docConfig).set({
+      data:JSON.stringify(docs),
+      actualizado:new Date().toISOString()
+    }).then(function(){
+      estadoEl.innerHTML='<span style="color:#aaa">Cruzando bases real y fiscal...</span>';
+      var fusion=fusionarBasesRealFiscal(CUENTAS_COBRAR_REAL, CUENTAS_COBRAR_FISCAL);
+      reconciliarCxC(fusion.resultado,function(docsFinal,mantenidos){
+        CUENTAS_COBRAR=docsFinal;
+        db.collection('config').doc('cuentas_cobrar').set({
+          data:JSON.stringify(CUENTAS_COBRAR),
+          actualizado:new Date().toISOString()
+        }).then(function(){
+          var faltaOtra=(tipo==='real' && CUENTAS_COBRAR_FISCAL.length===0) || (tipo==='fiscal' && CUENTAS_COBRAR_REAL.length===0);
+          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.descartadosFiscal>0?' | '+fusion.descartadosFiscal+' fiscales descartados (sin match en Real)':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+'</span>'+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'');
+          toast('Base de Cuentas por Cobrar actualizada');
+          renderResumenCxC();
+          input.value='';
+        }).catch(function(){
+          estadoEl.innerHTML='<span style="color:var(--rojo)">Error guardando en Firebase</span>';
+        });
+      });
+    }).catch(function(){
+      estadoEl.innerHTML='<span style="color:var(--rojo)">Error guardando la base '+nombreBase+' en Firebase</span>';
+    });
+  });
+}
+
+function renderResumenCxC(){
+  var totalDocs=CUENTAS_COBRAR.length;
+  var totalSaldo=0;
+  for(var i=0;i<CUENTAS_COBRAR.length;i++) totalSaldo+=CUENTAS_COBRAR[i].saldo;
+  var elD=document.getElementById('cxcResumDocs'); if(elD) elD.textContent=totalDocs;
+  var elS=document.getElementById('cxcResumSaldo'); if(elS) elS.textContent=totalSaldo<0?('($'+formatearNumeroConMiles(Math.abs(totalSaldo),2)+')'):('$'+formatearNumeroConMiles(totalSaldo,2));
+  renderListaCxCAdmin();
+}
+
+// Listado completo y buscable de TODAS las cuentas por cobrar, para que el
+// administrador pueda ver la deuda de cualquier cliente sin tener que pasar
+// por el flujo de reportar un pago.
+function renderListaCxCAdmin(){
+  var el=document.getElementById('cxcListaCompleta');
+  if(!el) return;
+  var qEl=document.getElementById('cxcBusqDoc');
+  var q=qEl?qEl.value.toLowerCase():'';
+  var docs=CUENTAS_COBRAR.filter(function(d){ return Math.abs(d.saldo)>0.009; });
+  if(q){
+    docs=docs.filter(function(d){
+      var cliReal=null;
+      for(var j=0;j<CLIENTES_PROFIT.length;j++){ if(CLIENTES_PROFIT[j].id===d.clienteId){ cliReal=CLIENTES_PROFIT[j]; break; } }
+      var nombre=(cliReal?cliReal.nombre:d.clienteNombre).toLowerCase();
+      var rif=(cliReal?cliReal.rif:'')||'';
+      return nombre.indexOf(q)>=0 || rif.toLowerCase().indexOf(q)>=0 || d.clienteId.indexOf(q)>=0 || d.numero.indexOf(q)>=0;
+    });
+  }
+  docs.sort(function(a,b){ return a.clienteId<b.clienteId?-1:(a.clienteId>b.clienteId?1:0); });
+  if(docs.length>100) docs=docs.slice(0,100);
+  var html='';
+  if(docs.length===0){
+    html='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin resultados</div>';
+  } else {
+    for(var i=0;i<docs.length;i++){
+      var d=docs[i];
+      var esCredito=d.saldo<0;
+      var cliReal=null;
+      for(var j=0;j<CLIENTES_PROFIT.length;j++){ if(CLIENTES_PROFIT[j].id===d.clienteId){ cliReal=CLIENTES_PROFIT[j]; break; } }
+      var nombre=cliReal?cliReal.nombre:d.clienteNombre;
+      var dias=calcularDiasVencimiento(d.vencimiento);
+      var diasTxt=(!esCredito && dias!==null && dias>0)?(' - <span style="color:var(--rojo)">Vencido '+dias+'d</span>'):'';
+      var origenTxt=esCredito
+        ?' <span class="tag tag-v" style="font-size:9px">Credito</span>'
+        :(d.origenBase==='diferencia'
+          ?' <span class="tag" style="background:#e3d9fc;color:#5b3fa0;font-size:9px">Dif DCTO.</span>'
+          :(d.tieneCruce?' <span class="tag tag-v" style="font-size:9px">Cruzado</span>':''));
+      html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:13px">'+
+        '<div style="font-weight:600">'+nombre+' <span style="font-weight:400;color:#888">(Cod: '+d.clienteId+')</span>'+origenTxt+'</div>'+
+        '<div style="font-size:11px;color:#888">Doc.'+d.numero+' | VEND '+d.vendedor+' | Vence: '+d.vencimiento+diasTxt+'</div>'+
+        '<div style="font-size:13px;font-weight:700;color:'+(esCredito?'var(--verde)':'var(--azul)')+'">'+(esCredito?'($'+formatearNumeroConMiles(Math.abs(d.saldo),2)+')':'$'+formatearNumeroConMiles(d.saldo,2))+'</div>'+
+      '</div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+// ═══ COBROS: formulario de reporte de pago ═══
+function obtenerClientesConDeuda(){
+  var vCod=VEND?VEND.codigo:'';
+  var verTodos=(vCod==='00'||vCod==='01'||vCod==='20');
+  var map={};
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){
+    var d=CUENTAS_COBRAR[i];
+    if(Math.abs(d.saldo)<=0.009) continue;
+    if(!verTodos && d.vendedor!==vCod) continue;
+    if(!map[d.clienteId]){
+      var cliReal=null;
+      for(var j=0;j<CLIENTES.length;j++){ if(CLIENTES[j].id===d.clienteId){ cliReal=CLIENTES[j]; break; } }
+      map[d.clienteId]={id:d.clienteId, nombre:cliReal?cliReal.nombre:d.clienteNombre, rif:cliReal?cliReal.rif:''};
+    }
+  }
+  var out=[];
+  for(var k in map) out.push(map[k]);
+  return out;
+}
+
+function filtrarCobroCli(){
+  var q=document.getElementById('cobroBusqCli').value.toLowerCase();
+  if(!q){ document.getElementById('cobroListaCli').innerHTML=''; return; }
+  var lista=obtenerClientesConDeuda().filter(function(c){
+    return c.nombre.toLowerCase().indexOf(q)>=0 || (c.rif||'').toLowerCase().indexOf(q)>=0 || c.id.indexOf(q)>=0;
+  });
+  if(lista.length>30) lista=lista.slice(0,30);
+  var html='';
+  if(lista.length===0){
+    html='<div style="color:#aaa;font-size:13px;padding:8px;text-align:center">Sin clientes con saldo pendiente que coincidan</div>';
+  } else {
+    for(var i=0;i<lista.length;i++){
+      var c=lista[i];
+      html+='<div class="cli-opt" onclick="selCobroCli(&quot;'+c.id+'&quot;)"><div class="cli-nom">'+c.nombre+'</div><div class="cli-det"><span style="font-weight:600;color:var(--azul)">Cod: '+c.id+'</span>'+(c.rif?' | '+c.rif:'')+'</div></div>';
+    }
+  }
+  document.getElementById('cobroListaCli').innerHTML=html;
+}
+
+function selCobroCli(id){
+  cobroClienteSeleccionado=id;
+  var c=obtenerClientesConDeuda().find(function(x){return x.id===id;});
+  document.getElementById('cobroBusqCli').value='';
+  document.getElementById('cobroListaCli').innerHTML='';
+  document.getElementById('cobroCliSelNom').textContent=(c?c.nombre:id)+' (Cod: '+id+')';
+  document.getElementById('cobroCliSel').classList.remove('hidden');
+  cobroDocsSeleccionados=[];
+  renderDocsPendientesCliente(id);
+}
+
+function limpiarCobroCli(){
+  cobroClienteSeleccionado=null;
+  cobroDocsSeleccionados=[];
+  document.getElementById('cobroCliSel').classList.add('hidden');
+  document.getElementById('cobroDocsCard').classList.add('hidden');
+  document.getElementById('cobroFormCard').classList.add('hidden');
+  document.getElementById('cobroBusqCli').value='';
+  document.getElementById('cobroListaCli').innerHTML='';
+}
+
+// Positivo = vencido hace N dias. Negativo = faltan N dias para vencer.
+function calcularDiasVencimiento(fechaStr){
+  if(!fechaStr) return null;
+  var p=fechaStr.split('/');
+  if(p.length!==3) return null;
+  var fVenc=new Date(parseInt(p[2],10),parseInt(p[1],10)-1,parseInt(p[0],10));
+  var hoy=new Date();
+  hoy.setHours(0,0,0,0); fVenc.setHours(0,0,0,0);
+  return Math.round((hoy-fVenc)/(1000*60*60*24));
+}
+
+function renderDocsPendientesCliente(clienteId, preservarSeleccion){
+  var docs=CUENTAS_COBRAR.filter(function(d){ return d.clienteId===clienteId && Math.abs(d.saldo)>0.009; });
+  docs.sort(function(a,b){ return a.numero<b.numero?-1:(a.numero>b.numero?1:0); });
+  var html='';
+  for(var i=0;i<docs.length;i++){
+    var d=docs[i];
+    var esCredito=d.saldo<0;
+    var dias=calcularDiasVencimiento(d.vencimiento);
+    var diasTxt='';
+    if(!esCredito && dias!==null){
+      if(dias>0) diasTxt='<span style="color:var(--rojo);font-weight:600">Vencido hace '+dias+' dia'+(dias!==1?'s':'')+'</span>';
+      else if(dias<0) diasTxt='<span style="color:#888">Vence en '+(-dias)+' dia'+((-dias)!==1?'s':'')+'</span>';
+      else diasTxt='<span style="color:var(--ambar);font-weight:600">Vence hoy</span>';
+    }
+    var checked=preservarSeleccion && cobroDocsSeleccionados.indexOf(d.numero)>=0;
+    html+='<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--borde);cursor:pointer'+(esCredito?';background:#F0FBF6':'')+'">'+
+      '<input type="checkbox" '+(checked?'checked':'')+' onchange="toggleDocCobro(&quot;'+d.numero+'&quot;,this.checked)" style="width:16px;height:16px;margin-top:2px;flex-shrink:0">'+
+      '<div style="flex:1">'+
+        (esCredito
+          ?'<div style="font-size:13px;font-weight:600">Doc. '+d.numero+' &nbsp;<span style="color:var(--verde)">Saldo a favor: ($'+formatearNumeroConMiles(Math.abs(d.saldo),2)+')</span></div>'+
+           '<div style="font-size:11px;color:var(--verde)">Credito disponible — se descuenta automaticamente si se selecciona junto a otro documento</div>'
+          :'<div style="font-size:13px;font-weight:600">Doc. '+d.numero+' &nbsp;<span style="color:var(--azul)">$'+formatearNumeroConMiles(d.saldo,2)+'</span></div>'+
+           '<div style="font-size:11px;color:#888">Emision: '+d.emision+' &nbsp;|&nbsp; Vencimiento: '+d.vencimiento+'</div>')+
+        (d.origenBase==='diferencia'?'<div style="font-size:11px;color:#5b3fa0">Diferencia del 35% relacionada al documento '+d.documentoRelacionado+'</div>':'')+
+        (diasTxt?'<div style="font-size:11px;margin-top:2px">'+diasTxt+'</div>':'')+
+      '</div>'+
+    '</label>';
+  }
+  if(docs.length===0) html='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Este cliente no tiene documentos pendientes</div>';
+  document.getElementById('cobroDocsList').innerHTML=html;
+  document.getElementById('cobroDocsCard').classList.remove('hidden');
+  document.getElementById('cobroFormCard').classList.remove('hidden');
+  if(preservarSeleccion) return;
+  var ahoraC=new Date();
+  document.getElementById('cobroFecha').value=ahoraC.getFullYear()+'-'+String(ahoraC.getMonth()+1).padStart(2,'0')+'-'+String(ahoraC.getDate()).padStart(2,'0');
+  document.getElementById('cobroDescuento').value='0';
+  cobroComprobantesData=[];
+  document.getElementById('cobroComprobantes').value='';
+  document.getElementById('cobroComprobantesPrev').innerHTML='';
+  document.getElementById('cobroValidacion').innerHTML='';
+  cobroDepositos=[{formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:''}];
+  renderDepositosCobro();
+}
+
+// ═══ COBROS: editar y anular un pago rechazado ═══
+var pagoEditandoId=null;
+
+function editarPagoRechazado(pagoId){
+  var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoId;});
+  if(!pago){ toast('Pago no encontrado'); return; }
+  pagoEditandoId=pagoId;
+  goScreen('cobros');
+  cobroClienteSeleccionado=pago.clienteId;
+  cobroDocsSeleccionados=pago.documentos.map(function(d){return d.numero;});
+  document.getElementById('cobroBusqCli').value='';
+  document.getElementById('cobroListaCli').innerHTML='';
+  document.getElementById('cobroCliSelNom').textContent=pago.clienteNombre+' (Cod: '+pago.clienteId+')';
+  document.getElementById('cobroCliSel').classList.remove('hidden');
+  renderDocsPendientesCliente(pago.clienteId, true);
+  document.getElementById('cobroFecha').value=pago.fecha;
+  document.getElementById('cobroDescuento').value=pago.descuentoPct||0;
+  cobroDepositos=(pago.depositos||[]).map(function(d){ var c={}; for(var k in d) c[k]=d[k]; return c; });
+  if(cobroDepositos.length===0) cobroDepositos=[{formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:''}];
+  renderDepositosCobro();
+  cobroComprobantesData=[];
+  document.getElementById('cobroComprobantes').value='';
+  document.getElementById('cobroComprobantesPrev').innerHTML='';
+  calcularValidacionCobro();
+  var btnG=document.getElementById('btnGuardarCobro');
+  if(btnG) btnG.textContent='Reenviar pago corregido';
+  toast('Editando pago rechazado. Corrige los datos y reenvialo.');
+}
+
+function anularPagoRechazado(pagoId){
+  var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoId;});
+  if(!pago){ toast('Pago no encontrado'); return; }
+  pago.estado='anulado';
+  guardarPagoCobranzaEnDocVendedor(pago, function(){
+    toast('Pago anulado');
+    cargarTodosPagosCobranzaFirebase(function(pagos){
+      PAGOS_COBRANZA_TODOS=pagos;
+      PAGOS_COBRANZA=pagos;
+      renderPagosPendientesAdmin();
+      renderHistorialCobros();
+    });
+  });
+}
+
+function toggleDocCobro(numero, checked){
+  var idx=cobroDocsSeleccionados.indexOf(numero);
+  if(checked && idx===-1) cobroDocsSeleccionados.push(numero);
+  else if(!checked && idx>=0) cobroDocsSeleccionados.splice(idx,1);
+  calcularValidacionCobro();
+}
+
+// ═══ COBROS: uno o varios depositos por pago ═══
+function agregarDepositoCobro(){
+  cobroDepositos.push({formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:''});
+  renderDepositosCobro();
+  calcularValidacionCobro();
+}
+
+function eliminarDepositoCobro(idx){
+  cobroDepositos.splice(idx,1);
+  renderDepositosCobro();
+  calcularValidacionCobro();
+}
+
+// Formatea un numero con separador de miles (,) y decimal (.)
+function formatearNumeroConMiles(valor, decimales){
+  if(valor===null||valor===undefined||valor==='') return '';
+  var num=parseFloat(valor);
+  if(isNaN(num)) return '';
+  var d=decimales===undefined?2:decimales;
+  var partes=num.toFixed(d).split('.');
+  partes[0]=partes[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  return d===0?partes[0]:partes.join('.');
+}
+
+// Mientras se escribe: solo deja pasar digitos y un punto decimal (sin
+// reformatear todavia, para no saltar el cursor mientras se escribe)
+function onInputMontoCampo(el, idx, campo){
+  var raw=el.value.replace(/,/g,'').replace(/[^\d.]/g,'');
+  var partes=raw.split('.');
+  if(partes.length>2) raw=partes[0]+'.'+partes.slice(1).join('');
+  el.value=raw;
+  cobroDepositos[idx][campo]=raw;
+  calcularValidacionCobro();
+}
+
+// Al salir del campo: aplica la mascara con separador de miles y el numero
+// de decimales que corresponda (2 para montos, 4 para la tasa BCV)
+function onBlurMontoCampo(el, idx, campo, decimales){
+  var val=parseFloat(String(el.value).replace(/,/g,''))||0;
+  cobroDepositos[idx][campo]=val;
+  el.value=val?formatearNumeroConMiles(val, decimales):'';
+  calcularValidacionCobro();
+}
+
+function actualizarCampoDeposito(idx, campo, valor){
+  cobroDepositos[idx][campo]=valor;
+  if(campo==='formaPago') renderDepositosCobro();
+  calcularValidacionCobro();
+}
+
+function renderDepositosCobro(){
+  var el=document.getElementById('cobroDepositosList');
+  if(!el) return;
+  var html='';
+  for(var i=0;i<cobroDepositos.length;i++){
+    var d=cobroDepositos[i];
+    var esT=(d.formaPago==='transferencia');
+    html+='<div style="border-left:3px solid var(--azul);padding-left:10px;margin-bottom:16px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
+        '<strong style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.5px">Deposito '+(i+1)+'</strong>'+
+        (cobroDepositos.length>1?'<button type="button" onclick="eliminarDepositoCobro('+i+')" style="background:none;border:none;color:var(--rojo);font-size:12px;font-weight:600;cursor:pointer">Quitar</button>':'')+
+      '</div>'+
+      '<div class="field"><label>Forma de pago</label>'+
+        '<select onchange="actualizarCampoDeposito('+i+',&quot;formaPago&quot;,this.value)">'+
+          '<option value="transferencia"'+(d.formaPago==='transferencia'?' selected':'')+'>Transferencia</option>'+
+          '<option value="efectivo"'+(d.formaPago==='efectivo'?' selected':'')+'>Efectivo</option>'+
+          '<option value="divisas"'+(d.formaPago==='divisas'?' selected':'')+'>Divisas</option>'+
+        '</select></div>'+
+      (esT?(
+        '<div class="field"><label>Banco</label><select onchange="actualizarCampoDeposito('+i+',&quot;banco&quot;,this.value)">'+
+          '<option value="Venezuela"'+(d.banco==='Venezuela'?' selected':'')+'>Banco de Venezuela</option>'+
+          '<option value="Banesco"'+(d.banco==='Banesco'?' selected':'')+'>Banesco</option>'+
+          '<option value="Mercantil"'+(d.banco==='Mercantil'?' selected':'')+'>Mercantil</option>'+
+          '<option value="BNC"'+(d.banco==='BNC'?' selected':'')+'>BNC</option>'+
+          '<option value="Amiga"'+(d.banco==='Amiga'?' selected':'')+'>Amiga</option>'+
+        '</select></div>'+
+        '<div class="field"><label>Referencia (ultimos 6 digitos)</label><input type="text" maxlength="6" inputmode="numeric" value="'+(d.referencia||'')+'" oninput="actualizarCampoDeposito('+i+',&quot;referencia&quot;,this.value)"></div>'
+      ):'')+
+      '<div class="field"><label>'+(esT?'Monto depositado (Bs)':'Monto (US$)')+'</label>'+
+        '<input type="text" inputmode="decimal" value="'+(d.monto?formatearNumeroConMiles(d.monto,2):'')+'" placeholder="0.00" '+
+        'oninput="onInputMontoCampo(this,'+i+',&quot;monto&quot;)" onblur="onBlurMontoCampo(this,'+i+',&quot;monto&quot;,2)"></div>'+
+      (esT?(
+        '<div class="field"><label>Tasa BCV del dia</label>'+
+        '<input type="text" inputmode="decimal" value="'+(d.tasa?formatearNumeroConMiles(d.tasa,4):'')+'" placeholder="0.0000" '+
+        'oninput="onInputMontoCampo(this,'+i+',&quot;tasa&quot;)" onblur="onBlurMontoCampo(this,'+i+',&quot;tasa&quot;,4)"></div>'
+      ):'')+
+    '</div>';
+  }
+  el.innerHTML=html;
+}
+
+function calcularMontoUSDDeposito(d){
+  var m=parseFloat(String(d.monto).replace(/,/g,''))||0;
+  if(d.formaPago==='transferencia'){
+    var t=parseFloat(String(d.tasa).replace(/,/g,''))||0;
+    return t>0?(m/t):0;
+  }
+  return m;
+}
+
+function calcularValidacionCobro(){
+  var el=document.getElementById('cobroValidacion');
+  if(!el) return;
+  var descPct=parseFloat(document.getElementById('cobroDescuento').value)||0;
+  var faltaTasa=false;
+  var montoUSD=0;
+  for(var i=0;i<cobroDepositos.length;i++){
+    var d=cobroDepositos[i];
+    if(d.formaPago==='transferencia' && !(parseFloat(String(d.tasa).replace(/,/g,''))>0)) faltaTasa=true;
+    montoUSD+=calcularMontoUSDDeposito(d);
+  }
+  if(faltaTasa){ el.innerHTML='<div style="font-size:12px;color:#aaa;padding:8px 0">Ingresa la tasa BCV en cada deposito por transferencia para calcular el equivalente en $</div>'; return; }
+  var sumaDocs=0;
+  for(var i=0;i<cobroDocsSeleccionados.length;i++){
+    var d=CUENTAS_COBRAR.find(function(x){return x.numero===cobroDocsSeleccionados[i];});
+    if(d) sumaDocs+=d.saldo;
+  }
+  var esperado=sumaDocs*(1-descPct/100);
+  var diferencia=montoUSD-esperado;
+  var html='<div style="background:#f7f8fb;border-radius:10px;padding:14px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#666;margin-bottom:6px">'+
+      '<span>'+(cobroDepositos.length>1?('Total de '+cobroDepositos.length+' depositos'):'Monto pagado')+'</span>'+
+      '<strong style="font-size:18px;color:var(--azul)">$'+formatearNumeroConMiles(montoUSD,2)+'</strong>'+
+    '</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#666;padding-bottom:10px;border-bottom:1px solid var(--borde)">'+
+      '<span>Esperado (con descuento)</span>'+
+      '<strong style="font-size:18px">$'+formatearNumeroConMiles(esperado,2)+'</strong>'+
+    '</div>';
+  if(cobroDocsSeleccionados.length===0){
+    html+='<div style="font-size:13px;color:var(--ambar);text-align:center;padding-top:10px;font-weight:600">Selecciona al menos un documento</div>';
+  } else if(Math.abs(diferencia)<0.01){
+    html+='<div style="text-align:center;padding-top:10px"><span class="tag tag-v" style="font-size:13px;padding:6px 14px">✓ Coincide</span></div>';
+  } else {
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px">'+
+      '<span style="font-size:13px;color:var(--rojo);font-weight:600">Diferencia '+(diferencia>0?'(a favor del cliente)':'(falta)')+'</span>'+
+      '<strong style="font-size:20px;color:var(--rojo)">'+(diferencia>0?('($'+formatearNumeroConMiles(Math.abs(diferencia),2)+')'):('$'+formatearNumeroConMiles(Math.abs(diferencia),2)))+'</strong>'+
+    '</div>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+function previewComprobantesCobro(){
+  var input=document.getElementById('cobroComprobantes');
+  var files=Array.prototype.slice.call(input.files);
+  cobroComprobantesData=files;
+  var previewEl=document.getElementById('cobroComprobantesPrev');
+  previewEl.innerHTML='';
+  files.forEach(function(file){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var div=document.createElement('div');
+      div.innerHTML='<img src="'+e.target.result+'" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)">';
+      previewEl.appendChild(div);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function guardarPagoCobro(){
+  if(!cobroClienteSeleccionado){ toast('Selecciona un cliente'); return; }
+  if(cobroDocsSeleccionados.length===0){ toast('Selecciona al menos un documento'); return; }
+  var fecha=document.getElementById('cobroFecha').value;
+  if(!fecha){ toast('Indica la fecha del pago'); return; }
+  if(cobroDepositos.length===0){ toast('Agrega al menos un deposito'); return; }
+
+  var depositosFinal=[];
+  var montoUSDTotal=0;
+  for(var i=0;i<cobroDepositos.length;i++){
+    var d=cobroDepositos[i];
+    var monto=parseFloat(String(d.monto).replace(/,/g,''))||0;
+    if(monto<=0){ toast('Indica el monto del deposito '+(i+1)); return; }
+    var dCopia={formaPago:d.formaPago, monto:monto};
+    if(d.formaPago==='transferencia'){
+      var referencia=(d.referencia||'').trim();
+      if(referencia.length!==6){ toast('La referencia del deposito '+(i+1)+' debe tener 6 digitos'); return; }
+      var tasa=parseFloat(String(d.tasa).replace(/,/g,''))||0;
+      if(tasa<=0){ toast('Indica la tasa BCV del deposito '+(i+1)); return; }
+      dCopia.banco=d.banco;
+      dCopia.referencia=referencia;
+      dCopia.tasa=tasa;
+      dCopia.montoUSD=monto/tasa;
+    } else {
+      dCopia.montoUSD=monto;
+    }
+    montoUSDTotal+=dCopia.montoUSD;
+    depositosFinal.push(dCopia);
+  }
+
+  var descPct=parseFloat(document.getElementById('cobroDescuento').value)||0;
+  var docsSeleccionadosInfo=[];
+  var sumaDocs=0;
+  for(var i=0;i<cobroDocsSeleccionados.length;i++){
+    var d=CUENTAS_COBRAR.find(function(x){return x.numero===cobroDocsSeleccionados[i];});
+    if(d){ docsSeleccionadosInfo.push({numero:d.numero, saldo:d.saldo, vencimiento:d.vencimiento}); sumaDocs+=d.saldo; }
+  }
+  var esperado=sumaDocs*(1-descPct/100);
+  var cliInfo=obtenerClientesConDeuda().find(function(x){return x.id===cobroClienteSeleccionado;});
+
+  var esEdicion=!!pagoEditandoId;
+  var pagoOriginal=esEdicion?PAGOS_COBRANZA.find(function(x){return x.id===pagoEditandoId;}):null;
+  var pagoId=esEdicion?pagoEditandoId:('PAGO-'+Date.now());
+  var pago={
+    id:pagoId,
+    clienteId:cobroClienteSeleccionado,
+    clienteNombre:cliInfo?cliInfo.nombre:cobroClienteSeleccionado,
+    documentos:docsSeleccionadosInfo,
+    fecha:fecha,
+    depositos:depositosFinal,
+    montoUSD:montoUSDTotal,
+    descuentoPct:descPct,
+    montoEsperado:esperado,
+    vendedor:(esEdicion && pagoOriginal)?pagoOriginal.vendedor:VEND.codigo,
+    vendedorNombre:(esEdicion && pagoOriginal)?pagoOriginal.vendedorNombre:VEND.nombre,
+    estado:'pendiente',
+    fechaReporte:new Date().toLocaleString('es-VE')
+  };
+  if(esEdicion){
+    pago.editadoPor=VEND.nombre;
+    pago.fechaEdicion=new Date().toLocaleString('es-VE');
+  }
+
+  var btnG=document.getElementById('btnGuardarCobro');
+  if(btnG){ btnG.disabled=true; btnG.textContent='Subiendo comprobantes...'; }
+
+  var basePath='clientes_nuevos/comprobantes_pago/'+pagoId+'/';
+  var tareas=[];
+  // Al editar un pago rechazado, se conservan los comprobantes ya subidos y
+  // se agregan los nuevos que se hayan adjuntado
+  pago.comprobantesUrls=(esEdicion && pagoOriginal && pagoOriginal.comprobantesUrls)?pagoOriginal.comprobantesUrls.slice():[];
+  cobroComprobantesData.forEach(function(file, idx){
+    tareas.push(subirArchivo(file, basePath+'comprobante_'+Date.now()+'_'+idx).then(function(url){ pago.comprobantesUrls.push(url); }));
+  });
+
+  Promise.all(tareas).then(function(){
+    finalizarGuardadoCobro(pago, true);
+  }).catch(function(e){
+    console.log('Error subiendo comprobantes:', e);
+    finalizarGuardadoCobro(pago, false);
+  });
+}
+
+function finalizarGuardadoCobro(pago, docsOk){
+  var idx=-1;
+  for(var i=0;i<PAGOS_COBRANZA.length;i++){ if(PAGOS_COBRANZA[i].id===pago.id){ idx=i; break; } }
+  if(idx>=0) PAGOS_COBRANZA[idx]=pago;
+  else PAGOS_COBRANZA.unshift(pago);
+  var fueEdicion=!!pagoEditandoId;
+  // IMPORTANTE: se guarda directamente en el documento de Firebase del
+  // vendedor DUENO del pago (pago.vendedor), no en el del usuario logueado.
+  // Si se guardara en el usuario logueado, un administrador (cuyo PAGOS_COBRANZA
+  // contiene los de TODOS los vendedores) terminaria copiando los pagos de
+  // todos los demas dentro de su propio documento.
+  guardarPagoCobranzaEnDocVendedor(pago, function(){
+    var btnG=document.getElementById('btnGuardarCobro');
+    if(btnG){ btnG.disabled=false; btnG.textContent='Reportar pago'; }
+    toast(docsOk?(fueEdicion?'Pago corregido y reenviado, queda pendiente de confirmar':'Pago reportado, queda pendiente de confirmar'):'Pago reportado (algunos comprobantes no se subieron)');
+    pagoEditandoId=null;
+    limpiarCobroCli();
+    renderHistorialCobros();
+  });
+}
+
+function cargarTodosPagosCobranzaFirebase(callback){
+  var vendIds=['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
+  try{
+    var promesas=[];
+    for(var i=0;i<vendIds.length;i++) promesas.push(db.collection('vendedores').doc(vendIds[i]).get());
+    Promise.all(promesas).then(function(docs){
+      var todos=[];
+      for(var i=0;i<docs.length;i++){
+        var doc=docs[i], vid=vendIds[i];
+        if(doc.exists){
+          var data=doc.data();
+          var pagos=[];
+          try{ pagos=data.pagosCobranza?JSON.parse(data.pagosCobranza):[]; }catch(e){}
+          for(var j=0;j<pagos.length;j++){
+            if(!pagos[j].vendedor) pagos[j].vendedor=vid;
+            todos.push(pagos[j]);
+          }
+        }
+      }
+      todos.sort(function(a,b){ return (b.fecha||'')>(a.fecha||'')?1:-1; });
+      callback(todos);
+    }).catch(function(e){ console.log('Error cargando pagos cobranza:', e); callback([]); });
+  }catch(e){ console.log('Excepcion cargando pagos cobranza:', e); callback([]); }
+}
+
+// ═══ COBROS: historial y filtros ═══
+function filtroCobroHoy(){
+  var ahoraV=new Date();
+  var hoy=ahoraV.getFullYear()+'-'+String(ahoraV.getMonth()+1).padStart(2,'0')+'-'+String(ahoraV.getDate()).padStart(2,'0');
+  document.getElementById('filtroCobroDesde').value=hoy;
+  document.getElementById('filtroCobroHasta').value=hoy;
+  renderHistorialCobros();
+}
+function filtroCobroTodo(){
+  document.getElementById('filtroCobroDesde').value='';
+  document.getElementById('filtroCobroHasta').value='';
+  renderHistorialCobros();
+}
+
+function getPagosCobranzaFiltrados(){
+  var desde=document.getElementById('filtroCobroDesde').value;
+  var hasta=document.getElementById('filtroCobroHasta').value;
+  var estadoF=document.getElementById('filtroCobroEstado').value;
+  var filtVend=document.getElementById('filtroCobroVendedor');
+  return PAGOS_COBRANZA.filter(function(p){
+    if(desde && p.fecha<desde) return false;
+    if(hasta && p.fecha>hasta) return false;
+    if(estadoF!=='todos' && p.estado!==estadoF) return false;
+    if(filtVend && filtVend.value && filtVend.value!=='todos' && p.vendedor!==filtVend.value) return false;
+    return true;
+  });
+}
+
+function badgeEstadoCobro(estado){
+  if(estado==='confirmado') return '<span class="tag tag-v" style="font-size:11px">Confirmado</span>';
+  if(estado==='rechazado') return '<span class="tag tag-r" style="font-size:11px">Rechazado</span>';
+  if(estado==='anulado') return '<span class="tag" style="background:#eee;color:#888;font-size:11px">Anulado</span>';
+  return '<span class="tag" style="background:#FFF3CD;color:#856404;font-size:11px">Pendiente</span>';
+}
+
+function renderPagoCobroCard(p){
+  var docsTxt=p.documentos.map(function(d){return 'Doc.'+d.numero;}).join(', ');
+  var depsHtml='';
+  if(p.depositos && p.depositos.length){
+    p.depositos.forEach(function(d,idx){
+      var esT=d.formaPago==='transferencia';
+      depsHtml+='<div style="font-size:11px;color:#888;margin-top:2px">'+
+        (p.depositos.length>1?('Deposito '+(idx+1)+': '):'')+
+        (esT?('Transferencia - '+BANCOS_COBRO[d.banco]+' - Ref: '+d.referencia):(d.formaPago==='efectivo'?'Efectivo':'Divisas'))+
+        ' - $'+formatearNumeroConMiles(d.montoUSD||0,2)+
+      '</div>';
+    });
+  }
+  var comprobHtml='';
+  if(p.comprobantesUrls && p.comprobantesUrls.length){
+    p.comprobantesUrls.forEach(function(u){
+      comprobHtml+='<a href="'+u+'" target="_blank"><img src="'+u+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1.5px solid var(--borde);margin-right:4px"></a>';
+    });
+  }
+  var acciones='';
+  var puedeAprobar=puedeAprobarPagosCobranza();
+  if(puedeAprobar && p.estado==='pendiente'){
+    acciones='<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+
+      '<button onclick="abrirConfirmarPago(&quot;'+p.id+'&quot;)" style="background:var(--verde-c);color:var(--verde);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Confirmar</button>'+
+      '<button onclick="abrirRechazarPago(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Rechazar</button>'+
+    '</div>';
+  } else if(p.estado==='confirmado' && (puedeAnularPagoCobranza(p) || puedeBorrarDiferenciaPago(p))){
+    acciones='<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+
+      (puedeBorrarDiferenciaPago(p)?'<button onclick="borrarDiferenciaPago(&quot;'+p.id+'&quot;)" style="background:var(--ambar-c);color:#856404;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Borrar diferencia pendiente</button>':'')+
+      (puedeAnularPagoCobranza(p)?'<button onclick="confirmarAnularPagoCobranza(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Anular pago</button>':'')+
+    '</div>';
+  } else if(p.estado==='rechazado' && (p.vendedor===VEND.codigo || puedeAprobar)){
+    acciones='<div style="display:flex;gap:8px;margin-top:8px">'+
+      '<button onclick="editarPagoRechazado(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Editar</button>'+
+      '<button onclick="anularPagoRechazado(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Anular</button>'+
+    '</div>';
+  }
+  var borderColor=p.estado==='confirmado'?'var(--verde)':(p.estado==='rechazado'?'var(--rojo)':(p.estado==='anulado'?'var(--rojo)':'var(--ambar)'));
+  var anuladoEstilo=p.estado==='anulado';
+  var cardOpacity=anuladoEstilo?'opacity:.55':'';
+  var saldoAjustLine='';
+  if(p.estado==='confirmado' && Math.abs(p.saldoPendienteAjustado||0)>0.009){
+    var esCredito=p.saldoPendienteAjustado<0;
+    saldoAjustLine='<div style="font-size:12px;color:'+(esCredito?'var(--verde)':'var(--ambar)')+';margin-top:4px">'+
+      (esCredito?'Saldo a favor del cliente: <strong>($'+formatearNumeroConMiles(Math.abs(p.saldoPendienteAjustado),2)+')</strong> (disponible para un cobro futuro)':'Saldo dejado pendiente: <strong>$'+formatearNumeroConMiles(p.saldoPendienteAjustado,2)+'</strong>')+
+      (p.observacionAjuste?' — '+p.observacionAjuste:'')+
+    '</div>';
+  }
+  return '<div class="card" style="margin-bottom:8px;border-left:3px solid '+borderColor+';'+cardOpacity+'">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
+      '<div>'+
+        '<strong style="font-size:14px;'+(anuladoEstilo?'text-decoration:line-through;color:#aaa':'')+'">'+p.clienteNombre+'</strong>'+
+        '<div style="font-size:11px;color:var(--azul);font-weight:600">Cod: '+p.clienteId+' | '+docsTxt+'</div>'+
+        '<div style="font-size:11px;color:#888">'+p.fecha+'</div>'+
+        depsHtml+
+        '<div style="font-size:11px;color:#888;margin-top:2px">VEND '+p.vendedor+' - '+(p.vendedorNombre||'')+'</div>'+
+      '</div>'+
+      badgeEstadoCobro(p.estado)+
+    '</div>'+
+    '<div style="font-size:13px;margin-top:6px">Monto total: <strong>$'+formatearNumeroConMiles(p.montoUSD,2)+'</strong>'+(p.descuentoPct?' | Desc. '+p.descuentoPct+'%':'')+' | Esperado: $'+formatearNumeroConMiles(p.montoEsperado,2)+'</div>'+
+    saldoAjustLine+
+    (p.estado==='rechazado' && p.motivoRechazo?'<div style="font-size:12px;color:var(--rojo);margin-top:4px">Motivo: '+p.motivoRechazo+'</div>':'')+
+    (comprobHtml?'<div style="margin-top:8px">'+comprobHtml+'</div>':'')+
+    acciones+
+  '</div>';
+}
+
+function renderHistorialCobros(){
+  var lista=getPagosCobranzaFiltrados();
+  var total=0, pendientes=0, montoConfirmado=0;
+  for(var i=0;i<lista.length;i++){
+    if(lista[i].estado==='anulado') continue; // los anulados no cuentan como pago valido
+    total++;
+    if(lista[i].estado==='pendiente') pendientes++;
+    if(lista[i].estado==='confirmado') montoConfirmado+=lista[i].montoUSD;
+  }
+  var elT=document.getElementById('cobroResumTotal'); if(elT) elT.textContent=total;
+  var elP=document.getElementById('cobroResumPendientes'); if(elP) elP.textContent=pendientes;
+  var elM=document.getElementById('cobroResumMonto'); if(elM) elM.textContent='$'+formatearNumeroConMiles(montoConfirmado,2);
+  var html='';
+  if(lista.length===0){
+    html='<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Sin pagos en este rango</div>';
+  } else {
+    for(var i=0;i<lista.length;i++) html+=renderPagoCobroCard(lista[i]);
+  }
+  document.getElementById('listaCobros').innerHTML=html;
+}
+
+var pagoRechazandoId=null;
+function abrirRechazarPago(pagoId){
+  pagoRechazandoId=pagoId;
+  document.getElementById('mRechazarPago').classList.add('open');
+}
+
+// Aplica el monto confirmado contra los documentos seleccionados, en el
+// orden en que se seleccionaron. Si el descuento aplicado alcanza para
+// saldar un documento completo, se salda (saldo=0). Si el monto no alcanza,
+// se abona parcialmente y el documento sigue con el saldo restante pendiente
+// (no se pierde ni se "revive" el resto: queda disponible para un pago
+// futuro). Si el administrador ajusto manualmente cuanto dejar pendiente,
+// montoAAplicar ya viene calculado con ese ajuste incluido.
+// Aplica al saldo de los documentos de este pago el resultado deseado:
+// saldoPendienteObjetivo es el saldo TOTAL que debe quedar pendiente entre
+// los documentos de este pago al terminar. Puede ser negativo: si el
+// cliente pago de mas, ese saldo a favor queda registrado como saldo
+// NEGATIVO en el documento, para poder usarlo como forma de pago en un
+// cobro futuro (no se pierde ni se fuerza a cero).
+function aplicarPagoADocumentosCxC(pago, saldoPendienteObjetivo){
+  var sumaDocsActual=0;
+  for(var i=0;i<pago.documentos.length;i++){
+    var doc=CUENTAS_COBRAR.find(function(x){return x.numero===pago.documentos[i].numero;});
+    if(doc) sumaDocsActual+=doc.saldo;
+  }
+  var restante=Math.round((sumaDocsActual-saldoPendienteObjetivo)*100)/100;
+  for(var i=0;i<pago.documentos.length;i++){
+    var num=pago.documentos[i].numero;
+    var doc=CUENTAS_COBRAR.find(function(x){return x.numero===num;});
+    if(!doc) continue;
+    var saldoAntes=doc.saldo;
+    doc.saldoAntesUltimoPago=doc.saldo;
+    var esUltimo=(i===pago.documentos.length-1);
+    if(esUltimo){
+      // Al ultimo documento se le deja exactamente lo que sobre o falte,
+      // incluso si queda negativo (saldo a favor del cliente)
+      doc.saldo=Math.round((doc.saldo-restante)*100)/100;
+    } else if(restante>=doc.saldo-0.01){
+      restante-=doc.saldo;
+      doc.saldo=0;
+    } else {
+      doc.saldo=Math.round((doc.saldo-restante)*100)/100;
+      restante=0;
+    }
+    doc.abonadoEnApp=true;
+    // Se acumula (no se sobrescribe) para que anular el pago mas adelante
+    // revierta el efecto TOTAL, incluso si de por medio se "borro la
+    // diferencia" en un ajuste posterior.
+    var deltaAplicado=Math.round((saldoAntes-doc.saldo)*100)/100;
+    pago.documentos[i].montoAplicado=Math.round(((pago.documentos[i].montoAplicado||0)+deltaAplicado)*100)/100;
+  }
+}
+
+// Deshace lo aplicado por aplicarPagoADocumentosCxC: a cada documento se le
+// devuelve exactamente el monto acumulado que este pago le habia
+// descontado (no un snapshot fijo), para que siga siendo correcto incluso
+// si hubo otros pagos o ajustes de diferencia de por medio.
+function revertirPagoEnDocumentosCxC(pago){
+  for(var i=0;i<pago.documentos.length;i++){
+    var num=pago.documentos[i].numero;
+    var doc=CUENTAS_COBRAR.find(function(x){return x.numero===num;});
+    if(!doc) continue;
+    var monto=pago.documentos[i].montoAplicado;
+    if(monto===undefined || monto===null){
+      // Compatibilidad con pagos confirmados antes de este ajuste
+      if(doc.saldoAntesUltimoPago!==undefined) monto=doc.saldoAntesUltimoPago-doc.saldo;
+      else monto=(pago.documentos[i].saldo||0)-doc.saldo;
+    }
+    doc.saldo=Math.round((doc.saldo+monto)*100)/100;
+    delete doc.saldoAntesUltimoPago;
+    delete doc.abonadoEnApp;
+  }
+}
+
+var pagoConfirmandoId=null;
+
+// Abre el modal de confirmacion. Por defecto NO se perdona ninguna
+// diferencia: se muestra el monto pagado, lo esperado, y la diferencia tal
+// cual quedaria pendiente (positiva = todavia se debe, negativa = el
+// cliente pago de mas y quedaria como saldo a favor). Se pregunta primero
+// si se desea modificar ese monto o dejarlo tal cual.
+function abrirConfirmarPago(pagoId){
+  var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoId;});
+  if(!pago){ toast('Pago no encontrado'); return; }
+  pagoConfirmandoId=pagoId;
+  var diferencia=Math.round((pago.montoEsperado-pago.montoUSD)*100)/100;
+  var resumenHtml='Monto pagado: <strong>$'+formatearNumeroConMiles(pago.montoUSD,2)+'</strong> &nbsp;|&nbsp; Esperado: <strong>$'+formatearNumeroConMiles(pago.montoEsperado,2)+'</strong>';
+  if(Math.abs(diferencia)>0.009){
+    resumenHtml+='<br>Diferencia: <strong style="color:'+(diferencia>0?'var(--rojo)':'var(--verde)')+'">'+(diferencia<0?('($'+formatearNumeroConMiles(Math.abs(diferencia),2)+')'):('$'+formatearNumeroConMiles(diferencia,2)))+'</strong> '+(diferencia>0?'(quedaria pendiente por cobrar)':'(a favor del cliente, quedaria como saldo negativo)');
+  } else {
+    resumenHtml+='<br><span style="color:var(--verde);font-weight:600">✓ El monto coincide exacto</span>';
+  }
+  document.getElementById('confirmarPagoResumen').innerHTML=resumenHtml;
+  document.getElementById('confirmarPagoSaldoPendiente').value=diferencia.toFixed(2);
+  document.getElementById('confirmarPagoObservacion').value='';
+  document.getElementById('confirmarPagoPreguntaWrap').classList.remove('hidden');
+  document.getElementById('confirmarPagoEdicionWrap').classList.add('hidden');
+  document.getElementById('mConfirmarPago').classList.add('open');
+}
+
+function mostrarEdicionDiferenciaPago(){
+  document.getElementById('confirmarPagoPreguntaWrap').classList.add('hidden');
+  document.getElementById('confirmarPagoEdicionWrap').classList.remove('hidden');
+}
+
+// "No, dejar la diferencia tal cual": confirma de inmediato usando
+// exactamente la diferencia calculada, sin pedir observacion.
+function confirmarPagoSinModificar(){
+  var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoConfirmandoId;});
+  if(!pago){ cerrarModal('mConfirmarPago'); return; }
+  var diferencia=Math.round((pago.montoEsperado-pago.montoUSD)*100)/100;
+  cerrarModal('mConfirmarPago');
+  confirmarPagoCobranza(pago.id, diferencia, null);
+}
+
+// "Si, quiero modificar el monto": requiere observacion obligatoria
+function ejecutarConfirmarPago(){
+  var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoConfirmandoId;});
+  if(!pago){ cerrarModal('mConfirmarPago'); return; }
+  var saldoPendienteDeseado=parseFloat(document.getElementById('confirmarPagoSaldoPendiente').value);
+  if(isNaN(saldoPendienteDeseado)) saldoPendienteDeseado=0;
+  var observacion=document.getElementById('confirmarPagoObservacion').value.trim();
+  if(!observacion){ toast('Indica una observacion explicando el ajuste'); return; }
+  cerrarModal('mConfirmarPago');
+  confirmarPagoCobranza(pago.id, saldoPendienteDeseado, observacion);
+}
+
+function confirmarPagoCobranza(pagoId, saldoPendienteDeseado, observacionAjuste){
+  var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoId;});
+  if(!pago){ toast('Pago no encontrado'); return; }
+  pago.estado='confirmado';
+  pago.confirmadoPor=VEND.nombre;
+  pago.fechaConfirmacion=new Date().toLocaleString('es-VE');
+  pago.saldoPendienteAjustado=saldoPendienteDeseado;
+  if(observacionAjuste) pago.observacionAjuste=observacionAjuste;
+  aplicarPagoADocumentosCxC(pago, saldoPendienteDeseado);
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    guardarPagoCobranzaEnDocVendedor(pago, function(){
+      toast('Pago confirmado');
+      renderResumenCxC();
+      cargarTodosPagosCobranzaFirebase(function(pagos){
+        PAGOS_COBRANZA_TODOS=pagos;
+        PAGOS_COBRANZA=pagos;
+        renderPagosPendientesAdmin();
+        renderHistorialCobros();
+      });
+    });
+  }).catch(function(){ toast('Error guardando en Firebase'); });
+}
+
+// Permite a 01/20 "perdonar" una diferencia pendiente POSITIVA (que el
+// cliente todavia debe) que quedo de un pago ya confirmado. No aplica a
+// saldos negativos (a favor del cliente): esos se dejan intactos a
+// proposito, para poder usarse como forma de pago en un cobro futuro.
+function puedeBorrarDiferenciaPago(p){
+  return puedeAprobarPagosCobranza() && p.estado==='confirmado' && (p.saldoPendienteAjustado||0)>0.009;
+}
+
+function borrarDiferenciaPago(pagoId){
+  var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoId;});
+  if(!pago){ toast('Pago no encontrado'); return; }
+  aplicarPagoADocumentosCxC(pago, 0);
+  pago.saldoPendienteAjustado=0;
+  pago.diferenciaBorradaPor=VEND.nombre;
+  pago.fechaDiferenciaBorrada=new Date().toLocaleString('es-VE');
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    guardarPagoCobranzaEnDocVendedor(pago, function(){
+      toast('Diferencia pendiente borrada');
+      renderResumenCxC();
+      cargarTodosPagosCobranzaFirebase(function(pagos){
+        PAGOS_COBRANZA_TODOS=pagos;
+        PAGOS_COBRANZA=pagos;
+        renderPagosPendientesAdmin();
+        renderHistorialCobros();
+      });
+    });
+  }).catch(function(){ toast('Error guardando en Firebase'); });
+}
+
+function ejecutarRechazarPago(){
+  var motivo=document.getElementById('motivoRechazoPago').value.trim();
+  if(!motivo){ toast('Indica el motivo del rechazo'); return; }
+  var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoRechazandoId;});
+  if(!pago){ cerrarModal('mRechazarPago'); return; }
+  pago.estado='rechazado';
+  pago.motivoRechazo=motivo;
+  pago.fechaConfirmacion=new Date().toLocaleString('es-VE');
+  guardarPagoCobranzaEnDocVendedor(pago, function(){
+    cerrarModal('mRechazarPago');
+    document.getElementById('motivoRechazoPago').value='';
+    toast('Pago rechazado');
+    cargarTodosPagosCobranzaFirebase(function(pagos){
+      PAGOS_COBRANZA_TODOS=pagos;
+      PAGOS_COBRANZA=pagos;
+      renderPagosPendientesAdmin();
+      renderHistorialCobros();
+    });
+  });
+}
+
+// ═══ COBROS: anular un pago ya confirmado (solo administradores) ═══
+var pagoAnulandoId=null;
+// Solo 01 y 20 pueden confirmar, rechazar o anular pagos. El 00 conserva
+// acceso de solo lectura y puede descargar el reporte por Excel.
+function puedeAprobarPagosCobranza(){
+  return (VEND.codigo==='01'||VEND.codigo==='20');
+}
+
+function puedeAnularPagoCobranza(p){
+  return puedeAprobarPagosCobranza() && p.estado==='confirmado';
+}
+function confirmarAnularPagoCobranza(pagoId){
+  pagoAnulandoId=pagoId;
+  document.getElementById('mAnularPago').classList.add('open');
+}
+function ejecutarAnularPagoCobranza(){
+  var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoAnulandoId;});
+  if(!pago){ cerrarModal('mAnularPago'); return; }
+  revertirPagoEnDocumentosCxC(pago);
+  pago.estado='anulado';
+  pago.fechaConfirmacion=new Date().toLocaleString('es-VE');
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    guardarPagoCobranzaEnDocVendedor(pago, function(){
+      cerrarModal('mAnularPago');
+      toast('Pago anulado, el saldo del documento fue restituido');
+      renderResumenCxC();
+      cargarTodosPagosCobranzaFirebase(function(pagos){
+        PAGOS_COBRANZA_TODOS=pagos;
+        PAGOS_COBRANZA=pagos;
+        renderPagosPendientesAdmin();
+        renderHistorialCobros();
+      });
+    });
+  }).catch(function(){ toast('Error guardando en Firebase'); });
+}
+
+// Guarda un pago actualizado (confirmado o rechazado) dentro del documento
+// de Firebase del vendedor que lo reporto originalmente.
+function guardarPagoCobranzaEnDocVendedor(pago, callback){
+  var vidDueno=pago.vendedor;
+  db.collection('vendedores').doc(vidDueno).get().then(function(doc){
+    var data=doc.exists?doc.data():{};
+    var pagos=[];
+    try{ pagos=data.pagosCobranza?JSON.parse(data.pagosCobranza):[]; }catch(e){}
+    var found=false;
+    for(var i=0;i<pagos.length;i++){ if(pagos[i].id===pago.id){ pagos[i]=pago; found=true; break; } }
+    if(!found) pagos.push(pago);
+    db.collection('vendedores').doc(vidDueno).set({
+      pedidos: data.pedidos||'[]',
+      visitas: data.visitas||'[]',
+      clientesNuevos: data.clientesNuevos||'[]',
+      pagosCobranza: JSON.stringify(pagos),
+      ultimaActualizacion: new Date().toISOString()
+    }, {merge:true}).then(function(){ if(callback) callback(); })
+    .catch(function(){ toast('Error guardando en Firebase'); if(callback) callback(); });
+  }).catch(function(){ toast('Error: no se pudo conectar con Firebase'); if(callback) callback(); });
+}
+
+function renderPagosPendientesAdmin(){
+  var el=document.getElementById('cxcPagosPendientesList');
+  if(!el) return;
+  var pendientes=PAGOS_COBRANZA_TODOS.filter(function(p){ return p.estado==='pendiente'; });
+  PAGOS_COBRANZA=PAGOS_COBRANZA_TODOS;
+  if(pendientes.length===0){ el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin pagos pendientes</div>'; return; }
+  var html='';
+  for(var i=0;i<pendientes.length;i++) html+=renderPagoCobroCard(pendientes[i]);
+  el.innerHTML=html;
+}
+
+// ═══ COBROS: exportacion ═══
+function abrirExportarCobrosExcel(){
+  var desdeActual=document.getElementById('filtroCobroDesde').value;
+  var hastaActual=document.getElementById('filtroCobroHasta').value;
+  document.getElementById('excelCobrosDesde').value=desdeActual||'';
+  document.getElementById('excelCobrosHasta').value=hastaActual||'';
+  document.getElementById('excelCobrosAnulados').value='excluir';
+  var verTodosExcel=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
+  document.getElementById('excelCobrosSepararWrap').style.display=verTodosExcel?'block':'none';
+  document.getElementById('excelCobrosSepararVendedor').checked=false;
+  document.getElementById('mExportarCobrosExcel').classList.add('open');
+}
+
+// Aplica un formato de numero NATIVO de Excel a una celda ya numerica, para
+// que se muestre con separador de miles / decimales segun la configuracion
+// regional de quien abra el archivo (nunca se pisa entre configuraciones,
+// porque el valor guardado en la celda siempre es un numero real, no texto).
+function aplicarFormatoNumerico(ws, row, col, formato){
+  var addr=XLSX.utils.encode_cell({r:row,c:col});
+  var cell=ws[addr];
+  if(cell && cell.t==='n'){ cell.z=formato; }
+}
+
+// Construye una hoja de calculo real (celdas numericas de verdad, no texto)
+// para una lista de pagos, con una fila por deposito y una nota aparte
+// cuando se uso un documento con saldo a favor como abono.
+function construirHojaCobros(lista, tituloHoja){
+  var headers=['Fecha','Cod cliente','Cliente','Documento','Vendedor','Monto en Bs','Banco','Ref','Tasa','Monto Pagado Equivalente en $','Descuento','Saldo','Estado'];
+  var rows=[
+    ['PAGOS REPORTADOS'+(tituloHoja?(' - '+tituloHoja):'')],
+    headers
+  ];
+  var notaRowIndices=[];
+  for(var i=0;i<lista.length;i++){
+    var p=lista[i];
+    // Marca con * los documentos que solo vinieron de la base REAL (sin cruce con Fiscal)
+    var docsTxt=p.documentos.map(function(d){
+      var docCxC=CUENTAS_COBRAR.find(function(x){return x.numero===d.numero;});
+      var esReal=docCxC && docCxC.origenBase==='real';
+      return d.numero+(esReal?'*':'');
+    }).join(', ');
+    var saldoPendiente=(p.saldoPendienteAjustado!==undefined && p.saldoPendienteAjustado!==null)
+      ? p.saldoPendienteAjustado
+      : Math.round((p.montoEsperado-p.montoUSD)*100)/100;
+    var deps=(p.depositos && p.depositos.length)?p.depositos:[{formaPago:'',monto:null,banco:null,referencia:'',tasa:null,montoUSD:p.montoUSD}];
+    for(var j=0;j<deps.length;j++){
+      var d=deps[j];
+      var esT=d.formaPago==='transferencia';
+      rows.push([
+        p.fecha, p.clienteId, p.clienteNombre, docsTxt, 'VEND '+p.vendedor+' - '+(p.vendedorNombre||''),
+        esT?(parseFloat(d.monto)||0):null,
+        esT?(BANCOS_COBRO[d.banco]||''):'',
+        esT?(d.referencia||''):'',
+        esT?(parseFloat(d.tasa)||0):null,
+        d.montoUSD||0,
+        (p.descuentoPct||0)/100,
+        saldoPendiente,
+        p.estado
+      ]);
+    }
+    // Si alguno de los documentos de este pago tenia saldo NEGATIVO (un
+    // credito a favor del cliente) al momento de reportarse, se agrega una
+    // fila aclarando que ese credito se aplico como abono en este pago.
+    for(var k=0;k<p.documentos.length;k++){
+      if(p.documentos[k].saldo<0){
+        notaRowIndices.push(rows.length);
+        rows.push(['↳ Nota: el documento '+p.documentos[k].numero+' tenia un saldo a favor de $'+Math.abs(p.documentos[k].saldo).toFixed(2)+' y fue aplicado como abono en este pago.']);
+      }
+    }
+  }
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  var range=XLSX.utils.decode_range(ws['!ref']);
+
+  // Fusionar y dar estilo al titulo (fila 0)
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:headers.length-1}}];
+  var tituloAddr=XLSX.utils.encode_cell({r:0,c:0});
+  if(ws[tituloAddr]) ws[tituloAddr].s={font:{bold:true,sz:14,color:{rgb:'1B2A6B'}}};
+
+  // Encabezados con fondo azul y texto blanco en negrita (fila 1)
+  for(var c=0;c<headers.length;c++){
+    var addrH=XLSX.utils.encode_cell({r:1,c:c});
+    if(ws[addrH]) ws[addrH].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'1B2A6B'}}};
+  }
+
+  // Formato numerico real en las columnas de dinero (los datos empiezan en la fila 2)
+  for(var r=2;r<=range.e.r;r++){
+    aplicarFormatoNumerico(ws, r, 5, '#,##0.00');
+    aplicarFormatoNumerico(ws, r, 8, '#,##0.0000');
+    aplicarFormatoNumerico(ws, r, 9, '#,##0.00');
+    aplicarFormatoNumerico(ws, r, 10, '0.0%');
+    aplicarFormatoNumerico(ws, r, 11, '#,##0.00_);(#,##0.00)');
+  }
+
+  // Resaltar en verde las filas de nota de credito aplicado
+  for(var n=0;n<notaRowIndices.length;n++){
+    ws['!merges'].push({s:{r:notaRowIndices[n],c:0},e:{r:notaRowIndices[n],c:headers.length-1}});
+    var addrNota=XLSX.utils.encode_cell({r:notaRowIndices[n],c:0});
+    if(ws[addrNota]) ws[addrNota].s={font:{italic:true,color:{rgb:'1A7A4C'}},fill:{fgColor:{rgb:'F0FBF6'}}};
+  }
+
+  ws['!cols']=[{wch:11},{wch:10},{wch:26},{wch:14},{wch:22},{wch:13},{wch:12},{wch:10},{wch:11},{wch:16},{wch:10},{wch:13},{wch:12}];
+  return ws;
+}
+
+function ejecutarExportarCobrosExcel(){
+  var desde=document.getElementById('excelCobrosDesde').value;
+  var hasta=document.getElementById('excelCobrosHasta').value;
+  var modoAnulados=document.getElementById('excelCobrosAnulados').value;
+  var separarPorVendedor=document.getElementById('excelCobrosSepararVendedor').checked;
+  var periodoTxt=desde?(desde===hasta?desde:('Del '+desde+' al '+hasta)):'Todo el periodo';
+
+  var lista=PAGOS_COBRANZA.filter(function(p){
+    if(desde && p.fecha<desde) return false;
+    if(hasta && p.fecha>hasta) return false;
+    if(modoAnulados==='excluir' && p.estado==='anulado') return false;
+    if(modoAnulados==='solo' && p.estado!=='anulado') return false;
+    return true;
+  });
+
+  if(lista.length===0){ toast('No hay pagos para exportar con estos filtros'); return; }
+
+  var wb=XLSX.utils.book_new();
+  if(separarPorVendedor){
+    var porVend={};
+    for(var i=0;i<lista.length;i++){
+      var vid=lista[i].vendedor||'SIN_VEND';
+      if(!porVend[vid]) porVend[vid]=[];
+      porVend[vid].push(lista[i]);
+    }
+    var vids=Object.keys(porVend).sort();
+    for(var v=0;v<vids.length;v++){
+      var hojaNombre=('VEND '+vids[v]).substring(0,31);
+      var ws=construirHojaCobros(porVend[vids[v]], 'VEND '+vids[v]+' - '+periodoTxt);
+      XLSX.utils.book_append_sheet(wb, ws, hojaNombre);
+    }
+  } else {
+    var ws=construirHojaCobros(lista, periodoTxt);
+    XLSX.utils.book_append_sheet(wb, ws, 'Pagos');
+  }
+
+  var nombreArchivo='pagos_'+(desde||'todo')+(hasta&&hasta!==desde?('_a_'+hasta):'')+'.xlsx';
+  XLSX.writeFile(wb, nombreArchivo, {cellStyles:true});
+  cerrarModal('mExportarCobrosExcel');
+  toast('Excel generado');
+}
+
+// Version "con estilo": genera una tabla HTML disfrazada de .xls, con
+// colores y negrita reales (Excel la abre igual), a costa de que los
+// numeros dependen de la configuracion regional de la computadora donde se
+// abra. Util para una vista bonita / impresion; para trabajar con los
+// numeros se recomienda la opcion "Excel (datos)".
+function ejecutarExportarCobrosExcelEstilo(){
+  var desde=document.getElementById('excelCobrosDesde').value;
+  var hasta=document.getElementById('excelCobrosHasta').value;
+  var modoAnulados=document.getElementById('excelCobrosAnulados').value;
+  var separarPorVendedor=document.getElementById('excelCobrosSepararVendedor').checked;
+  var periodoTxt=desde?(desde===hasta?desde:('Del '+desde+' al '+hasta)):'Todo el periodo';
+
+  var lista=PAGOS_COBRANZA.filter(function(p){
+    if(desde && p.fecha<desde) return false;
+    if(hasta && p.fecha>hasta) return false;
+    if(modoAnulados==='excluir' && p.estado==='anulado') return false;
+    if(modoAnulados==='solo' && p.estado!=='anulado') return false;
+    return true;
+  });
+  if(lista.length===0){ toast('No hay pagos para exportar con estos filtros'); return; }
+
+  function construirTablaHTML(sublista, tituloSeccion){
+    var html='';
+    if(tituloSeccion) html+='<h3 style="color:#1B2A6B;margin-top:24px">'+tituloSeccion+'</h3>';
+    html+='<table style="width:100%;border-collapse:collapse"><tr>'+
+      '<th>Fecha</th><th>Cod cliente</th><th>Cliente</th><th>Documento</th><th>Monto en Bs</th><th>Banco</th><th>Ref</th><th>Tasa</th><th>Monto Pagado Equivalente en $</th><th>Descuento</th><th>Saldo</th><th>Estado</th>'+
+    '</tr>';
+    for(var i=0;i<sublista.length;i++){
+      var p=sublista[i];
+      var docsTxt=p.documentos.map(function(d){
+        var docCxC=CUENTAS_COBRAR.find(function(x){return x.numero===d.numero;});
+        var esReal=docCxC && docCxC.origenBase==='real';
+        return d.numero+(esReal?'*':'');
+      }).join(', ');
+      var saldoPendiente=(p.saldoPendienteAjustado!==undefined && p.saldoPendienteAjustado!==null)
+        ? p.saldoPendienteAjustado
+        : Math.round((p.montoEsperado-p.montoUSD)*100)/100;
+      var saldoTxt=saldoPendiente<0?('('+formatearNumeroConMiles(Math.abs(saldoPendiente),2)+')'):formatearNumeroConMiles(saldoPendiente,2);
+      var deps=(p.depositos && p.depositos.length)?p.depositos:[{formaPago:'',monto:null,banco:null,referencia:'',tasa:null,montoUSD:p.montoUSD}];
+      for(var j=0;j<deps.length;j++){
+        var d=deps[j];
+        var esT=d.formaPago==='transferencia';
+        html+='<tr>'+
+          '<td>'+p.fecha+'</td>'+
+          '<td>'+p.clienteId+'</td>'+
+          '<td>'+p.clienteNombre+'</td>'+
+          '<td>'+docsTxt+'</td>'+
+          '<td>'+(esT?formatearNumeroConMiles(d.monto,2):'')+'</td>'+
+          '<td>'+(esT?(BANCOS_COBRO[d.banco]||''):'')+'</td>'+
+          '<td>'+(esT?(d.referencia||''):'')+'</td>'+
+          '<td>'+(esT?formatearNumeroConMiles(d.tasa,4):'')+'</td>'+
+          '<td>'+formatearNumeroConMiles(d.montoUSD||0,2)+'</td>'+
+          '<td>'+p.descuentoPct+'%</td>'+
+          '<td>'+saldoTxt+'</td>'+
+          '<td>'+p.estado+'</td>'+
+        '</tr>';
+      }
+      for(var k=0;k<p.documentos.length;k++){
+        if(p.documentos[k].saldo<0){
+          html+='<tr><td colspan="12" style="background:#F0FBF6;color:#1a7a4c;font-style:italic">'+
+            '↳ Nota: el documento '+p.documentos[k].numero+' tenia un saldo a favor de $'+Math.abs(p.documentos[k].saldo).toFixed(2)+' y fue aplicado como abono en este pago.'+
+          '</td></tr>';
+        }
+      }
+    }
+    html+='</table>';
+    return html;
+  }
+
+  var estilos='<style>body{font-family:Arial,sans-serif}th{background:#1B2A6B;color:#fff;padding:6px 8px;font-size:12px}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:12px}</style>';
+  var contenido='<html><head><meta charset="UTF-8">'+estilos+'</head><body>';
+  contenido+='<h2 style="color:#1B2A6B">PAGOS REPORTADOS - '+periodoTxt+'</h2>';
+
+  if(separarPorVendedor){
+    var porVend={};
+    for(var i=0;i<lista.length;i++){
+      var vid=lista[i].vendedor||'SIN_VEND';
+      if(!porVend[vid]) porVend[vid]=[];
+      porVend[vid].push(lista[i]);
+    }
+    var vids=Object.keys(porVend).sort();
+    for(var v=0;v<vids.length;v++){
+      contenido+=construirTablaHTML(porVend[vids[v]], 'VEND '+vids[v]+' - '+(porVend[vids[v]][0].vendedorNombre||''));
+    }
+  } else {
+    contenido+=construirTablaHTML(lista, null);
+  }
+
+  contenido+='</body></html>';
+  var blob=new Blob([contenido],{type:'application/vnd.ms-excel'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='pagos_'+(desde||'todo')+'_estilo.xls';
+  a.click();
+  cerrarModal('mExportarCobrosExcel');
+  toast('Excel con estilo generado');
+}
+
+function enviarCorreoCobros(){
+  var lista=getPagosCobranzaFiltrados();
+  if(lista.length===0){ toast('No hay pagos para enviar'); return; }
+  var desde=document.getElementById('filtroCobroDesde').value;
+  var hasta=document.getElementById('filtroCobroHasta').value;
+  var periodo=desde?(desde===hasta?desde:'Del '+desde+' al '+hasta):'Todo el periodo';
+  var N=nl();
+  var lineas=['REPORTE DE PAGOS - TUTIM','================================','Periodo: '+periodo,'Pagos: '+lista.length,'================================',''];
+  for(var i=0;i<lista.length;i++){
+    var p=lista[i];
+    var docsTxt=p.documentos.map(function(d){return d.numero;}).join(', ');
+    lineas.push((i+1)+'. '+p.clienteNombre+' (Cod: '+p.clienteId+') - Doc: '+docsTxt);
+    lineas.push('   Fecha: '+p.fecha+' | VEND '+p.vendedor+' - '+(p.vendedorNombre||''));
+    (p.depositos||[]).forEach(function(d,idx){
+      lineas.push('   Deposito '+(idx+1)+': '+(d.formaPago==='transferencia'?('Transferencia - '+BANCOS_COBRO[d.banco]+' - Ref: '+d.referencia):d.formaPago)+' - $'+(d.montoUSD||0).toFixed(2));
+    });
+    lineas.push('   Monto total: $'+p.montoUSD.toFixed(2)+' | Estado: '+p.estado);
+    lineas.push('');
+  }
+  var asunto='Reporte de Pagos Tutim - '+periodo;
+  var gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to=grupoadj26@gmail.com&su='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(lineas.join(N));
+  window.open(gmailUrl,'_blank');
+  toast('Abriendo Gmail...');
 }
 
 // ═══ HISTORICO PROFIT ═══
@@ -5331,7 +7442,7 @@ function cargarHistoricoProfit(){
         visitas: doc.exists?(doc.data().visitas||'[]'):'[]',
         clientesNuevos: doc.exists?(doc.data().clientesNuevos||'[]'):'[]',
         ultimaActualizacion: new Date().toISOString()
-      }).then(function(){
+      }, {merge:true}).then(function(){
         done++;
         estado.textContent = 'VEND '+vid+' ('+nuevos.length+' pedidos)... ';
         siguiente(i+1);
