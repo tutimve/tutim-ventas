@@ -306,6 +306,14 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="card-title">Pagos reportados hoy</div>
       <div id="ultimosCobros"><div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Sin pagos hoy</div></div>
     </div>
+    <div class="card" style="background:#FFF3CD">
+      <div class="card-title" style="color:#856404">Cobrar Hoy</div>
+      <div id="cxcCobrarHoyList"><div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Cargando...</div></div>
+    </div>
+    <div class="card" style="background:#EAF2FF">
+      <div class="card-title" style="color:var(--azul)">Por Vencer Mañana</div>
+      <div id="cxcPorVencerMananaList"><div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Cargando...</div></div>
+    </div>
     <div class="card" style="background:var(--azul-c)">
       <div class="card-title" style="color:var(--azul)">Stock disponible</div>
       <div id="stockHome" style="font-size:13px;color:var(--azul)">Cargando...</div>
@@ -560,6 +568,12 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
     </div>
 
+    <div class="card" id="cxcPorVencimientoCard">
+      <div class="card-title">Cuentas por Cobrar Pendientes (por antiguedad)</div>
+      <p style="font-size:12px;color:#666;margin-bottom:6px">Escribe arriba para filtrar por cliente. Toca un rango para ver sus documentos.</p>
+      <div id="cxcPorVencimientoList"></div>
+    </div>
+
     <div class="card hidden" id="cobroDocsCard">
       <div class="card-title">Documentos pendientes</div>
       <div id="cobroDocsList"></div>
@@ -652,6 +666,16 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           </div>
           <span id="promoLabel">Inactiva</span>
         </label>
+      </div>
+    </div>
+
+    <!-- Limite de deuda para bloquear pedidos -->
+    <div class="card" style="background:#FFF3CD;border:2px solid var(--ambar)">
+      <div style="font-weight:700;font-size:14px;color:#856404">Bloqueo de pedidos por deuda</div>
+      <div style="font-size:12px;color:#856404;margin:4px 0 10px">Si un cliente tiene una deuda pendiente (segun Cuentas por Cobrar) mayor a este monto, no se le podra crear un pedido nuevo. Deja en 0 para desactivar el bloqueo.</div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div class="field" style="flex:1;margin-bottom:0"><label>Monto limite (US$)</label><input type="number" id="limiteDeudaInput" placeholder="0.00" step="0.01"></div>
+        <button class="btn btn-p btn-sm" onclick="guardarLimiteDeudaPedidos()">Guardar</button>
       </div>
     </div>
 
@@ -1277,6 +1301,22 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <button class="btn" style="background:var(--rojo);color:#fff;font-weight:600" onclick="ejecutarAnularPagoCobranza()">Anular pago</button>
       <button class="btn btn-s" onclick="cerrarModal('mAnularPago')">Cancelar</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL BLOQUEO DE PEDIDO POR DEUDA -->
+<div class="modal-bg" id="mBloqueoDeuda">
+  <div class="modal">
+    <h3 style="color:var(--rojo)">Cliente con deuda pendiente</h3>
+    <div id="bloqueoDeudaInfo" style="font-size:14px;color:#555;margin-bottom:16px"></div>
+    <div id="bloqueoDeudaAdminWrap" class="hidden">
+      <div class="field">
+        <label>Observacion (obligatoria para continuar)</label>
+        <textarea id="bloqueoDeudaObs" rows="2" placeholder="Explica el motivo para continuar de todas formas..."></textarea>
+      </div>
+      <button class="btn" style="background:var(--ambar);color:#fff;font-weight:600;margin-bottom:8px;width:100%" onclick="continuarPedidoConDeuda()">Continuar de todas formas</button>
+    </div>
+    <button class="btn btn-s" style="width:100%" onclick="cerrarModal('mBloqueoDeuda')">Cancelar pedido</button>
   </div>
 </div>
 
@@ -2030,6 +2070,7 @@ function goScreen(name){
     }
   }
   if(name==='cobros'){
+    renderCxCPorVencimiento();
     var ahora4=new Date();
     var hoy4=ahora4.getFullYear()+'-'+String(ahora4.getMonth()+1).padStart(2,'0')+'-'+String(ahora4.getDate()).padStart(2,'0');
     if(!document.getElementById('filtroCobroDesde').value) document.getElementById('filtroCobroDesde').value=hoy4;
@@ -2129,8 +2170,55 @@ function filtrarCli(){
   document.getElementById('listaCli').innerHTML=html;
 }
 
+function calcularDeudaCliente(clienteId){
+  var total=0;
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){
+    if(CUENTAS_COBRAR[i].clienteId===clienteId) total+=CUENTAS_COBRAR[i].saldo;
+  }
+  return total;
+}
+
+var clienteBloqueadoPorDeuda=null;
+var deudaBloqueadaMonto=0;
+
+function abrirBloqueoDeudaPedido(cli, deuda){
+  clienteBloqueadoPorDeuda=cli;
+  deudaBloqueadaMonto=deuda;
+  document.getElementById('bloqueoDeudaInfo').innerHTML=
+    '<strong>'+cli.nombre+'</strong> (Cod: '+cli.id+') tiene una deuda pendiente de <strong style="color:var(--rojo)">$'+formatearNumeroConMiles(deuda,2)+'</strong>, superior al limite de <strong>$'+formatearNumeroConMiles(LIMITE_DEUDA_PEDIDOS,2)+'</strong> permitido para crear pedidos nuevos.';
+  var esAprobador=puedeAprobarPagosCobranza();
+  var wrapAdmin=document.getElementById('bloqueoDeudaAdminWrap');
+  if(esAprobador) wrapAdmin.classList.remove('hidden'); else wrapAdmin.classList.add('hidden');
+  document.getElementById('bloqueoDeudaObs').value='';
+  document.getElementById('mBloqueoDeuda').classList.add('open');
+}
+
+function continuarPedidoConDeuda(){
+  var obs=document.getElementById('bloqueoDeudaObs').value.trim();
+  if(!obs){ toast('Indica una observacion para continuar'); return; }
+  var cli=clienteBloqueadoPorDeuda;
+  cerrarModal('mBloqueoDeuda');
+  pedido.cliente=cli;
+  pedido.bloqueoDeudaOmitido=true;
+  pedido.observacionBloqueoDeuda=obs;
+  pedido.deudaAlMomento=deudaBloqueadaMonto;
+  document.getElementById('paso1').classList.add('hidden');
+  document.getElementById('paso2').classList.remove('hidden');
+  renderProds();
+}
+
 function selCli(id){
-  for(var i=0;i<CLIENTES.length;i++){if(CLIENTES[i].id===id){pedido.cliente=CLIENTES[i];break;}}
+  var cli=null;
+  for(var i=0;i<CLIENTES.length;i++){if(CLIENTES[i].id===id){cli=CLIENTES[i];break;}}
+  if(!cli) return;
+  if(LIMITE_DEUDA_PEDIDOS>0){
+    var deuda=calcularDeudaCliente(id);
+    if(deuda>LIMITE_DEUDA_PEDIDOS){
+      abrirBloqueoDeudaPedido(cli, deuda);
+      return;
+    }
+  }
+  pedido.cliente=cli;
   document.getElementById('paso1').classList.add('hidden');
   document.getElementById('paso2').classList.remove('hidden');
   renderProds();
@@ -2397,7 +2485,7 @@ function crearObj(){
       }
     }
   }
-  return{id:Date.now(),fecha:new Date().toLocaleDateString('es-VE'),
+  var obj={id:Date.now(),fecha:new Date().toLocaleDateString('es-VE'),
     hora:new Date().toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit'}),
     cliente:JSON.parse(JSON.stringify(pedido.cliente)),
     items:JSON.parse(JSON.stringify(pedido.items)),
@@ -2406,6 +2494,12 @@ function crearObj(){
     listaPrecio:t.lp,vendedor:VEND.codigo,vendedorNombre:VEND.nombre,
     promoDisplay:PROMO_DISPLAY_ACTIVA,
     zona:VEND.zona,status:'pendiente'};
+  if(pedido.bloqueoDeudaOmitido){
+    obj.bloqueoDeudaOmitido=true;
+    obj.observacionBloqueoDeuda=pedido.observacionBloqueoDeuda;
+    obj.deudaAlMomento=pedido.deudaAlMomento;
+  }
+  return obj;
 }
 
 function soloGuardar(){
@@ -3677,6 +3771,9 @@ function previewFacturas(inputId, previewId){
 
 // Minimo de facturas para considerar ese requisito satisfecho
 var MIN_FACTURAS_REQUERIDAS=2;
+// Monto maximo de deuda pendiente que un cliente puede tener antes de que
+// se bloquee la creacion de un pedido nuevo. 0 = sin limite (desactivado).
+var LIMITE_DEUDA_PEDIDOS=0;
 
 // Un cliente se considera con documentacion COMPLETA solo si tiene los 5
 // requisitos, y las facturas cuentan solo si hay al menos MIN_FACTURAS_REQUERIDAS
@@ -4179,6 +4276,59 @@ function actualizarMetricas(){
       elCob.innerHTML=htmlC;
     }
   }
+  renderCxCHomeReminders();
+}
+
+// ═══ INICIO: avisos de "Cobrar Hoy" (7 dias o mas desde la emision, es
+// decir ya se cumplio o paso el plazo de credito de 7 dias) y "Por Vencer
+// Manana" (exactamente 6 dias desde la emision) ═══
+function renderCxCHomeReminders(){
+  var elHoy=document.getElementById('cxcCobrarHoyList');
+  var elManana=document.getElementById('cxcPorVencerMananaList');
+  if(!elHoy || !elManana) return;
+  var vCod=VEND?VEND.codigo:'';
+  var verTodos=(vCod==='00'||vCod==='01'||vCod==='20');
+  var cobrarHoy=[], porVencerManana=[];
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){
+    var d=CUENTAS_COBRAR[i];
+    if(d.saldo<=0.009) continue;
+    if(!verTodos && d.vendedor!==vCod) continue;
+    var dias=diasDesdeEmision(d.emision);
+    if(dias===null) continue;
+    if(dias>=7) cobrarHoy.push(d);
+    else if(dias===6) porVencerManana.push(d);
+  }
+  function nombreClienteR(d){
+    var cliReal=null;
+    for(var j=0;j<CLIENTES.length;j++){ if(CLIENTES[j].id===d.clienteId){ cliReal=CLIENTES[j]; break; } }
+    return cliReal?cliReal.nombre:d.clienteNombre;
+  }
+  // Los mas vencidos primero
+  cobrarHoy.sort(function(a,b){ return diasVencidoDesdeEmision(b.emision)-diasVencidoDesdeEmision(a.emision); });
+  porVencerManana.sort(function(a,b){ return diasVencidoDesdeEmision(b.emision)-diasVencidoDesdeEmision(a.emision); });
+  function renderLista(el, lista, vacio){
+    if(lista.length===0){
+      el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">'+vacio+'</div>';
+      return;
+    }
+    var html='';
+    for(var i=0;i<lista.length;i++){
+      var d=lista[i];
+      html+='<div onclick="irACobrarCliente(&quot;'+d.clienteId+'&quot;)" style="border-bottom:1px solid rgba(0,0,0,.08);padding:6px 0;cursor:pointer">'+
+        '<div style="display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:600">'+nombreClienteR(d)+'</span><strong style="font-size:13px">$'+formatearNumeroConMiles(d.saldo,2)+'</strong></div>'+
+        '<div style="font-size:11px;color:#666">Cod: '+d.clienteId+' | Doc.'+d.numero+' | Emision: '+d.emision+'</div>'+
+        '<div style="font-size:11px;margin-top:2px">'+etiquetaDiasVencido(diasVencidoDesdeEmision(d.emision))+'</div>'+
+      '</div>';
+    }
+    el.innerHTML=html;
+  }
+  renderLista(elHoy, cobrarHoy, 'Nada por cobrar hoy');
+  renderLista(elManana, porVencerManana, 'Nada por vencer mañana');
+}
+
+function irACobrarCliente(clienteId){
+  goScreen('cobros');
+  selCobroCli(clienteId);
 }
 
 var pedidoEditandoId = null;
@@ -5076,6 +5226,8 @@ function togglePromoDisplay(){
 }
 
 function actualizarUIPromo(){
+  var limEl=document.getElementById('limiteDeudaInput');
+  if(limEl) limEl.value=LIMITE_DEUDA_PEDIDOS>0?LIMITE_DEUDA_PEDIDOS:'';
   var sw=document.getElementById('promoSwitch');
   var knob=document.getElementById('promoKnob');
   var lbl=document.getElementById('promoLabel');
@@ -5089,6 +5241,17 @@ function actualizarUIPromo(){
     knob.style.left='2px';
     if(lbl) lbl.textContent='Inactiva';
   }
+}
+
+function guardarLimiteDeudaPedidos(){
+  var val=parseFloat(document.getElementById('limiteDeudaInput').value)||0;
+  LIMITE_DEUDA_PEDIDOS=val;
+  db.collection('config').doc('limite_deuda').set({
+    monto: val,
+    actualizado: new Date().toISOString()
+  }).then(function(){
+    toast(val>0?('Limite guardado: $'+val.toFixed(2)):'Bloqueo por deuda desactivado');
+  }).catch(function(){ toast('Error guardando en Firebase'); });
 }
 
 // ═══ ADMIN ═══
@@ -5925,7 +6088,8 @@ function cargarConfigFirebase(callback){
     db.collection('config').doc('promo_display').get(),
     db.collection('config').doc('cuentas_cobrar').get(),
     db.collection('config').doc('cuentas_cobrar_real').get(),
-    db.collection('config').doc('cuentas_cobrar_fiscal').get()
+    db.collection('config').doc('cuentas_cobrar_fiscal').get(),
+    db.collection('config').doc('limite_deuda').get()
   ];
   Promise.all(promesas).then(function(docs){
     // Inventario
@@ -6014,6 +6178,13 @@ function cargarConfigFirebase(callback){
         var cxcF=JSON.parse(docs[7].data().data||'[]');
         CUENTAS_COBRAR_FISCAL.length=0;
         for(var i=0;i<cxcF.length;i++) CUENTAS_COBRAR_FISCAL.push(cxcF[i]);
+      }
+    }catch(e){}
+    // Limite de deuda para bloquear pedidos nuevos
+    try{
+      if(docs[8].exists){
+        var lim=docs[8].data().monto;
+        LIMITE_DEUDA_PEDIDOS=(lim!==undefined && lim!==null)?parseFloat(lim):0;
       }
     }catch(e){}
     // Llamar callback cuando todo está listo
@@ -6317,6 +6488,7 @@ function obtenerClientesConDeuda(){
 
 function filtrarCobroCli(){
   var q=document.getElementById('cobroBusqCli').value.toLowerCase();
+  renderCxCPorVencimiento();
   if(!q){ document.getElementById('cobroListaCli').innerHTML=''; return; }
   var lista=obtenerClientesConDeuda().filter(function(c){
     return c.nombre.toLowerCase().indexOf(q)>=0 || (c.rif||'').toLowerCase().indexOf(q)>=0 || c.id.indexOf(q)>=0;
@@ -6341,6 +6513,7 @@ function selCobroCli(id){
   document.getElementById('cobroListaCli').innerHTML='';
   document.getElementById('cobroCliSelNom').textContent=(c?c.nombre:id)+' (Cod: '+id+')';
   document.getElementById('cobroCliSel').classList.remove('hidden');
+  var cardVenc=document.getElementById('cxcPorVencimientoCard'); if(cardVenc) cardVenc.classList.add('hidden');
   cobroDocsSeleccionados=[];
   renderDocsPendientesCliente(id);
 }
@@ -6353,6 +6526,80 @@ function limpiarCobroCli(){
   document.getElementById('cobroFormCard').classList.add('hidden');
   document.getElementById('cobroBusqCli').value='';
   document.getElementById('cobroListaCli').innerHTML='';
+  var cardVenc=document.getElementById('cxcPorVencimientoCard'); if(cardVenc) cardVenc.classList.remove('hidden');
+  renderCxCPorVencimiento();
+}
+
+// ═══ COBROS: cuentas por cobrar agrupadas por antiguedad (dias desde la
+// emision), filtrables por lo que se escriba en el buscador de cliente ═══
+var cxcBucketExpandido={};
+
+function toggleCxCBucket(key){
+  cxcBucketExpandido[key]=!cxcBucketExpandido[key];
+  renderCxCPorVencimiento();
+}
+
+function renderCxCPorVencimiento(){
+  var cont=document.getElementById('cxcPorVencimientoList');
+  if(!cont) return;
+  var filtro=(document.getElementById('cobroBusqCli').value||'').toLowerCase();
+  var vCod=VEND?VEND.codigo:'';
+  var verTodos=(vCod==='00'||vCod==='01'||vCod==='20');
+  var docs=CUENTAS_COBRAR.filter(function(d){
+    if(d.saldo<=0.009) return false; // solo pendientes, los creditos no aplican aqui
+    if(!verTodos && d.vendedor!==vCod) return false;
+    return true;
+  });
+  function nombreCliente(d){
+    var cliReal=null;
+    for(var j=0;j<CLIENTES.length;j++){ if(CLIENTES[j].id===d.clienteId){ cliReal=CLIENTES[j]; break; } }
+    return cliReal?cliReal.nombre:d.clienteNombre;
+  }
+  if(filtro){
+    docs=docs.filter(function(d){
+      return nombreCliente(d).toLowerCase().indexOf(filtro)>=0 || d.clienteId.indexOf(filtro)>=0;
+    });
+  }
+
+  var buckets={};
+  for(var bi=0;bi<BUCKETS_VENCIMIENTO.length;bi++) buckets[BUCKETS_VENCIMIENTO[bi].key]=[];
+  for(var i=0;i<docs.length;i++){
+    var dias=diasDesdeEmision(docs[i].emision);
+    var b=bucketVencimiento(dias===null?0:Math.max(dias,0));
+    buckets[b].push({doc:docs[i], dias:dias});
+  }
+
+  var html='';
+  for(var bi=0;bi<BUCKETS_VENCIMIENTO.length;bi++){
+    var bk=BUCKETS_VENCIMIENTO[bi];
+    var items=buckets[bk.key];
+    var totalBucket=0;
+    for(var i=0;i<items.length;i++) totalBucket+=items[i].doc.saldo;
+    var expandido=!!cxcBucketExpandido[bk.key];
+    html+='<div style="border-bottom:1px solid var(--borde)">'+
+      '<div onclick="toggleCxCBucket(&quot;'+bk.key+'&quot;)" style="display:flex;justify-content:space-between;align-items:center;padding:10px 4px;cursor:pointer">'+
+        '<span style="font-size:13px;font-weight:600">'+bk.label+' <span style="color:#888;font-weight:400">('+items.length+')</span></span>'+
+        '<span style="display:flex;align-items:center;gap:6px"><strong style="color:var(--azul)">$'+formatearNumeroConMiles(totalBucket,2)+'</strong><span style="color:#aaa;font-size:11px">'+(expandido?'▲':'▼')+'</span></span>'+
+      '</div>';
+    if(expandido){
+      if(items.length===0){
+        html+='<div style="padding:6px 4px 10px;color:#aaa;font-size:12px">Sin documentos en este rango</div>';
+      } else {
+        items.sort(function(a,b){ return diasVencidoDesdeEmision(b.doc.emision)-diasVencidoDesdeEmision(a.doc.emision); });
+        for(var i=0;i<items.length;i++){
+          var d=items[i].doc;
+          html+='<div onclick="event.stopPropagation();selCobroCli(&quot;'+d.clienteId+'&quot;)" style="padding:6px 4px 6px 12px;font-size:12px;cursor:pointer;border-top:1px solid #f2f2f2">'+
+            '<div style="font-weight:600">'+nombreCliente(d)+' <span style="color:#888;font-weight:400">(Cod: '+d.clienteId+')</span></div>'+
+            '<div style="color:#888">Doc.'+d.numero+' | Emision: '+d.emision+'</div>'+
+            '<div style="margin-top:2px">'+etiquetaDiasVencido(diasVencidoDesdeEmision(d.emision))+'</div>'+
+            '<div style="color:var(--azul);font-weight:700">$'+formatearNumeroConMiles(d.saldo,2)+'</div>'+
+          '</div>';
+        }
+      }
+    }
+    html+='</div>';
+  }
+  cont.innerHTML=html||'<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin cuentas por cobrar pendientes</div>';
 }
 
 // Positivo = vencido hace N dias. Negativo = faltan N dias para vencer.
@@ -6364,6 +6611,52 @@ function calcularDiasVencimiento(fechaStr){
   var hoy=new Date();
   hoy.setHours(0,0,0,0); fVenc.setHours(0,0,0,0);
   return Math.round((hoy-fVenc)/(1000*60*60*24));
+}
+
+// Dias transcurridos desde la fecha de EMISION de un documento (no desde el
+// vencimiento). Se usa para el control de antiguedad de cuentas por cobrar
+// y los avisos de "Cobrar hoy" / "Por vencer manana" en Inicio.
+function diasDesdeEmision(fechaStr){
+  if(!fechaStr) return null;
+  var p=fechaStr.split('/');
+  if(p.length!==3) return null;
+  var fEmi=new Date(parseInt(p[2],10),parseInt(p[1],10)-1,parseInt(p[0],10));
+  var hoy=new Date();
+  hoy.setHours(0,0,0,0); fEmi.setHours(0,0,0,0);
+  return Math.round((hoy-fEmi)/(1000*60*60*24));
+}
+
+var BUCKETS_VENCIMIENTO=[
+  {key:'0-7', label:'0 a 7 dias'},
+  {key:'8-14', label:'8 a 14 dias'},
+  {key:'15-21', label:'15 a 21 dias'},
+  {key:'22-30', label:'22 a 30 dias'},
+  {key:'31+', label:'31 dias o mas'}
+];
+function bucketVencimiento(dias){
+  if(dias===null) return '0-7';
+  if(dias<=7) return '0-7';
+  if(dias<=14) return '8-14';
+  if(dias<=21) return '15-21';
+  if(dias<=30) return '22-30';
+  return '31+';
+}
+
+// Dias vencido asumiendo el credito estandar de 7 dias desde la emision:
+// positivo = ya vencido hace X dias, 0 = vence hoy, negativo = vence en X dias.
+function diasVencidoDesdeEmision(fechaEmision){
+  var d=diasDesdeEmision(fechaEmision);
+  if(d===null) return null;
+  return d-7;
+}
+
+// Etiqueta visual consistente con el resto de la app (rojo = vencido,
+// ambar = vence hoy, gris = todavia no vence)
+function etiquetaDiasVencido(diasVencido){
+  if(diasVencido===null) return '';
+  if(diasVencido>0) return '<span style="color:var(--rojo);font-weight:600">Vencido hace '+diasVencido+' dia'+(diasVencido!==1?'s':'')+'</span>';
+  if(diasVencido<0) return '<span style="color:#888">Vence en '+(-diasVencido)+' dia'+((-diasVencido)!==1?'s':'')+'</span>';
+  return '<span style="color:var(--ambar);font-weight:600">Vence hoy</span>';
 }
 
 function renderDocsPendientesCliente(clienteId, preservarSeleccion){
@@ -6488,21 +6781,23 @@ function formatearNumeroConMiles(valor, decimales){
 
 // Mientras se escribe: solo deja pasar digitos y un punto decimal (sin
 // reformatear todavia, para no saltar el cursor mientras se escribe)
-function onInputMontoCampo(el, idx, campo){
-  var raw=el.value.replace(/,/g,'').replace(/[^\d.]/g,'');
-  var partes=raw.split('.');
-  if(partes.length>2) raw=partes[0]+'.'+partes.slice(1).join('');
-  el.value=raw;
-  cobroDepositos[idx][campo]=raw;
-  calcularValidacionCobro();
-}
-
-// Al salir del campo: aplica la mascara con separador de miles y el numero
-// de decimales que corresponda (2 para montos, 4 para la tasa BCV)
-function onBlurMontoCampo(el, idx, campo, decimales){
-  var val=parseFloat(String(el.value).replace(/,/g,''))||0;
-  cobroDepositos[idx][campo]=val;
-  el.value=val?formatearNumeroConMiles(val, decimales):'';
+// Estilo "punto de venta": el usuario solo escribe digitos (sin coma ni
+// punto), y la app inserta el separador decimal automaticamente antes de
+// los ultimos N digitos (2 para montos, 4 para la tasa BCV). Esto evita
+// por completo el problema de que el teclado numerico del celular use coma
+// o punto segun el idioma configurado en el dispositivo, porque nunca hay
+// que escribir ningun separador.
+function onInputCentavos(el, idx, campo, decimales){
+  var soloDigitos=el.value.replace(/\D/g,'').replace(/^0+(?=\d)/,'');
+  var valorNumerico=soloDigitos?(parseInt(soloDigitos,10)/Math.pow(10,decimales)):0;
+  cobroDepositos[idx][campo]=valorNumerico;
+  el.value=soloDigitos?formatearNumeroConMiles(valorNumerico,decimales):'';
+  var previewEl=document.getElementById('previewCentavos_'+idx+'_'+campo);
+  if(previewEl){
+    previewEl.innerHTML=soloDigitos
+      ?('Se registrara: <strong style="font-size:15px">'+formatearNumeroConMiles(valorNumerico,decimales)+'</strong>')
+      :'';
+  }
   calcularValidacionCobro();
 }
 
@@ -6541,12 +6836,16 @@ function renderDepositosCobro(){
         '<div class="field"><label>Referencia (ultimos 6 digitos)</label><input type="text" maxlength="6" inputmode="numeric" value="'+(d.referencia||'')+'" oninput="actualizarCampoDeposito('+i+',&quot;referencia&quot;,this.value)"></div>'
       ):'')+
       '<div class="field"><label>'+(esT?'Monto depositado (Bs)':'Monto (US$)')+'</label>'+
-        '<input type="text" inputmode="decimal" value="'+(d.monto?formatearNumeroConMiles(d.monto,2):'')+'" placeholder="0.00" '+
-        'oninput="onInputMontoCampo(this,'+i+',&quot;monto&quot;)" onblur="onBlurMontoCampo(this,'+i+',&quot;monto&quot;,2)"></div>'+
+        '<input type="text" inputmode="numeric" value="'+(d.monto?formatearNumeroConMiles(d.monto,2):'')+'" placeholder="0.00" '+
+        'oninput="onInputCentavos(this,'+i+',&quot;monto&quot;,2)">'+
+        '<div style="font-size:11px;color:#888;margin-top:2px">Escribe solo numeros, sin punto ni coma (el punto se acomoda solo). Ej: para 1.420,91 escribe 142091</div>'+
+        '<div id="previewCentavos_'+i+'_monto" style="font-size:13px;color:var(--azul);margin-top:2px">'+(d.monto?('Se registrara: <strong style="font-size:15px">'+formatearNumeroConMiles(d.monto,2)+'</strong>'):'')+'</div></div>'+
       (esT?(
         '<div class="field"><label>Tasa BCV del dia</label>'+
-        '<input type="text" inputmode="decimal" value="'+(d.tasa?formatearNumeroConMiles(d.tasa,4):'')+'" placeholder="0.0000" '+
-        'oninput="onInputMontoCampo(this,'+i+',&quot;tasa&quot;)" onblur="onBlurMontoCampo(this,'+i+',&quot;tasa&quot;,4)"></div>'
+        '<input type="text" inputmode="numeric" value="'+(d.tasa?formatearNumeroConMiles(d.tasa,2):'')+'" placeholder="0.00" '+
+        'oninput="onInputCentavos(this,'+i+',&quot;tasa&quot;,2)">'+
+        '<div style="font-size:11px;color:#888;margin-top:2px">Escribe solo numeros. Ej: para 725,00 escribe 72500</div>'+
+        '<div id="previewCentavos_'+i+'_tasa" style="font-size:13px;color:var(--azul);margin-top:2px">'+(d.tasa?('Se registrara: <strong style="font-size:15px">'+formatearNumeroConMiles(d.tasa,2)+'</strong>'):'')+'</div></div>'
       ):'')+
     '</div>';
   }
@@ -7243,7 +7542,7 @@ function construirHojaCobros(lista, tituloHoja){
   // Formato numerico real en las columnas de dinero (los datos empiezan en la fila 2)
   for(var r=2;r<=range.e.r;r++){
     aplicarFormatoNumerico(ws, r, 5, '#,##0.00');
-    aplicarFormatoNumerico(ws, r, 8, '#,##0.0000');
+    aplicarFormatoNumerico(ws, r, 8, '#,##0.00');
     aplicarFormatoNumerico(ws, r, 9, '#,##0.00');
     aplicarFormatoNumerico(ws, r, 10, '0.0%');
     aplicarFormatoNumerico(ws, r, 11, '#,##0.00_);(#,##0.00)');
@@ -7352,7 +7651,7 @@ function ejecutarExportarCobrosExcelEstilo(){
           '<td>'+(esT?formatearNumeroConMiles(d.monto,2):'')+'</td>'+
           '<td>'+(esT?(BANCOS_COBRO[d.banco]||''):'')+'</td>'+
           '<td>'+(esT?(d.referencia||''):'')+'</td>'+
-          '<td>'+(esT?formatearNumeroConMiles(d.tasa,4):'')+'</td>'+
+          '<td>'+(esT?formatearNumeroConMiles(d.tasa,2):'')+'</td>'+
           '<td>'+formatearNumeroConMiles(d.montoUSD||0,2)+'</td>'+
           '<td>'+p.descuentoPct+'%</td>'+
           '<td>'+saldoTxt+'</td>'+
