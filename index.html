@@ -4241,17 +4241,23 @@ function actualizarMetricas(){
   var hoy=new Date().toLocaleDateString('es-VE');
   var ahoraM=new Date();
   var hoyISO=ahoraM.getFullYear()+'-'+String(ahoraM.getMonth()+1).padStart(2,'0')+'-'+String(ahoraM.getDate()).padStart(2,'0');
-  var pedH=[],visH=[],cobH=[],bH=0,mH=0;
+  var pedH=[],visH=[],cobH=[],cobHCount=[],bH=0,mH=0;
   for(var i=0;i<PEDIDOS.length;i++){if(PEDIDOS[i].fecha===hoy && !PEDIDOS[i].anulado){pedH.push(PEDIDOS[i]);bH+=PEDIDOS[i].bultos;mH+=PEDIDOS[i].monto;}}
   for(var i=0;i<VISITAS.length;i++){if(VISITAS[i].fecha===hoy) visH.push(VISITAS[i]);}
-  for(var i=0;i<PAGOS_COBRANZA.length;i++){if(PAGOS_COBRANZA[i].fecha===hoyISO && PAGOS_COBRANZA[i].estado!=='anulado') cobH.push(PAGOS_COBRANZA[i]);}
+  for(var i=0;i<PAGOS_COBRANZA.length;i++){
+    var pc=PAGOS_COBRANZA[i];
+    if(pc.fecha===hoyISO && pc.estado!=='anulado'){
+      cobH.push(pc); // para la lista de abajo: se ve tambien lo rechazado, para dar contexto
+      if(pc.estado!=='rechazado') cobHCount.push(pc); // para el conteo: un rechazo no cuenta como pago valido
+    }
+  }
   document.getElementById('mPed').textContent=pedH.length; ajustarFontMetrica('mPed');
   document.getElementById('mVis').textContent=visH.length; ajustarFontMetrica('mVis');
-  document.getElementById('mCob').textContent=cobH.length; ajustarFontMetrica('mCob');
+  document.getElementById('mCob').textContent=cobHCount.length; ajustarFontMetrica('mCob');
   document.getElementById('mBul').textContent=bH; ajustarFontMetrica('mBul');
   document.getElementById('mMon').textContent='$'+mH.toFixed(0); ajustarFontMetrica('mMon');
   var cobradoHoy=0;
-  for(var i=0;i<cobH.length;i++){ if(cobH[i].estado==='confirmado') cobradoHoy+=cobH[i].montoUSD; }
+  for(var i=0;i<cobHCount.length;i++){ if(cobHCount[i].estado==='confirmado') cobradoHoy+=cobHCount[i].montoUSD; }
   var elCobrado=document.getElementById('mCobrado'); if(elCobrado){ elCobrado.textContent='$'+formatearNumeroConMiles(cobradoHoy,2); ajustarFontMetrica('mCobrado'); }
   if(pedH.length===0){
     document.getElementById('ultimosPed').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Sin pedidos hoy</div>';
@@ -7009,20 +7015,44 @@ function finalizarGuardadoCobro(pago, docsOk){
   if(idx>=0) PAGOS_COBRANZA[idx]=pago;
   else PAGOS_COBRANZA.unshift(pago);
   var fueEdicion=!!pagoEditandoId;
-  // IMPORTANTE: se guarda directamente en el documento de Firebase del
-  // vendedor DUENO del pago (pago.vendedor), no en el del usuario logueado.
-  // Si se guardara en el usuario logueado, un administrador (cuyo PAGOS_COBRANZA
-  // contiene los de TODOS los vendedores) terminaria copiando los pagos de
-  // todos los demas dentro de su propio documento.
-  guardarPagoCobranzaEnDocVendedor(pago, function(){
-    var btnG=document.getElementById('btnGuardarCobro');
-    if(btnG){ btnG.disabled=false; btnG.textContent='Reportar pago'; }
-    toast(docsOk?(fueEdicion?'Pago corregido y reenviado, queda pendiente de confirmar':'Pago reportado, queda pendiente de confirmar'):'Pago reportado (algunos comprobantes no se subieron)');
-    pagoEditandoId=null;
-    limpiarCobroCli();
-    renderHistorialCobros();
-    actualizarMetricas();
+
+  // Rebajar el saldo del documento DESDE que se reporta el pago (no esperar
+  // a que un admin lo confirme), para que el mismo documento no se pueda
+  // volver a procesar por error mientras esta pendiente de aprobacion. Si
+  // el pago es rechazado mas adelante, el saldo se restituye (se "libera"
+  // el documento). Si se confirma, aplicarPagoADocumentosCxC ya sabe partir
+  // del saldo actual (no duplica el descuento).
+  var diferenciaProvisional=Math.round((pago.montoEsperado-pago.montoUSD)*100)/100;
+  pago.saldoPendienteAjustado=diferenciaProvisional;
+  aplicarPagoADocumentosCxC(pago, diferenciaProvisional);
+
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    guardarPagoYRenderizar();
+  }).catch(function(){
+    toast('Error guardando el saldo en Firebase, intenta de nuevo');
+    guardarPagoYRenderizar();
   });
+
+  function guardarPagoYRenderizar(){
+    // IMPORTANTE: se guarda directamente en el documento de Firebase del
+    // vendedor DUENO del pago (pago.vendedor), no en el del usuario logueado.
+    // Si se guardara en el usuario logueado, un administrador (cuyo PAGOS_COBRANZA
+    // contiene los de TODOS los vendedores) terminaria copiando los pagos de
+    // todos los demas dentro de su propio documento.
+    guardarPagoCobranzaEnDocVendedor(pago, function(){
+      var btnG=document.getElementById('btnGuardarCobro');
+      if(btnG){ btnG.disabled=false; btnG.textContent='Reportar pago'; }
+      toast(docsOk?(fueEdicion?'Pago corregido y reenviado, queda pendiente de confirmar':'Pago reportado, queda pendiente de confirmar'):'Pago reportado (algunos comprobantes no se subieron)');
+      pagoEditandoId=null;
+      limpiarCobroCli();
+      renderResumenCxC();
+      renderHistorialCobros();
+      actualizarMetricas();
+    });
+  }
 }
 
 function cargarTodosPagosCobranzaFirebase(callback){
@@ -7244,6 +7274,9 @@ function revertirPagoEnDocumentosCxC(pago){
     doc.saldo=Math.round((doc.saldo+monto)*100)/100;
     delete doc.saldoAntesUltimoPago;
     delete doc.abonadoEnApp;
+    // Dejar en 0 lo aplicado por ESTE pago: si mas adelante se corrige y
+    // se reenvia, debe aplicar de cero, no acumular sobre lo ya revertido.
+    pago.documentos[i].montoAplicado=0;
   }
 }
 
@@ -7368,18 +7401,27 @@ function ejecutarRechazarPago(){
   pago.estado='rechazado';
   pago.motivoRechazo=motivo;
   pago.fechaConfirmacion=new Date().toLocaleString('es-VE');
-  guardarPagoCobranzaEnDocVendedor(pago, function(){
-    cerrarModal('mRechazarPago');
-    document.getElementById('motivoRechazoPago').value='';
-    toast('Pago rechazado');
-    cargarTodosPagosCobranzaFirebase(function(pagos){
-      PAGOS_COBRANZA_TODOS=pagos;
-      PAGOS_COBRANZA=pagos;
-      renderPagosPendientesAdmin();
-      renderHistorialCobros();
-      actualizarMetricas();
+  // El reporte ya habia rebajado el saldo provisionalmente; al rechazar, se
+  // libera el documento devolviendole el saldo que tenia antes del reporte.
+  revertirPagoEnDocumentosCxC(pago);
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    guardarPagoCobranzaEnDocVendedor(pago, function(){
+      cerrarModal('mRechazarPago');
+      document.getElementById('motivoRechazoPago').value='';
+      toast('Pago rechazado, el documento vuelve a estar disponible');
+      renderResumenCxC();
+      cargarTodosPagosCobranzaFirebase(function(pagos){
+        PAGOS_COBRANZA_TODOS=pagos;
+        PAGOS_COBRANZA=pagos;
+        renderPagosPendientesAdmin();
+        renderHistorialCobros();
+        actualizarMetricas();
+      });
     });
-  });
+  }).catch(function(){ toast('Error guardando en Firebase'); });
 }
 
 // ═══ COBROS: anular un pago ya confirmado (solo administradores) ═══
