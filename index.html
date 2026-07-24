@@ -201,6 +201,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -4246,7 +4247,14 @@ function actualizarMetricas(){
   for(var i=0;i<VISITAS.length;i++){if(VISITAS[i].fecha===hoy) visH.push(VISITAS[i]);}
   for(var i=0;i<PAGOS_COBRANZA.length;i++){
     var pc=PAGOS_COBRANZA[i];
-    if(pc.fecha===hoyISO && pc.estado!=='anulado'){
+    // Se usa la fecha en que se REGISTRO el pago en el sistema (no la fecha
+    // de la transaccion que puso el vendedor en el formulario), para que
+    // "Pagos hoy" refleje la actividad real del dia, incluso si alguien
+    // reporta un pago de dias atras. Los pagos guardados antes de este
+    // cambio no tienen fechaRegistroISO, asi que se usa pc.fecha como
+    // respaldo para no perderlos de las metricas.
+    var fechaParaHoy=pc.fechaRegistroISO||pc.fecha;
+    if(fechaParaHoy===hoyISO && pc.estado!=='anulado'){
       cobH.push(pc); // para la lista de abajo: se ve tambien lo rechazado, para dar contexto
       if(pc.estado!=='rechazado') cobHCount.push(pc); // para el conteo: un rechazo no cuenta como pago valido
     }
@@ -6969,12 +6977,15 @@ function guardarPagoCobro(){
   var esEdicion=!!pagoEditandoId;
   var pagoOriginal=esEdicion?PAGOS_COBRANZA.find(function(x){return x.id===pagoEditandoId;}):null;
   var pagoId=esEdicion?pagoEditandoId:('PAGO-'+Date.now());
+  var ahoraReg=new Date();
+  var fechaRegistroISO=ahoraReg.getFullYear()+'-'+String(ahoraReg.getMonth()+1).padStart(2,'0')+'-'+String(ahoraReg.getDate()).padStart(2,'0');
   var pago={
     id:pagoId,
     clienteId:cobroClienteSeleccionado,
     clienteNombre:cliInfo?cliInfo.nombre:cobroClienteSeleccionado,
     documentos:docsSeleccionadosInfo,
     fecha:fecha,
+    fechaRegistroISO:fechaRegistroISO,
     depositos:depositosFinal,
     montoUSD:montoUSDTotal,
     descuentoPct:descPct,
@@ -7168,7 +7179,7 @@ function renderPagoCobroCard(p){
       '<div>'+
         '<strong style="font-size:14px;'+(anuladoEstilo?'text-decoration:line-through;color:#aaa':'')+'">'+p.clienteNombre+'</strong>'+
         '<div style="font-size:11px;color:var(--azul);font-weight:600">Cod: '+p.clienteId+' | '+docsTxt+'</div>'+
-        '<div style="font-size:11px;color:#888">'+p.fecha+'</div>'+
+        '<div style="font-size:11px;color:#888">Fecha del pago: '+p.fecha+(p.fechaRegistroISO && p.fechaRegistroISO!==p.fecha?' &nbsp;|&nbsp; Registrado: '+p.fechaRegistroISO:'')+'</div>'+
         depsHtml+
         '<div style="font-size:11px;color:#888;margin-top:2px">VEND '+p.vendedor+' - '+(p.vendedorNombre||'')+'</div>'+
       '</div>'+
@@ -8042,7 +8053,18 @@ function toast(msg){
   setTimeout(function(){t.classList.remove('show');},2500);
 }
 
-init();
+// Inicia sesion de forma anonima e invisible para el usuario (no pide nada,
+// no cambia el login por PIN que ya existe) antes de arrancar la app. Esto
+// es lo que permite que las Reglas de Seguridad de Firebase exijan
+// "request.auth != null", bloqueando cualquier acceso a la base de datos
+// que no pase por la app (bots, scripts, alguien usando la configuracion
+// de Firebase directamente desde afuera).
+firebase.auth().signInAnonymously().then(function(){
+  init();
+}).catch(function(e){
+  console.log('No se pudo iniciar sesion anonima (revisa que este habilitada en Firebase Authentication):', e);
+  init();
+});
 </script>
 </body>
 </html>
