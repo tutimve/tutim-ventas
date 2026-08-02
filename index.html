@@ -1276,6 +1276,15 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
+<!-- MODAL IMAGEN AMPLIADA (lightbox de fotos de producto) -->
+<div class="modal-bg" id="mImagenAmpliada" onclick="cerrarModal('mImagenAmpliada')" style="background:rgba(0,0,0,.85);align-items:center;justify-content:center">
+  <div style="max-width:92vw;max-height:88vh;display:flex;flex-direction:column;align-items:center;gap:10px" onclick="event.stopPropagation()">
+    <img id="imagenAmpliadaSrc" src="" style="max-width:92vw;max-height:76vh;object-fit:contain;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.4)">
+    <div id="imagenAmpliadaNombre" style="color:#fff;font-weight:600;font-size:14px;text-align:center"></div>
+    <button class="btn btn-s" onclick="cerrarModal('mImagenAmpliada')">Cerrar</button>
+  </div>
+</div>
+
 <!-- MODAL RECHAZAR PAGO -->
 <div class="modal-bg" id="mRechazarPago">
   <div class="modal">
@@ -2403,7 +2412,7 @@ function renderProds(){
     var op=agotado?' style="opacity:.5"':'';
     var dis=agotado?' disabled':'';
     var iconoHtml=p.fotoUrl
-      ? '<div class="prod-icon" style="background:'+p.color+';padding:0;overflow:hidden"><img src="'+p.fotoUrl+'" style="width:100%;height:100%;object-fit:cover"></div>'
+      ? '<div class="prod-icon" style="background:'+p.color+';padding:0;overflow:hidden;cursor:pointer" onclick="event.stopPropagation();ampliarImagenProducto(&quot;'+p.fotoUrl+'&quot;,&quot;'+p.nombre.replace(/"/g,'&quot;')+'&quot;)"><img src="'+p.fotoUrl+'" style="width:100%;height:100%;object-fit:cover"></div>'
       : '<div class="prod-icon" style="background:'+p.color+'">'+inicialesProducto(p)+'</div>';
     html+='<div class="prod-card"'+op+'>'+iconoHtml+
       '<div class="prod-info"><div class="prod-name">'+p.nombre+'</div>'+
@@ -3780,7 +3789,7 @@ function renderInv(){
     var color=p.stock===0?'#E24B4A':p.stock<5?'#EDA100':p.color;
     var label=p.stock===0?'Agotado':p.stock<5?'Stock bajo':'Disponible';
     var iconoHtmlInv=p.fotoUrl
-      ? '<div class="prod-icon" style="background:'+p.color+';padding:0;overflow:hidden"><img src="'+p.fotoUrl+'" style="width:100%;height:100%;object-fit:cover"></div>'
+      ? '<div class="prod-icon" style="background:'+p.color+';padding:0;overflow:hidden;cursor:pointer" onclick="ampliarImagenProducto(&quot;'+p.fotoUrl+'&quot;,&quot;'+p.nombre.replace(/"/g,'&quot;')+'&quot;)"><img src="'+p.fotoUrl+'" style="width:100%;height:100%;object-fit:cover"></div>'
       : '<div class="prod-icon" style="background:'+p.color+'">'+inicialesProducto(p)+'</div>';
     html+='<div class="prod-card">'+iconoHtmlInv+
       '<div class="prod-info" style="flex:1"><div class="prod-name">'+p.nombre+'</div>'+
@@ -3797,14 +3806,6 @@ function renderPromosActivasStock(){
   var el=document.getElementById('promosActivasList');
   if(!el) return;
   var html='';
-  // Promo de bolsas: bonificacion permanente por escala, siempre activa
-  html+='<div style="padding:10px 0;border-bottom:1px solid var(--borde)">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
-      '<strong style="font-size:13px">Promo Bolsas</strong>'+
-      '<span class="tag tag-v" style="font-size:10px">ACTIVA</span>'+
-    '</div>'+
-    '<div style="font-size:12px;color:#666">2 btos: +5 unid &nbsp;|&nbsp; 3 btos: +9 unid &nbsp;|&nbsp; 4 btos: +18 unid &nbsp;|&nbsp; 5+ btos: 1 bulto gratis cada 5</div>'+
-  '</div>';
   // Promociones personalizadas activas
   var activas=PROMOCIONES_CUSTOM.filter(function(x){return x.activa;});
   if(activas.length===0){
@@ -5589,6 +5590,15 @@ function cargarCSVInventario(input){
 // --- PRECIOS ---
 // Iniciales genericas a partir del nombre del producto (no depende de que
 // sea Menta/Tutti Frutti/Bolsa/Display, sirve para cualquier articulo nuevo)
+// Abre la foto del producto en grande (lightbox), al tocar su miniatura
+// en la pantalla de pedido o de Stock
+function ampliarImagenProducto(url, nombre){
+  if(!url) return;
+  document.getElementById('imagenAmpliadaSrc').src=url;
+  document.getElementById('imagenAmpliadaNombre').textContent=nombre||'';
+  document.getElementById('mImagenAmpliada').classList.add('open');
+}
+
 function inicialesProducto(p){
   var palabras=(p.nombre||'').trim().split(/\s+/);
   var ini='';
@@ -6740,6 +6750,15 @@ function cargarConfigFirebase(callback){
               }
             }
           }
+        }
+        // La fecha de "Ultimo update" tambien viene guardada en este mismo
+        // documento; antes solo se actualizaba en pantalla en el momento de
+        // guardar, y al volver a abrir la app se perdia y quedaba con el
+        // valor de ejemplo puesto en el HTML.
+        var fechaActInv=docs[0].data().actualizado;
+        if(fechaActInv){
+          var fElInv=document.getElementById('invFecha');
+          if(fElInv) fElInv.textContent=new Date(fechaActInv).toLocaleDateString('es-VE');
         }
       }
       // Si no hay datos en Firebase, calcular stock desde stock_und
