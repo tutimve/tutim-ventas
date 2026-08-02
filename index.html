@@ -659,7 +659,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <!-- Tabs internos -->
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px" id="adminTabs">
       <button class="btn btn-p btn-sm admin-tab-btn" id="atab-inventario" onclick="adminTab('inventario')">Inventario</button>
-      <button class="btn btn-s btn-sm admin-tab-btn" id="atab-precios" onclick="adminTab('precios')">Precios</button>
+      <button class="btn btn-s btn-sm admin-tab-btn" id="atab-precios" onclick="adminTab('precios')">Productos</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-vendedores" onclick="adminTab('vendedores')">Vendedores</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-clientes" onclick="adminTab('clientes')">Clientes</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-docs" onclick="adminTab('docs')">Documentacion</button>
@@ -684,13 +684,14 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <!-- TAB PRECIOS -->
     <div id="adminTab-precios" style="display:none">
       <div class="card">
-        <div class="card-title">Modificar Precios</div>
-        <div id="adminPreciosList"></div>
-        <button class="btn btn-p" style="margin-top:12px" onclick="guardarPrecios()">Guardar Precios</button>
+        <div class="card-title">Productos</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Aqui puedes agregar articulos nuevos a la linea (con foto, nombre, categoria libre y precios), o editar/desactivar los existentes.</p>
+        <div id="adminProductosList"></div>
+        <button class="btn btn-p" style="margin-top:8px" onclick="abrirNuevoProducto()">+ Agregar producto nuevo</button>
       </div>
       <div class="card" style="background:var(--azul-c)">
-        <div class="card-title" style="color:var(--azul)">Cargar desde archivo CSV</div>
-        <p style="font-size:12px;color:#666;margin-bottom:8px">Acepta el archivo <strong>art.DBF</strong> exportado de Profit directamente, o CSV con columnas: CO_ART, PREC_VTA1, PREC_VTA2, PREC_VTA3, PREC_VTA4, PREC_VTA5</p>
+        <div class="card-title" style="color:var(--azul)">Cargar precios desde archivo CSV</div>
+        <p style="font-size:12px;color:#666;margin-bottom:8px">Acepta el archivo <strong>art.DBF</strong> exportado de Profit directamente, o CSV con columnas: CO_ART, PREC_VTA1, PREC_VTA2, PREC_VTA3, PREC_VTA4, PREC_VTA5. Los articulos que no existan todavia se agregan solos.</p>
         <input type="file" id="csvPrecios" accept=".csv,.dbf,.DBF" onchange="cargarCSVPrecios(this)">
       </div>
 
@@ -753,6 +754,11 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
             <input type="date" id="docsFiltroHasta" onchange="renderControlDocs()" style="padding:8px;font-size:13px;width:100%;box-sizing:border-box">
           </div>
         </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn btn-s btn-sm" onclick="filtroFechaDocs('semana')">Esta semana</button>
+          <button class="btn btn-s btn-sm" onclick="filtroFechaDocs('mes')">Este mes</button>
+          <button class="btn btn-s btn-sm" onclick="filtroFechaDocs('todos')">Todos</button>
+        </div>
         <div style="margin-top:8px">
           <label style="font-size:12px;color:#666;text-transform:none;letter-spacing:0">Estado:</label>
           <select id="docsFiltroEstado" onchange="renderControlDocs()" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--borde);border-radius:6px;margin-left:6px">
@@ -784,6 +790,14 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="card" style="background:var(--azul-c)">
         <div class="card-title" style="color:var(--azul)">Cargar bases de Cuentas por Cobrar</div>
         <p style="font-size:12px;color:#666;margin-bottom:8px">Sube los Excel exportados de Profit (Facturas por Numero, condicion "Sin Cancelar") de cada sistema. La app cruza ambas bases por cliente + fecha exacta, comparando la <strong>base imponible</strong> (neto − IVA). Si coincide, o si la base fiscal es 35% menor a la real, usa el documento <strong>FISCAL</strong> y crea aparte un documento con la diferencia. Los documentos de Real sin pareja se mantienen igual; los de Fiscal sin pareja en Real se descartan. Si un documento ya tenia un pago confirmado y la nueva carga todavia no lo refleja, la app respeta lo ya confirmado.</p>
+        <div class="field">
+          <label>Modo de carga</label>
+          <select id="cxcModoCarga">
+            <option value="reemplazar">Reemplazar toda la base (actualizacion periodica completa, "Sin Cancelar" entero)</option>
+            <option value="agregar">Agregar/actualizar sin borrar lo demas (solo subo unos documentos nuevos)</option>
+          </select>
+          <div id="cxcModoCargaAviso" style="font-size:11px;color:#856404;margin-top:4px">⚠ Si subes un archivo con SOLO unos documentos nuevos, usa "Agregar/actualizar" — si eliges "Reemplazar" con un archivo parcial, se va a borrar todo lo que no venga en ese archivo.</div>
+        </div>
         <div class="field"><label>Base</label>
           <input type="file" id="cxcExcelInputReal" accept=".xlsx,.xls" onchange="cargarExcelCxC(this,'real')">
         </div>
@@ -1238,6 +1252,30 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
+<!-- MODAL ELIMINAR PEDIDO PERMANENTEMENTE -->
+<div class="modal-bg" id="mEliminarPedidoDef">
+  <div class="modal">
+    <h3 style="color:var(--rojo)">Eliminar pedido permanentemente</h3>
+    <p style="font-size:14px;color:#555;margin-bottom:16px">Esto borra el pedido por completo, no como "Anulado" — <strong>no se puede deshacer</strong> y desaparece de todos los reportes e historial. Usalo solo para pedidos de prueba o errores. ¿Confirmas?</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:var(--rojo);color:#fff;font-weight:600" onclick="ejecutarEliminarPedidoDef()">Eliminar definitivamente</button>
+      <button class="btn btn-s" onclick="cerrarModal('mEliminarPedidoDef')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ELIMINAR PRODUCTO PERMANENTEMENTE -->
+<div class="modal-bg" id="mEliminarProductoDef">
+  <div class="modal">
+    <h3 style="color:var(--rojo)">Eliminar producto permanentemente</h3>
+    <p style="font-size:14px;color:#555;margin-bottom:16px">Esto borra el producto por completo del catalogo — <strong>no se puede deshacer</strong>. Si algun pedido (activo o anulado) todavia lo referencia, ahi se vera solo su codigo en vez del nombre. Usalo solo para productos de prueba o errores. ¿Confirmas?</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:var(--rojo);color:#fff;font-weight:600" onclick="ejecutarEliminarProductoDef()">Eliminar definitivamente</button>
+      <button class="btn btn-s" onclick="cerrarModal('mEliminarProductoDef')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL RECHAZAR PAGO -->
 <div class="modal-bg" id="mRechazarPago">
   <div class="modal">
@@ -1330,6 +1368,13 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <option value="precio_lista">Cambiar a otra lista de precio (P1-P5)</option>
       </select>
     </div>
+    <div class="field" id="promoCustomUnidadWrap">
+      <label>La cantidad de cada rango se cuenta en</label>
+      <select id="promoCustomUnidad">
+        <option value="unidades">Unidades</option>
+        <option value="bultos">Bultos</option>
+      </select>
+    </div>
     <div class="field">
       <label>Rangos segun bultos comprados (de los productos elegidos, sumados)</label>
       <div id="promoCustomRangos"></div>
@@ -1348,6 +1393,43 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div style="display:flex;gap:8px">
       <button class="btn btn-p" onclick="guardarPromoCustom()">Guardar promocion</button>
       <button class="btn btn-s" onclick="cerrarModal('mPromoCustom')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CREAR/EDITAR PRODUCTO -->
+<div class="modal-bg" id="mProducto">
+  <div class="modal">
+    <h3 id="productoTitulo">Nuevo producto</h3>
+    <div class="field" style="text-align:center">
+      <label>Foto del producto</label>
+      <img id="productoFotoPreview" src="" class="hidden" style="max-width:200px;max-height:200px;width:auto;height:auto;object-fit:contain;border-radius:12px;display:block;margin:0 auto 8px;box-shadow:0 1px 4px rgba(0,0,0,.15)">
+      <input type="file" id="productoFotoInput" accept="image/*" onchange="previsualizarFotoProducto(this)">
+    </div>
+    <div class="field"><label>Codigo / Referencia</label><input type="text" id="productoCodigo" placeholder="Ej: GU9020"></div>
+    <div class="field"><label>Nombre</label><input type="text" id="productoNombre" placeholder="Ej: Caramelos de Fresa Bolsa"></div>
+    <div style="display:flex;gap:8px">
+      <div class="field" style="flex:1"><label>Categoria / Sabor (libre)</label><input type="text" id="productoSabor" placeholder="Ej: Fresa, Mani, Chocolate..."></div>
+      <div class="field" style="flex:1"><label>Presentacion (libre)</label><input type="text" id="productoTipo" placeholder="Ej: Bolsa, Display, Granel..."></div>
+    </div>
+    <div class="field"><label>Unidades por bulto</label><input type="number" id="productoUniVenta" placeholder="Ej: 36" value="1"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <div class="field" style="flex:1;min-width:70px"><label>Precio 1</label><input type="number" step="0.01" id="productoP1"></div>
+      <div class="field" style="flex:1;min-width:70px"><label>Precio 2</label><input type="number" step="0.01" id="productoP2"></div>
+      <div class="field" style="flex:1;min-width:70px"><label>Precio 3</label><input type="number" step="0.01" id="productoP3"></div>
+      <div class="field" style="flex:1;min-width:70px"><label>Precio 4</label><input type="number" step="0.01" id="productoP4"></div>
+      <div class="field" style="flex:1;min-width:70px"><label>Precio 5</label><input type="number" step="0.01" id="productoP5"></div>
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px">
+        <input type="checkbox" id="productoActivo" checked style="width:16px;height:16px">
+        Producto activo (visible al armar pedidos)
+      </label>
+    </div>
+    <div id="productoGuardando" class="hidden" style="text-align:center;color:#888;font-size:13px;margin-bottom:8px">Guardando...</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p" id="btnGuardarProducto" onclick="guardarProducto()">Guardar producto</button>
+      <button class="btn btn-s" onclick="cerrarModal('mProducto')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -1761,20 +1843,41 @@ function fechaDDMMAAAAaISO(fecha){
   return p[2]+'-'+p[1]+'-'+p[0];
 }
 
+// La promo de bultos que antes estaba fija en el codigo ahora es una
+// promocion editable mas dentro de PROMOCIONES_CUSTOM (ver
+// migrarPromoBolsasOriginal). Esta funcion queda como un envoltorio simple
+// para no tener que cambiar quien la llama.
 function calcularBonificacion(items){
-  var partes=[];
-  var bultoBolsas = (items['GU9000'] || 0) + (items['GU9010'] || 0);
-  if(bultoBolsas>0){
-    if(bultoBolsas >= 5){
-      var bultosBonus = Math.floor(bultoBolsas / 5);
-      partes.push('Bonif: '+bultosBonus+' bulto'+(bultosBonus>1?'s':'')+' x '+bultoBolsas+' btos bolsa');
-    } else if(bultoBolsas === 4) partes.push('Bonif: +18 unid x 4 btos bolsa');
-    else if(bultoBolsas === 3) partes.push('Bonif: +9 unid x 3 btos bolsa');
-    else if(bultoBolsas === 2) partes.push('Bonif: +5 unid x 2 btos bolsa');
-  }
   var promosCustom=calcularPromosCustomAplicables(items);
-  for(var i=0;i<promosCustom.notas.length;i++) partes.push(promosCustom.notas[i]);
-  return partes.join(' | ');
+  return promosCustom.notas.join(' | ');
+}
+
+// Se ejecuta una sola vez (la primera vez que la app corre con esta
+// version): crea la promocion "Promo Bultos Bolsa" con el mismo
+// comportamiento que antes estaba fijo en el codigo, para que a partir de
+// ahora sea editable/eliminable desde Admin como cualquier otra promocion.
+// El tramo de "5 bultos o mas" (antes "1 bulto gratis cada 5") se expresa
+// en UNIDADES (36 unidades = 1 bulto de Menta/Tutti Frutti Bolsa) para que
+// toda la promocion use la misma unidad de principio a fin.
+function migrarPromoBolsasOriginal(){
+  var yaExiste=PROMOCIONES_CUSTOM.some(function(p){return p.id==='PROMO-BOLSAS-ORIGINAL';});
+  if(yaExiste) return;
+  PROMOCIONES_CUSTOM.push({
+    id:'PROMO-BOLSAS-ORIGINAL',
+    nombre:'Promo Bultos Bolsa',
+    productos:['GU9000','GU9010'],
+    tipoBeneficio:'unidades_gratis',
+    unidadBeneficio:'unidades',
+    rangos:[
+      {desde:2, hasta:2, valor:5},
+      {desde:3, hasta:3, valor:9},
+      {desde:4, hasta:4, valor:18},
+      {desde:5, hasta:null, valor:36, cada:5}
+    ],
+    observacion:'',
+    activa:true
+  });
+  guardarPromocionesCustomFirebase();
 }
 
 function mostrarLoading(msg){
@@ -2289,6 +2392,7 @@ function renderProds(){
   var html='';
   for(var i=0;i<PRODUCTOS.length;i++){
     var p=PRODUCTOS[i];
+    if(p.activo===false) continue;
     var qty=pedido.items[p.id]||0;
     var totalDisplaysRend=(pedido.items['GU9001']||0)+(pedido.items['GU9011']||0);
     var fpagoRend=''; try{fpagoRend=document.getElementById('fPago')?document.getElementById('fPago').value:'02';}catch(e){}
@@ -2298,8 +2402,10 @@ function renderProds(){
     var agotado=p.stock===0;
     var op=agotado?' style="opacity:.5"':'';
     var dis=agotado?' disabled':'';
-    var ini=p.sabor.substring(0,3).toUpperCase()+(p.tipo==='Display'?'-D':'-B');
-    html+='<div class="prod-card"'+op+'><div class="prod-icon" style="background:'+p.color+'">'+ini+'</div>'+
+    var iconoHtml=p.fotoUrl
+      ? '<div class="prod-icon" style="background:'+p.color+';padding:0;overflow:hidden"><img src="'+p.fotoUrl+'" style="width:100%;height:100%;object-fit:cover"></div>'
+      : '<div class="prod-icon" style="background:'+p.color+'">'+inicialesProducto(p)+'</div>';
+    html+='<div class="prod-card"'+op+'>'+iconoHtml+
       '<div class="prod-info"><div class="prod-name">'+p.nombre+'</div>'+
       '<div style="font-size:11px;color:#aaa;margin-top:1px">Ref: '+p.co_art+'</div>'+
       '<div class="prod-sub" id="precioTxt-'+p.id+'">$'+precio.toFixed(2)+'/bulto - '+(agotado?'Agotado':p.stock+' btos')+promoTxt+'</div></div>'+
@@ -2795,6 +2901,8 @@ function renderPedidoCard(p){
     :'<button onclick="editarPedido(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Editar</button>';
   var btnAnular='<button onclick="confirmarAnular(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Anular</button>';
   var btnReactivar=puedeReactivar(p)?'<button onclick="confirmarReactivar(&quot;'+p.id+'&quot;)" style="background:var(--verde-c);color:var(--verde);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Reactivar</button>':'';
+  var esAdminElim=(VEND.codigo==='01'||VEND.codigo==='20');
+  var btnEliminarDef=(anulado && esAdminElim)?'<button onclick="confirmarEliminarPedidoDef(&quot;'+p.id+'&quot;)" style="background:none;color:var(--rojo);border:1px solid var(--rojo);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Eliminar</button>':'';
   return '<div class="hist-card" style="border-left:3px solid '+cardBorder+';'+cardOpacity+'">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
       '<input type="checkbox" class="ped-check" data-id="'+p.id+'" '+(p._sel&&!anulado?'checked':'')+
@@ -2814,7 +2922,7 @@ function renderPedidoCard(p){
       '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
         enviadoBadge+
         (anulado
-          ?'<span class="tag tag-r">Anulado</span>'+(p.motivoAnulacion?' <span style="font-size:11px;color:var(--rojo)">'+p.motivoAnulacion+'</span>':'')+' '+btnReactivar
+          ?'<span class="tag tag-r">Anulado</span>'+(p.motivoAnulacion?' <span style="font-size:11px;color:var(--rojo)">'+p.motivoAnulacion+'</span>':'')+' '+btnReactivar+' '+btnEliminarDef
           :(btnEditar+btnAnular)
         )+
       '</div>' +
@@ -3667,11 +3775,14 @@ function renderInv(){
   var html='';
   for(var i=0;i<PRODUCTOS.length;i++){
     var p=PRODUCTOS[i];
+    if(p.activo===false) continue;
     var pct=Math.min(100,Math.round(p.stock/maxS*100));
     var color=p.stock===0?'#E24B4A':p.stock<5?'#EDA100':p.color;
     var label=p.stock===0?'Agotado':p.stock<5?'Stock bajo':'Disponible';
-    var ini=p.sabor.substring(0,3).toUpperCase()+(p.tipo==='Display'?'-D':'-B');
-    html+='<div class="prod-card"><div class="prod-icon" style="background:'+p.color+'">'+ini+'</div>'+
+    var iconoHtmlInv=p.fotoUrl
+      ? '<div class="prod-icon" style="background:'+p.color+';padding:0;overflow:hidden"><img src="'+p.fotoUrl+'" style="width:100%;height:100%;object-fit:cover"></div>'
+      : '<div class="prod-icon" style="background:'+p.color+'">'+inicialesProducto(p)+'</div>';
+    html+='<div class="prod-card">'+iconoHtmlInv+
       '<div class="prod-info" style="flex:1"><div class="prod-name">'+p.nombre+'</div>'+
       '<div style="font-size:11px;color:#aaa;margin-bottom:4px">Ref: '+p.co_art+'</div>'+
       '<div class="inv-bar-wrap"><div class="inv-bar" style="width:'+pct+'%;background:'+color+'"></div></div>'+
@@ -3722,6 +3833,7 @@ function renderStockHome(){
   var html='';
   for(var i=0;i<PRODUCTOS.length;i++){
     var p=PRODUCTOS[i];
+    if(p.activo===false) continue;
     var icon=p.stock===0?'X':p.stock<5?'!':'OK';
     html+=icon+' '+p.nombre+': '+(p.stock===0?'Agotado':p.stock+' bultos')+'<br>';
   }
@@ -3829,6 +3941,39 @@ function clienteTieneAlgunDoc(c){
 function fechaSeisDeEsteMes(){
   var ahora=new Date();
   return ahora.getFullYear()+'-'+String(ahora.getMonth()+1).padStart(2,'0')+'-06';
+}
+
+// Calcula el lunes de la semana actual (fecha local, formato YYYY-MM-DD)
+function fechaLunesDeEstaSemana(){
+  var hoy=new Date();
+  var diaSemana=hoy.getDay(); // 0=domingo, 1=lunes...
+  var offset=(diaSemana===0)?6:diaSemana-1;
+  var lunes=new Date(hoy);
+  lunes.setDate(hoy.getDate()-offset);
+  return lunes.getFullYear()+'-'+String(lunes.getMonth()+1).padStart(2,'0')+'-'+String(lunes.getDate()).padStart(2,'0');
+}
+
+function fechaHoyISO(){
+  var hoy=new Date();
+  return hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0');
+}
+
+// Botones rapidos de rango de fecha para el Control de Documentacion
+function filtroFechaDocs(tipo){
+  var desdeEl=document.getElementById('docsFiltroDesde');
+  var hastaEl=document.getElementById('docsFiltroHasta');
+  if(tipo==='semana'){
+    desdeEl.value=fechaLunesDeEstaSemana();
+    hastaEl.value=fechaHoyISO();
+  } else if(tipo==='mes'){
+    var hoy=new Date();
+    desdeEl.value=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-01';
+    hastaEl.value=fechaHoyISO();
+  } else if(tipo==='todos'){
+    desdeEl.value='';
+    hastaEl.value='';
+  }
+  renderControlDocs();
 }
 
 // Determina la fecha en que un cliente fue agregado al sistema. Usa el campo
@@ -4723,6 +4868,64 @@ function ejecutarReactivar(){
   }).catch(function(){ toast('Error al reactivar: no se pudo conectar con Firebase'); });
 }
 
+var pedidoEliminandoDefId=null;
+
+function confirmarEliminarPedidoDef(pid){
+  pedidoEliminandoDefId=pid;
+  document.getElementById('mEliminarPedidoDef').classList.add('open');
+}
+
+// Elimina un pedido POR COMPLETO (no como "Anulado" - desaparece del todo),
+// revisando los documentos de TODOS los vendedores por si hay copias
+// duplicadas (mismo motivo que ejecutarAnular/ejecutarReactivar), y las
+// borra de cualquier lugar donde aparezca. Restringido a 01/20 desde el
+// boton que la llama, por ser una accion irreversible.
+function ejecutarEliminarPedidoDef(){
+  if(!(VEND.codigo==='01'||VEND.codigo==='20')){ cerrarModal('mEliminarPedidoDef'); return; }
+  var vendIdsAllE=['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
+  var promesasE = vendIdsAllE.map(function(vid){
+    return db.collection('vendedores').doc(vid).get().then(function(doc){ return {vid:vid, doc:doc}; });
+  });
+  Promise.all(promesasE).then(function(resultados){
+    var coincidencias=[];
+    for(var r=0;r<resultados.length;r++){
+      var vid=resultados[r].vid, doc=resultados[r].doc;
+      if(!doc.exists) continue;
+      var data=doc.data();
+      var peds=[];
+      try{ peds=data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
+      for(var k=0;k<peds.length;k++){
+        if(String(peds[k].id)===String(pedidoEliminandoDefId)){
+          coincidencias.push({vid:vid, data:data, peds:peds, idx:k});
+          break;
+        }
+      }
+    }
+    if(coincidencias.length===0){
+      cerrarModal('mEliminarPedidoDef'); renderHistorial(); toast('Pedido no encontrado (puede que ya se haya eliminado)'); return;
+    }
+    var escrituras=[];
+    for(var c=0;c<coincidencias.length;c++){
+      var item=coincidencias[c];
+      item.peds.splice(item.idx,1);
+      escrituras.push(db.collection('vendedores').doc(item.vid).set({
+        pedidos: JSON.stringify(item.peds),
+        visitas: item.data.visitas||'[]',
+        clientesNuevos: item.data.clientesNuevos||'[]',
+        ultimaActualizacion: new Date().toISOString()
+      }, {merge:true}));
+    }
+    Promise.all(escrituras).then(function(){
+      cargarTodosFirebase(function(todos){
+        PEDIDOS = todos;
+        cerrarModal('mEliminarPedidoDef');
+        renderHistorial();
+        toast('Pedido eliminado permanentemente');
+      });
+    }).catch(function(){ toast('Error guardando cambios en Firebase'); });
+  }).catch(function(){ toast('Error al eliminar: no se pudo conectar con Firebase'); });
+}
+
 function confirmarReset(){
   document.getElementById('resetConfirmText').value='';
   document.getElementById('mReset').classList.add('open');
@@ -5233,6 +5436,28 @@ function guardarLimiteDeudaPedidos(){
 // ═══ ADMIN ═══
 var vendEditandoId = null;
 
+// El usuario 00 solo puede agregar/actualizar documentos nuevos, nunca
+// reemplazar toda la base (para evitar que una carga parcial borre por
+// error el resto de la cartera). 01 y 20 mantienen ambas opciones.
+function ajustarModoCargaCxC(){
+  var sel=document.getElementById('cxcModoCarga');
+  var avisoEl=document.getElementById('cxcModoCargaAviso');
+  if(!sel) return;
+  var esRestringido=(VEND && VEND.codigo==='00');
+  if(esRestringido){
+    sel.innerHTML='<option value="agregar">Agregar/actualizar sin borrar lo demas</option>';
+    sel.value='agregar';
+    sel.disabled=true;
+    if(avisoEl) avisoEl.innerHTML='Tu usuario solo puede agregar o actualizar documentos, no reemplazar toda la base. Si necesitas hacer una actualizacion completa, pidele a un administrador (01/20) que la realice.';
+  } else {
+    sel.innerHTML='<option value="reemplazar">Reemplazar toda la base (actualizacion periodica completa, "Sin Cancelar" entero)</option>'+
+      '<option value="agregar">Agregar/actualizar sin borrar lo demas (solo subo unos documentos nuevos)</option>';
+    sel.value='reemplazar';
+    sel.disabled=false;
+    if(avisoEl) avisoEl.innerHTML='⚠ Si subes un archivo con SOLO unos documentos nuevos, usa "Agregar/actualizar" — si eliges "Reemplazar" con un archivo parcial, se va a borrar todo lo que no venga en ese archivo.';
+  }
+}
+
 function adminTab(tab){
   var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico'];
   for(var i=0;i<tabs.length;i++){
@@ -5244,7 +5469,7 @@ function adminTab(tab){
     }
   }
   if(tab==='inventario') renderAdminInv();
-  if(tab==='precios'){ renderAdminPrecios(); renderListaPromosCustom(); }
+  if(tab==='precios'){ renderAdminProductos(); renderListaPromosCustom(); }
   if(tab==='vendedores') renderAdminVend();
   if(tab==='clientes'){
     document.getElementById('adminCliList').innerHTML='<div style="color:#aaa;text-align:center;padding:12px">Cargando clientes...</div>';
@@ -5257,7 +5482,7 @@ function adminTab(tab){
   if(tab==='docs'){
     var desdeElD=document.getElementById('docsFiltroDesde');
     var hastaElD=document.getElementById('docsFiltroHasta');
-    if(desdeElD && !desdeElD.value) desdeElD.value=fechaSeisDeEsteMes();
+    if(desdeElD && !desdeElD.value) desdeElD.value=fechaLunesDeEstaSemana();
     if(hastaElD && !hastaElD.value){
       var ahoraD=new Date();
       hastaElD.value=ahoraD.getFullYear()+'-'+String(ahoraD.getMonth()+1).padStart(2,'0')+'-'+String(ahoraD.getDate()).padStart(2,'0');
@@ -5272,6 +5497,7 @@ function adminTab(tab){
   if(tab==='cxc'){
     var limEl=document.getElementById('limiteDeudaInput');
     if(limEl) limEl.value=LIMITE_DEUDA_PEDIDOS>0?LIMITE_DEUDA_PEDIDOS:'';
+    ajustarModoCargaCxC();
     renderResumenCxC();
     document.getElementById('cxcPagosPendientesList').innerHTML='<div style="color:#aaa;text-align:center;padding:12px">Cargando...</div>';
     cargarTodosPagosCobranzaFirebase(function(pagos){
@@ -5361,48 +5587,189 @@ function cargarCSVInventario(input){
 }
 
 // --- PRECIOS ---
-function renderAdminPrecios(){
+// Iniciales genericas a partir del nombre del producto (no depende de que
+// sea Menta/Tutti Frutti/Bolsa/Display, sirve para cualquier articulo nuevo)
+function inicialesProducto(p){
+  var palabras=(p.nombre||'').trim().split(/\s+/);
+  var ini='';
+  for(var i=0;i<palabras.length && ini.length<3;i++){ ini+=palabras[i].substring(0,1).toUpperCase(); }
+  return ini||'?';
+}
+
+function colorAutoParaProducto(indice){
+  var paleta=['#1B2A6B','#2E44A8','#A32D2D','#C0392B','#1E7145','#16A085','#8E44AD','#D35400','#2980B9','#27AE60','#7D3C98','#B9770E'];
+  return paleta[indice % paleta.length];
+}
+
+function renderAdminProductos(){
+  var cont=document.getElementById('adminProductosList');
+  if(!cont) return;
   var html='';
   for(var i=0;i<PRODUCTOS.length;i++){
     var p=PRODUCTOS[i];
-    html+='<div style="padding:10px 0;border-bottom:1px solid var(--borde)">' +
-      '<div style="font-weight:600;font-size:13px;margin-bottom:8px">'+p.nombre+' <span style="font-size:11px;color:#aaa">'+p.co_art+'</span></div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-        '<div><label style="font-size:11px;text-transform:none;letter-spacing:0">P1</label>' +
-        '<input type="number" step="0.01" value="'+p.precio1+'" id="p1_'+p.id+'" style="width:90px;padding:6px;border:1.5px solid var(--borde);border-radius:6px;font-size:13px"></div>' +
-        '<div><label style="font-size:11px;text-transform:none;letter-spacing:0">P2</label>' +
-        '<input type="number" step="0.01" value="'+p.precio2+'" id="p2_'+p.id+'" style="width:90px;padding:6px;border:1.5px solid var(--borde);border-radius:6px;font-size:13px"></div>' +
-        '<div><label style="font-size:11px;text-transform:none;letter-spacing:0">P3</label>' +
-        '<input type="number" step="0.01" value="'+p.precio3+'" id="p3_'+p.id+'" style="width:90px;padding:6px;border:1.5px solid var(--borde);border-radius:6px;font-size:13px"></div>' +
-        '<div><label style="font-size:11px;text-transform:none;letter-spacing:0">P4</label>' +
-        '<input type="number" step="0.01" value="'+p.precio4+'" id="p4_'+p.id+'" style="width:90px;padding:6px;border:1.5px solid var(--borde);border-radius:6px;font-size:13px"></div>' +
-        '<div><label style="font-size:11px;text-transform:none;letter-spacing:0">P5</label>' +
-        '<input type="number" step="0.01" value="'+p.precio5+'" id="p5_'+p.id+'" style="width:90px;padding:6px;border:1.5px solid var(--borde);border-radius:6px;font-size:13px"></div>' +
-      '</div>' +
+    var fotoHtml=p.fotoUrl
+      ? '<img src="'+p.fotoUrl+'" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">'
+      : '<div style="width:56px;height:56px;border-radius:8px;background:'+(p.color||'#1B2A6B')+';color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">'+inicialesProducto(p)+'</div>';
+    var categoriaTxt=[p.sabor,p.tipo].filter(function(x){return x;}).join(' — ');
+    html+='<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--borde);'+(p.activo===false?'opacity:.5':'')+'">'+
+      fotoHtml+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-weight:600;font-size:13px">'+p.nombre+' <span style="font-size:11px;color:#aaa">'+p.id+'</span>'+(p.activo===false?' <span class="tag" style="background:#eee;color:#888;font-size:10px">Inactivo</span>':'')+'</div>'+
+        (categoriaTxt?'<div style="font-size:11px;color:#888">'+categoriaTxt+' | '+p.uni_venta+' unid/bulto</div>':'<div style="font-size:11px;color:#888">'+p.uni_venta+' unid/bulto</div>')+
+        '<div style="font-size:11px;color:var(--azul);margin-top:2px">P1 $'+p.precio1.toFixed(2)+' | P2 $'+p.precio2.toFixed(2)+' | P3 $'+p.precio3.toFixed(2)+' | P4 $'+p.precio4.toFixed(2)+' | P5 $'+p.precio5.toFixed(2)+'</div>'+
+        '<div style="display:flex;gap:6px;margin-top:6px">'+
+          '<button class="btn btn-s btn-sm" onclick="editarProducto(&quot;'+p.id+'&quot;)">Editar</button>'+
+          ((p.activo===false && (VEND.codigo==='01'||VEND.codigo==='20'))?'<button class="btn btn-s btn-sm" style="color:var(--rojo)" onclick="confirmarEliminarProductoDef(&quot;'+p.id+'&quot;)">Eliminar</button>':'')+
+        '</div>'+
+      '</div>'+
     '</div>';
   }
-  document.getElementById('adminPreciosList').innerHTML=html;
+  cont.innerHTML=html||'<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin productos</div>';
 }
 
-function guardarPrecios(){
-  for(var i=0;i<PRODUCTOS.length;i++){
-    var p=PRODUCTOS[i];
-    var inp1=document.getElementById('p1_'+p.id);
-    var inp2=document.getElementById('p2_'+p.id);
-    var inp3=document.getElementById('p3_'+p.id);
-    var inp4=document.getElementById('p4_'+p.id);
-    var inp5=document.getElementById('p5_'+p.id);
-    if(inp1) p.precio1=parseFloat(inp1.value)||p.precio1;
-    if(inp2) p.precio2=parseFloat(inp2.value)||p.precio2;
-    if(inp3) p.precio3=parseFloat(inp3.value)||p.precio3;
-    if(inp4) p.precio4=parseFloat(inp4.value)||p.precio4;
-    if(inp5) p.precio5=parseFloat(inp5.value)||p.precio5;
+var productoEditandoId=null;
+var productoFotoNueva=null;
+
+function abrirNuevoProducto(){
+  productoEditandoId=null;
+  productoFotoNueva=null;
+  document.getElementById('productoTitulo').textContent='Nuevo producto';
+  document.getElementById('productoCodigo').value='';
+  document.getElementById('productoCodigo').disabled=false;
+  document.getElementById('productoNombre').value='';
+  document.getElementById('productoSabor').value='';
+  document.getElementById('productoTipo').value='';
+  document.getElementById('productoUniVenta').value='1';
+  document.getElementById('productoP1').value='';
+  document.getElementById('productoP2').value='';
+  document.getElementById('productoP3').value='';
+  document.getElementById('productoP4').value='';
+  document.getElementById('productoP5').value='';
+  document.getElementById('productoActivo').checked=true;
+  document.getElementById('productoFotoInput').value='';
+  document.getElementById('productoFotoPreview').classList.add('hidden');
+  document.getElementById('mProducto').classList.add('open');
+}
+
+function editarProducto(id){
+  var p=PRODUCTOS.find(function(x){return x.id===id;});
+  if(!p) return;
+  productoEditandoId=id;
+  productoFotoNueva=null;
+  document.getElementById('productoTitulo').textContent='Editar producto';
+  document.getElementById('productoCodigo').value=p.id;
+  document.getElementById('productoCodigo').disabled=true;
+  document.getElementById('productoNombre').value=p.nombre;
+  document.getElementById('productoSabor').value=p.sabor||'';
+  document.getElementById('productoTipo').value=p.tipo||'';
+  document.getElementById('productoUniVenta').value=p.uni_venta;
+  document.getElementById('productoP1').value=p.precio1;
+  document.getElementById('productoP2').value=p.precio2;
+  document.getElementById('productoP3').value=p.precio3;
+  document.getElementById('productoP4').value=p.precio4;
+  document.getElementById('productoP5').value=p.precio5;
+  document.getElementById('productoActivo').checked=p.activo!==false;
+  document.getElementById('productoFotoInput').value='';
+  var prev=document.getElementById('productoFotoPreview');
+  if(p.fotoUrl){ prev.src=p.fotoUrl; prev.classList.remove('hidden'); }
+  else { prev.classList.add('hidden'); }
+  document.getElementById('mProducto').classList.add('open');
+}
+
+function previsualizarFotoProducto(input){
+  var file=input.files[0];
+  if(!file) return;
+  productoFotoNueva=file;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=document.getElementById('productoFotoPreview');
+    img.src=e.target.result;
+    img.classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+function guardarProducto(){
+  var codigo=document.getElementById('productoCodigo').value.trim();
+  var nombre=document.getElementById('productoNombre').value.trim();
+  if(!codigo||!nombre){ toast('Codigo y nombre son obligatorios'); return; }
+  if(!productoEditandoId && PRODUCTOS.some(function(x){return x.id===codigo;})){
+    toast('Ya existe un producto con ese codigo'); return;
   }
-  db.collection('config').doc('precios').set({
-    data: JSON.stringify(PRODUCTOS.map(function(p){return {id:p.id,precio1:p.precio1,precio2:p.precio2,precio3:p.precio3,precio4:p.precio4,precio5:p.precio5};})),
+  var uniVenta=parseInt(document.getElementById('productoUniVenta').value,10)||1;
+  var p1=parseFloat(document.getElementById('productoP1').value)||0;
+  var p2=parseFloat(document.getElementById('productoP2').value)||p1;
+  var p3=parseFloat(document.getElementById('productoP3').value)||p2;
+  var p4=parseFloat(document.getElementById('productoP4').value)||p3;
+  var p5=parseFloat(document.getElementById('productoP5').value)||p4;
+  var sabor=document.getElementById('productoSabor').value.trim();
+  var tipo=document.getElementById('productoTipo').value.trim();
+  var activo=document.getElementById('productoActivo').checked;
+
+  var btn=document.getElementById('btnGuardarProducto');
+  btn.disabled=true;
+  document.getElementById('productoGuardando').classList.remove('hidden');
+
+  function finalizarGuardadoProducto(fotoUrl){
+    var existente=PRODUCTOS.find(function(x){return x.id===codigo;});
+    if(existente){
+      existente.nombre=nombre; existente.sabor=sabor; existente.tipo=tipo;
+      existente.uni_venta=uniVenta; existente.precio1=p1; existente.precio2=p2;
+      existente.precio3=p3; existente.precio4=p4; existente.precio5=p5;
+      existente.activo=activo;
+      if(fotoUrl) existente.fotoUrl=fotoUrl;
+    } else {
+      PRODUCTOS.push({
+        id:codigo, co_art:codigo, ean:'',
+        nombre:nombre, sabor:sabor, tipo:tipo,
+        color:colorAutoParaProducto(PRODUCTOS.length),
+        precio1:p1, precio2:p2, precio3:p3, precio4:p4, precio5:p5,
+        stock:0, stock_und:0, uni_venta:uniVenta,
+        activo:activo, fotoUrl:fotoUrl||''
+      });
+    }
+    guardarCatalogoProductosFirebase();
+    btn.disabled=false;
+    document.getElementById('productoGuardando').classList.add('hidden');
+    cerrarModal('mProducto');
+    toast('Producto guardado');
+  }
+
+  if(productoFotoNueva){
+    subirArchivo(productoFotoNueva, 'productos/'+codigo+'/foto_'+Date.now()+'.jpg').then(function(url){
+      finalizarGuardadoProducto(url);
+    }).catch(function(){
+      toast('No se pudo subir la foto, se guardo el resto de los datos');
+      finalizarGuardadoProducto(null);
+    });
+  } else {
+    finalizarGuardadoProducto(null);
+  }
+}
+
+function guardarCatalogoProductosFirebase(){
+  renderAdminProductos();
+  db.collection('config').doc('catalogo_productos').set({
+    data: JSON.stringify(PRODUCTOS),
     actualizado: new Date().toISOString()
-  }).then(function(){ toast('Precios actualizados'); })
-  .catch(function(){ toast('Error al guardar precios'); });
+  }).catch(function(){ toast('Error al guardar el catalogo de productos'); });
+}
+
+var productoEliminandoDefId=null;
+
+function confirmarEliminarProductoDef(id){
+  productoEliminandoDefId=id;
+  document.getElementById('mEliminarProductoDef').classList.add('open');
+}
+
+function ejecutarEliminarProductoDef(){
+  if(!(VEND.codigo==='01'||VEND.codigo==='20')){ cerrarModal('mEliminarProductoDef'); return; }
+  var idx=PRODUCTOS.findIndex(function(x){return x.id===productoEliminandoDefId;});
+  if(idx<0){ cerrarModal('mEliminarProductoDef'); toast('Producto no encontrado'); return; }
+  PRODUCTOS.splice(idx,1);
+  guardarCatalogoProductosFirebase();
+  cerrarModal('mEliminarProductoDef');
+  toast('Producto eliminado permanentemente');
 }
 
 // ═══ PROMOCIONES PERSONALIZADAS ═══
@@ -5425,9 +5792,10 @@ function renderListaPromosCustom(){
       var prod=PRODUCTOS.find(function(x){return x.id===pid;});
       return prod?prod.nombre:pid;
     }).join(', ');
+    var unidadTxtList=promo.unidadBeneficio==='bultos'?'bulto(s)':'unid';
     var rangosTxt=promo.rangos.map(function(r){
       var rango=r.hasta?(r.desde+' a '+r.hasta):(r.desde+' o mas');
-      var val=promo.tipoBeneficio==='precio_lista'?('Precio '+r.valor):(promo.tipoBeneficio==='descuento_pct'?(r.valor+'%'):('+'+r.valor+' unid'));
+      var val=promo.tipoBeneficio==='precio_lista'?('Precio '+r.valor):(promo.tipoBeneficio==='descuento_pct'?(r.valor+'%'):(r.cada?('+'+r.valor+' '+unidadTxtList+' cada '+r.cada+' btos'):('+'+r.valor+' '+unidadTxtList)));
       return rango+' btos → '+val;
     }).join(' | ');
     html+='<div style="border:1px solid var(--borde);border-radius:10px;padding:10px;margin-bottom:8px;'+(promo.activa?'':'opacity:.5')+'">'+
@@ -5464,7 +5832,7 @@ function renderProductosCheckboxPromoCustom(seleccionados){
 }
 
 function agregarRangoPromoCustom(){
-  promoCustomRangosTemp.push({desde:'', hasta:'', valor:''});
+  promoCustomRangosTemp.push({desde:'', hasta:'', valor:'', cada:''});
   renderRangosPromoCustom();
 }
 function eliminarRangoPromoCustom(idx){
@@ -5476,18 +5844,27 @@ function actualizarRangoPromoCustom(idx, campo, valor){
 }
 function renderRangosPromoCustom(){
   var tipo=document.getElementById('promoCustomTipo').value;
-  var labelValor=tipo==='precio_lista'?'Lista (1-5)':(tipo==='descuento_pct'?'Descuento %':'Unidades gratis');
+  var esUnidadesGratis=tipo==='unidades_gratis';
+  var unidadWrap=document.getElementById('promoCustomUnidadWrap');
+  if(unidadWrap) unidadWrap.style.display=esUnidadesGratis?'block':'none';
+  var labelValor=tipo==='precio_lista'?'Lista (1-5)':(tipo==='descuento_pct'?'Descuento %':'Cantidad');
   var html='';
   for(var i=0;i<promoCustomRangosTemp.length;i++){
     var r=promoCustomRangosTemp[i];
-    html+='<div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:6px">'+
-      '<div style="flex:1"><label style="font-size:10px;text-transform:none;letter-spacing:0">Desde (btos)</label>'+
-        '<input type="number" value="'+r.desde+'" oninput="actualizarRangoPromoCustom('+i+',&quot;desde&quot;,this.value)" style="width:100%;padding:6px;font-size:13px"></div>'+
-      '<div style="flex:1"><label style="font-size:10px;text-transform:none;letter-spacing:0">Hasta (vacio=o mas)</label>'+
-        '<input type="number" value="'+r.hasta+'" oninput="actualizarRangoPromoCustom('+i+',&quot;hasta&quot;,this.value)" style="width:100%;padding:6px;font-size:13px"></div>'+
-      '<div style="flex:1"><label style="font-size:10px;text-transform:none;letter-spacing:0">'+labelValor+'</label>'+
-        '<input type="number" value="'+r.valor+'" oninput="actualizarRangoPromoCustom('+i+',&quot;valor&quot;,this.value)" style="width:100%;padding:6px;font-size:13px"></div>'+
-      '<button type="button" onclick="eliminarRangoPromoCustom('+i+')" style="background:none;border:none;color:var(--rojo);font-size:12px;font-weight:600;cursor:pointer;padding:6px">Quitar</button>'+
+    html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:8px;margin-bottom:6px">'+
+      '<div style="display:flex;gap:6px;align-items:flex-end">'+
+        '<div style="flex:1"><label style="font-size:10px;text-transform:none;letter-spacing:0">Desde (btos)</label>'+
+          '<input type="number" value="'+r.desde+'" oninput="actualizarRangoPromoCustom('+i+',&quot;desde&quot;,this.value)" style="width:100%;padding:6px;font-size:13px"></div>'+
+        '<div style="flex:1"><label style="font-size:10px;text-transform:none;letter-spacing:0">Hasta (vacio=o mas)</label>'+
+          '<input type="number" value="'+r.hasta+'" oninput="actualizarRangoPromoCustom('+i+',&quot;hasta&quot;,this.value)" style="width:100%;padding:6px;font-size:13px"></div>'+
+        '<div style="flex:1"><label style="font-size:10px;text-transform:none;letter-spacing:0">'+labelValor+'</label>'+
+          '<input type="number" value="'+r.valor+'" oninput="actualizarRangoPromoCustom('+i+',&quot;valor&quot;,this.value)" style="width:100%;padding:6px;font-size:13px"></div>'+
+        '<button type="button" onclick="eliminarRangoPromoCustom('+i+')" style="background:none;border:none;color:var(--rojo);font-size:12px;font-weight:600;cursor:pointer;padding:6px">Quitar</button>'+
+      '</div>'+
+      (esUnidadesGratis?(
+        '<div style="margin-top:6px"><label style="font-size:10px;text-transform:none;letter-spacing:0">Repetir cada cuantos bultos (opcional — dejar vacio para que sea un monto fijo, una sola vez, al llegar al rango)</label>'+
+          '<input type="number" value="'+(r.cada||'')+'" oninput="actualizarRangoPromoCustom('+i+',&quot;cada&quot;,this.value)" placeholder="Ej: 5 (1 bulto gratis por cada 5 comprados)" style="width:100%;padding:6px;font-size:13px"></div>'
+      ):'')+
     '</div>';
   }
   document.getElementById('promoCustomRangos').innerHTML=html||'<div style="color:#aaa;font-size:12px">Agrega al menos un rango</div>';
@@ -5498,10 +5875,11 @@ function abrirNuevaPromoCustom(){
   document.getElementById('promoCustomTitulo').textContent='Nueva promocion';
   document.getElementById('promoCustomNombre').value='';
   document.getElementById('promoCustomTipo').value='unidades_gratis';
+  document.getElementById('promoCustomUnidad').value='unidades';
   document.getElementById('promoCustomObservacion').value='';
   document.getElementById('promoCustomActiva').checked=true;
   renderProductosCheckboxPromoCustom([]);
-  promoCustomRangosTemp=[{desde:'',hasta:'',valor:''}];
+  promoCustomRangosTemp=[{desde:'',hasta:'',valor:'',cada:''}];
   renderRangosPromoCustom();
   document.getElementById('mPromoCustom').classList.add('open');
 }
@@ -5513,10 +5891,11 @@ function editarPromoCustom(id){
   document.getElementById('promoCustomTitulo').textContent='Editar promocion';
   document.getElementById('promoCustomNombre').value=promo.nombre;
   document.getElementById('promoCustomTipo').value=promo.tipoBeneficio;
+  document.getElementById('promoCustomUnidad').value=promo.unidadBeneficio||'unidades';
   document.getElementById('promoCustomObservacion').value=promo.observacion||'';
   document.getElementById('promoCustomActiva').checked=promo.activa;
   renderProductosCheckboxPromoCustom(promo.productos);
-  promoCustomRangosTemp=promo.rangos.map(function(r){return {desde:r.desde, hasta:r.hasta===null?'':r.hasta, valor:r.valor};});
+  promoCustomRangosTemp=promo.rangos.map(function(r){return {desde:r.desde, hasta:r.hasta===null?'':r.hasta, valor:r.valor, cada:r.cada||''};});
   renderRangosPromoCustom();
   document.getElementById('mPromoCustom').classList.add('open');
 }
@@ -5540,6 +5919,7 @@ function guardarPromoCustom(){
   var productos=Array.prototype.map.call(chks, function(c){return c.value;});
   if(productos.length===0){ toast('Selecciona al menos un producto'); return; }
   var tipoBeneficio=document.getElementById('promoCustomTipo').value;
+  var unidadBeneficio=document.getElementById('promoCustomUnidad').value;
   var rangos=[];
   for(var i=0;i<promoCustomRangosTemp.length;i++){
     var r=promoCustomRangosTemp[i];
@@ -5549,7 +5929,12 @@ function guardarPromoCustom(){
     var valor=parseFloat(r.valor);
     if(isNaN(valor)){ toast('Revisa el valor del rango '+(i+1)); return; }
     if(tipoBeneficio==='precio_lista' && (valor<1||valor>5)){ toast('La lista de precio debe ser un numero entre 1 y 5'); return; }
-    rangos.push({desde:desde, hasta:hasta, valor:valor});
+    var rangoObj={desde:desde, hasta:hasta, valor:valor};
+    if(tipoBeneficio==='unidades_gratis'){
+      var cada=parseInt(r.cada,10);
+      if(!isNaN(cada) && cada>0) rangoObj.cada=cada;
+    }
+    rangos.push(rangoObj);
   }
   if(rangos.length===0){ toast('Agrega al menos un rango'); return; }
   rangos.sort(function(a,b){return a.desde-b.desde;});
@@ -5559,12 +5944,13 @@ function guardarPromoCustom(){
     var promo=PROMOCIONES_CUSTOM.find(function(x){return x.id===promoCustomEditandoId;});
     if(promo){
       promo.nombre=nombre; promo.productos=productos; promo.tipoBeneficio=tipoBeneficio;
+      promo.unidadBeneficio=unidadBeneficio;
       promo.rangos=rangos; promo.observacion=observacion; promo.activa=document.getElementById('promoCustomActiva').checked;
     }
   } else {
     PROMOCIONES_CUSTOM.push({
       id:'PROMO-'+Date.now(),
-      nombre:nombre, productos:productos, tipoBeneficio:tipoBeneficio,
+      nombre:nombre, productos:productos, tipoBeneficio:tipoBeneficio, unidadBeneficio:unidadBeneficio,
       rangos:rangos, observacion:observacion, activa:document.getElementById('promoCustomActiva').checked
     });
   }
@@ -5605,7 +5991,14 @@ function calcularPromosCustomAplicables(items){
     }
     if(!rangoAplicable) continue;
     if(promo.tipoBeneficio==='unidades_gratis'){
-      notas.push(promo.nombre+': +'+rangoAplicable.valor+' unid gratis ('+totalBultos+' btos)');
+      var unidadTxt=promo.unidadBeneficio==='bultos'?'bulto':'unid';
+      if(rangoAplicable.cada){
+        var veces=Math.floor(totalBultos/rangoAplicable.cada);
+        var cantidad=veces*rangoAplicable.valor;
+        if(cantidad>0) notas.push(promo.nombre+': +'+cantidad+' '+unidadTxt+(cantidad!==1?(unidadTxt==='bulto'?'s':''):'')+' gratis ('+totalBultos+' btos, '+rangoAplicable.valor+' '+unidadTxt+' cada '+rangoAplicable.cada+' btos)');
+      } else {
+        notas.push(promo.nombre+': +'+rangoAplicable.valor+' '+unidadTxt+(rangoAplicable.valor!==1?(unidadTxt==='bulto'?'s':''):'')+' gratis ('+totalBultos+' btos)');
+      }
     } else {
       for(var j=0;j<promo.productos.length;j++){
         overrides[promo.productos[j]]={tipo:promo.tipoBeneficio, valor:rangoAplicable.valor, nombrePromo:promo.nombre};
@@ -5623,32 +6016,49 @@ function cargarCSVPrecios(input){
     var reader=new FileReader();
     reader.onload=function(e){
       parsearDBF(e.target.result,function(fields,records){
-        var act=0;
+        var act=0, nuevos=0;
         for(var i=0;i<records.length;i++){
           var rec=records[i];
           var co=(rec['CO_ART']||'').trim();
           if(!co) continue;
-          for(var j=0;j<PRODUCTOS.length;j++){
-            if(PRODUCTOS[j].id===co){
-              // Los precios en DBF son doubles IEEE 754 - ya parseados como string
-              // intentar parseFloat
-              var p1=parseFloat(rec['PREC_VTA1']);
-              var p2=parseFloat(rec['PREC_VTA2']);
-              var p3=parseFloat(rec['PREC_VTA3']);
-              var p4=parseFloat(rec['PREC_VTA4']);
-              var p5=parseFloat(rec['PREC_VTA5']);
-              if(p1>0) PRODUCTOS[j].precio1=Math.round(p1*100)/100;
-              if(p2>0) PRODUCTOS[j].precio2=Math.round(p2*100)/100;
-              if(p3>0) PRODUCTOS[j].precio3=Math.round(p3*100)/100;
-              if(p4>0) PRODUCTOS[j].precio4=Math.round(p4*100)/100;
-              if(p5>0) PRODUCTOS[j].precio5=Math.round(p5*100)/100;
-              act++;break;
-            }
+          // Los precios en DBF son doubles IEEE 754 - ya parseados como string
+          var p1=parseFloat(rec['PREC_VTA1'])||0;
+          var p2=parseFloat(rec['PREC_VTA2'])||0;
+          var p3=parseFloat(rec['PREC_VTA3'])||0;
+          var p4=parseFloat(rec['PREC_VTA4'])||0;
+          var p5=parseFloat(rec['PREC_VTA5'])||0;
+          var encontrado=null;
+          for(var j=0;j<PRODUCTOS.length;j++){ if(PRODUCTOS[j].id===co){ encontrado=PRODUCTOS[j]; break; } }
+          if(encontrado){
+            if(p1>0) encontrado.precio1=Math.round(p1*100)/100;
+            if(p2>0) encontrado.precio2=Math.round(p2*100)/100;
+            if(p3>0) encontrado.precio3=Math.round(p3*100)/100;
+            if(p4>0) encontrado.precio4=Math.round(p4*100)/100;
+            if(p5>0) encontrado.precio5=Math.round(p5*100)/100;
+            act++;
+          } else if(p1>0){
+            // Codigo nuevo que no existia: se agrega solo. El nombre puede
+            // no venir en este archivo (solo trae precios), asi que si no
+            // se encuentra descripcion se usa el propio codigo - se puede
+            // renombrar despues desde "Editar".
+            var nombreNuevo=(rec['DES_ART']||rec['DESCRIPCION']||rec['NOMBRE']||co).toString().trim();
+            PRODUCTOS.push({
+              id:co, co_art:co, ean:rec['EAN']||'',
+              nombre:nombreNuevo, sabor:'', tipo:'',
+              color:colorAutoParaProducto(PRODUCTOS.length),
+              precio1:Math.round(p1*100)/100,
+              precio2:p2>0?Math.round(p2*100)/100:Math.round(p1*100)/100,
+              precio3:p3>0?Math.round(p3*100)/100:Math.round(p1*100)/100,
+              precio4:p4>0?Math.round(p4*100)/100:Math.round(p1*100)/100,
+              precio5:p5>0?Math.round(p5*100)/100:Math.round(p1*100)/100,
+              stock:0, stock_und:0, uni_venta:parseInt(rec['UNI_VENTA'])||1,
+              activo:true, fotoUrl:''
+            });
+            nuevos++;
           }
         }
-        guardarPrecios();
-        renderAdminPrecios();
-        toast(act+' precios actualizados desde DBF');
+        guardarCatalogoProductosFirebase();
+        toast(act+' precios actualizados'+(nuevos>0?', '+nuevos+' productos nuevos agregados (revisa nombre y foto en Editar)':'')+' desde DBF');
       });
     };
     reader.readAsArrayBuffer(file);
@@ -5664,25 +6074,42 @@ function cargarCSVPrecios(input){
     var idxP3=headers.indexOf('PREC_VTA3');
     var idxP4=headers.indexOf('PREC_VTA4');
     var idxP5=headers.indexOf('PREC_VTA5');
+    var idxDes=headers.indexOf('DES_ART');
     if(idxArt<0){toast('CSV debe tener columna CO_ART');return;}
-    var act=0;
+    var act=0, nuevos=0;
     for(var i=1;i<lines.length;i++){
       var cols=lines[i].split(',').map(function(c){return c.trim().replace(/"/g,'');});
       if(!cols[idxArt]) continue;
-      for(var j=0;j<PRODUCTOS.length;j++){
-        if(PRODUCTOS[j].id===cols[idxArt]){
-          if(idxP1>=0&&cols[idxP1]) PRODUCTOS[j].precio1=parseFloat(cols[idxP1])||PRODUCTOS[j].precio1;
-          if(idxP2>=0&&cols[idxP2]) PRODUCTOS[j].precio2=parseFloat(cols[idxP2])||PRODUCTOS[j].precio2;
-          if(idxP3>=0&&cols[idxP3]) PRODUCTOS[j].precio3=parseFloat(cols[idxP3])||PRODUCTOS[j].precio3;
-          if(idxP4>=0&&cols[idxP4]) PRODUCTOS[j].precio4=parseFloat(cols[idxP4])||PRODUCTOS[j].precio4;
-          if(idxP5>=0&&cols[idxP5]) PRODUCTOS[j].precio5=parseFloat(cols[idxP5])||PRODUCTOS[j].precio5;
-          act++; break;
-        }
+      var co=cols[idxArt];
+      var p1=(idxP1>=0&&cols[idxP1])?parseFloat(cols[idxP1])||0:0;
+      var p2=(idxP2>=0&&cols[idxP2])?parseFloat(cols[idxP2])||0:0;
+      var p3=(idxP3>=0&&cols[idxP3])?parseFloat(cols[idxP3])||0:0;
+      var p4=(idxP4>=0&&cols[idxP4])?parseFloat(cols[idxP4])||0:0;
+      var p5=(idxP5>=0&&cols[idxP5])?parseFloat(cols[idxP5])||0:0;
+      var encontrado=null;
+      for(var j=0;j<PRODUCTOS.length;j++){ if(PRODUCTOS[j].id===co){ encontrado=PRODUCTOS[j]; break; } }
+      if(encontrado){
+        if(p1>0) encontrado.precio1=p1;
+        if(p2>0) encontrado.precio2=p2;
+        if(p3>0) encontrado.precio3=p3;
+        if(p4>0) encontrado.precio4=p4;
+        if(p5>0) encontrado.precio5=p5;
+        act++;
+      } else if(p1>0){
+        var nombreNuevo=(idxDes>=0&&cols[idxDes])?cols[idxDes]:co;
+        PRODUCTOS.push({
+          id:co, co_art:co, ean:'',
+          nombre:nombreNuevo, sabor:'', tipo:'',
+          color:colorAutoParaProducto(PRODUCTOS.length),
+          precio1:p1, precio2:p2>0?p2:p1, precio3:p3>0?p3:p1, precio4:p4>0?p4:p1, precio5:p5>0?p5:p1,
+          stock:0, stock_und:0, uni_venta:1,
+          activo:true, fotoUrl:''
+        });
+        nuevos++;
       }
     }
-    guardarPrecios();
-    renderAdminPrecios();
-    toast(act+' precios actualizados');
+    guardarCatalogoProductosFirebase();
+    toast(act+' precios actualizados'+(nuevos>0?', '+nuevos+' productos nuevos agregados (revisa nombre, unidades por bulto y foto en Editar)':''));
   };
   reader.readAsText(file);
 }
@@ -6295,7 +6722,8 @@ function cargarConfigFirebase(callback){
     db.collection('config').doc('cuentas_cobrar_real').get(),
     db.collection('config').doc('cuentas_cobrar_fiscal').get(),
     db.collection('config').doc('limite_deuda').get(),
-    db.collection('config').doc('promociones_custom').get()
+    db.collection('config').doc('promociones_custom').get(),
+    db.collection('config').doc('catalogo_productos').get()
   ];
   Promise.all(promesas).then(function(docs){
     // Inventario
@@ -6336,6 +6764,18 @@ function cargarConfigFirebase(callback){
               break;
             }
           }
+        }
+      }
+    }catch(e){}
+    // Catalogo completo de productos (reemplaza el listado inicial si ya
+    // se ha usado la gestion de productos en Admin - permite agregar
+    // articulos nuevos, fotos, sabores/tipos libres, etc.)
+    try{
+      if(docs[10] && docs[10].exists){
+        var catalogo=JSON.parse(docs[10].data().data||'[]');
+        if(catalogo.length>0){
+          PRODUCTOS.length=0;
+          for(var i=0;i<catalogo.length;i++) PRODUCTOS.push(catalogo[i]);
         }
       }
     }catch(e){}
@@ -6399,6 +6839,7 @@ function cargarConfigFirebase(callback){
         PROMOCIONES_CUSTOM.length=0;
         for(var i=0;i<promosGuardadas.length;i++) PROMOCIONES_CUSTOM.push(promosGuardadas[i]);
       }
+      migrarPromoBolsasOriginal();
     }catch(e){}
     // Llamar callback cuando todo está listo
     if(callback) callback();
@@ -6427,34 +6868,72 @@ function parsearExcelCxC(file, callback){
     try{
       var data=new Uint8Array(e.target.result);
       var wb=XLSX.read(data,{type:'array',cellDates:true});
-      var sheet=wb.Sheets[wb.SheetNames[0]];
-      var rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null});
-      var headerIdx=-1;
-      for(var i=0;i<rows.length;i++){
-        if(rows[i] && String(rows[i][0]||'').trim().toUpperCase()==='NUMERO'){ headerIdx=i; break; }
+      // Buscar la columna "NUMERO" recorriendo TODAS las hojas del archivo
+      // (no solo la primera), por si el reporte trae una hoja de portada
+      // (nombre de la empresa, RIF, fecha) antes de la hoja con la tabla de
+      // datos real. Dentro de la hoja donde se encuentre, tambien se busca
+      // en CUALQUIER columna (no solo la A), por si hay alguna columna
+      // extra al inicio. Las demas columnas se ubican de forma RELATIVA a
+      // donde se encontro NUMERO, para que el resto no se desalinee.
+      var rows=null, headerIdx=-1, numeroCol=-1, hojaUsada=null, encabezadoAprox=false;
+      var primerasFilasPortada=null;
+      for(var s=0;s<wb.SheetNames.length && headerIdx===-1;s++){
+        var sheet=wb.Sheets[wb.SheetNames[s]];
+        var rowsHoja=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null});
+        if(s===0){
+          primerasFilasPortada=rowsHoja.slice(0,3).map(function(r){ return r?r.filter(function(x){return x!==null&&x!=='';}).slice(0,6).join(' | '):''; }).join(' // ');
+        }
+        for(var i=0;i<rowsHoja.length && headerIdx===-1;i++){
+          if(!rowsHoja[i]) continue;
+          for(var c=0;c<rowsHoja[i].length;c++){
+            if(String(rowsHoja[i][c]||'').trim().toUpperCase()==='NUMERO'){ headerIdx=i; numeroCol=c; rows=rowsHoja; hojaUsada=wb.SheetNames[s]; break; }
+          }
+        }
+        // Algunos reportes de Profit traen la celda de "NUMERO" corrupta
+        // (por ejemplo, mostrando un numero de fila en vez del texto). Si no
+        // se encontro "NUMERO" tal cual, se usa "EMISION" seguido de
+        // "VENCIMIENTO" como ancla alternativa: esa es siempre la columna
+        // inmediatamente despues de NUMERO, asi que se puede inferir su
+        // posicion aunque el texto de esa celda especifica este dañado.
+        if(headerIdx===-1){
+          for(var i=0;i<rowsHoja.length && headerIdx===-1;i++){
+            if(!rowsHoja[i]) continue;
+            for(var c=1;c<rowsHoja[i].length;c++){
+              if(String(rowsHoja[i][c]||'').trim().toUpperCase()==='EMISION' &&
+                 String(rowsHoja[i][c+1]||'').trim().toUpperCase()==='VENCIMIENTO'){
+                headerIdx=i; numeroCol=c-1; rows=rowsHoja; hojaUsada=wb.SheetNames[s]; encabezadoAprox=true; break;
+              }
+            }
+          }
+        }
       }
-      if(headerIdx===-1){ callback(null,'No se encontro el encabezado NUMERO en el archivo. Verifica que sea el reporte "Facturas por Numero" de Profit.'); return; }
+      if(headerIdx===-1){
+        callback(null,'No se encontro una columna llamada "NUMERO" (ni "EMISION"/"VENCIMIENTO" como referencia) en ninguna de las '+wb.SheetNames.length+' hoja(s) del archivo ('+wb.SheetNames.join(', ')+'). Verifica que sea el reporte "Facturas por Numero" de Profit. Primeras filas leidas: '+primerasFilasPortada);
+        return;
+      }
+      var col=function(offset){ return numeroCol+offset; };
       var docs=[];
+      var filasVacias=0, filasSaldoCero=0, filasTotal=0;
       for(var i=headerIdx+1;i<rows.length;i++){
         var r=rows[i];
-        if(!r || r[0]===null || r[0]===undefined || String(r[0]).trim()==='') continue;
-        if(String(r[0]).trim().toLowerCase().indexOf('total')>=0) continue;
-        var saldo=parseFloat(r[9])||0;
-        if(saldo<=0.009) continue; // ya cancelado, no es cuenta pendiente
+        if(!r || r[numeroCol]===null || r[numeroCol]===undefined || String(r[numeroCol]).trim()===''){ filasVacias++; continue; }
+        if(String(r[numeroCol]).trim().toLowerCase().indexOf('total')>=0){ filasTotal++; continue; }
+        var saldo=parseFloat(r[col(9)])||0;
+        if(saldo<=0.009){ filasSaldoCero++; continue; } // ya cancelado, no es cuenta pendiente
         docs.push({
-          numero:String(r[0]).trim(),
-          emision:formatearFechaExcel(r[1]),
-          vencimiento:formatearFechaExcel(r[2]),
-          clienteId:String(r[3]||'').trim(),
-          clienteNombre:String(r[4]||'').trim(),
-          vendedor:String(r[5]||'').trim(),
-          iva:parseFloat(r[6])||0,
-          otros:parseFloat(r[7])||0,
-          neto:parseFloat(r[8])||0,
+          numero:String(r[numeroCol]).trim(),
+          emision:formatearFechaExcel(r[col(1)]),
+          vencimiento:formatearFechaExcel(r[col(2)]),
+          clienteId:String(r[col(3)]||'').trim(),
+          clienteNombre:String(r[col(4)]||'').trim(),
+          vendedor:String(r[col(5)]||'').trim(),
+          iva:parseFloat(r[col(6)])||0,
+          otros:parseFloat(r[col(7)])||0,
+          neto:parseFloat(r[col(8)])||0,
           saldo:saldo
         });
       }
-      callback(docs,null);
+      callback(docs,null,{filasVacias:filasVacias,filasSaldoCero:filasSaldoCero,filasTotal:filasTotal,numeroCol:numeroCol,hoja:hojaUsada,encabezadoAprox:encabezadoAprox});
     }catch(err){
       callback(null,'Error leyendo el archivo: '+err.message);
     }
@@ -6585,19 +7064,43 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
   return {resultado:resultado, coincidencias:coincidencias, docsDiferencia:docsDiferencia, descartadosFiscal:descartadosFiscal};
 }
 
+// Combina una base existente con los documentos recien leidos de un Excel,
+// SIN borrar nada que no venga en el archivo nuevo: si el documento ya
+// existe (mismo numero) se actualiza con los datos frescos, y si no existe
+// se agrega. Se usa cuando el admin sube un archivo que solo trae algunos
+// documentos nuevos, no el reporte completo de "Sin Cancelar".
+function fusionarDocsExcelConBase(baseExistente, docsNuevos){
+  var resultado=baseExistente.slice();
+  for(var i=0;i<docsNuevos.length;i++){
+    var nuevo=docsNuevos[i];
+    var idx=-1;
+    for(var j=0;j<resultado.length;j++){ if(resultado[j].numero===nuevo.numero){ idx=j; break; } }
+    if(idx>=0) resultado[idx]=nuevo;
+    else resultado.push(nuevo);
+  }
+  return resultado;
+}
+
 function cargarExcelCxC(input, tipo){
   var file=input.files[0]; if(!file) return;
   var nombreBase=(tipo==='real'?'REAL':'FISCAL');
+  var modoCarga=document.getElementById('cxcModoCarga')?document.getElementById('cxcModoCarga').value:'reemplazar';
   var estadoEl=document.getElementById('cxcEstadoCarga');
   estadoEl.innerHTML='<span style="color:#aaa">Leyendo archivo '+nombreBase+'...</span>';
-  parsearExcelCxC(file,function(docs,error){
+  parsearExcelCxC(file,function(docs,error,diag){
     if(error){ estadoEl.innerHTML='<span style="color:var(--rojo)">'+error+'</span>'; return; }
     if(!docs||docs.length===0){ estadoEl.innerHTML='<span style="color:var(--rojo)">No se encontraron documentos con saldo pendiente</span>'; return; }
-    if(tipo==='real'){ CUENTAS_COBRAR_REAL=docs; } else { CUENTAS_COBRAR_FISCAL=docs; }
+    var diagTxt=diag?(' <span style="color:'+(diag.encabezadoAprox?'var(--ambar)':'#888')+'">(hoja "'+diag.hoja+'", columna NUMERO en la posicion '+(diag.numeroCol+1)+(diag.encabezadoAprox?' — detectada por EMISION/VENCIMIENTO, la celda NUMERO venia dañada en este archivo':'')+' | '+diag.filasSaldoCero+' filas con saldo 0 descartadas, '+diag.filasVacias+' filas vacias, '+diag.filasTotal+' filas de total)</span>'):'';
+    if(tipo==='real'){
+      CUENTAS_COBRAR_REAL = modoCarga==='agregar' ? fusionarDocsExcelConBase(CUENTAS_COBRAR_REAL, docs) : docs;
+    } else {
+      CUENTAS_COBRAR_FISCAL = modoCarga==='agregar' ? fusionarDocsExcelConBase(CUENTAS_COBRAR_FISCAL, docs) : docs;
+    }
     var docConfig=(tipo==='real'?'cuentas_cobrar_real':'cuentas_cobrar_fiscal');
+    var baseActualizada=(tipo==='real'?CUENTAS_COBRAR_REAL:CUENTAS_COBRAR_FISCAL);
     estadoEl.innerHTML='<span style="color:#aaa">Guardando base '+nombreBase+'...</span>';
     db.collection('config').doc(docConfig).set({
-      data:JSON.stringify(docs),
+      data:JSON.stringify(baseActualizada),
       actualizado:new Date().toISOString()
     }).then(function(){
       estadoEl.innerHTML='<span style="color:#aaa">Cruzando bases real y fiscal...</span>';
@@ -6609,7 +7112,8 @@ function cargarExcelCxC(input, tipo){
           actualizado:new Date().toISOString()
         }).then(function(){
           var faltaOtra=(tipo==='real' && CUENTAS_COBRAR_FISCAL.length===0) || (tipo==='fiscal' && CUENTAS_COBRAR_REAL.length===0);
-          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.descartadosFiscal>0?' | '+fusion.descartadosFiscal+' fiscales descartados (sin match en Real)':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+'</span>'+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'');
+          var modoTxt=modoCarga==='agregar'?'Modo: agregado/actualizado sin borrar lo demas. ':'Modo: base reemplazada por completo. ';
+          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+modoTxt+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.descartadosFiscal>0?' | '+fusion.descartadosFiscal+' fiscales descartados (sin match en Real)':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+'</span>'+diagTxt+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'');
           toast('Base de Cuentas por Cobrar actualizada');
           renderResumenCxC();
           input.value='';
