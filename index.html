@@ -665,6 +665,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-docs" onclick="adminTab('docs')">Documentacion</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-cxc" onclick="adminTab('cxc')">Cuentas x Cobrar</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-historico" onclick="adminTab('historico')">Historico</button>
+      <button class="btn btn-s btn-sm admin-tab-btn" id="atab-reposicion" onclick="adminTab('reposicion')">Reposicion</button>
     </div>
 
     <!-- TAB INVENTARIO -->
@@ -826,6 +827,12 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         </div>
         <div id="cxcListaCompleta"></div>
       </div>
+      <div class="card" id="cxcVerificadorCard" style="display:none">
+        <div class="card-title">Verificador de integridad de cobros</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Revisa si hay documentos duplicados en la base actual, o pagos ya confirmados cuyo documento cargado no refleja ese abono (por ejemplo, por una recarga de Excel que lo sobreescribio).</p>
+        <button class="btn btn-p btn-sm" onclick="verificarIntegridadCobros()">Verificar ahora</button>
+        <div id="cxcVerificadorResultado" style="margin-top:10px"></div>
+      </div>
     </div>
 
     <!-- TAB HISTORICO -->
@@ -840,6 +847,73 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <div id="historicoInfo" style="font-size:13px;color:#555;margin-top:10px"></div>
         <div id="historicoEstado" style="font-size:13px;margin-top:6px"></div>
         <button class="btn btn-p" onclick="cargarHistoricoProfit()" id="btnCargarHistorico" style="margin-top:8px" disabled>Guardar en Firebase</button>
+      </div>
+    </div>
+
+    <!-- TAB REPOSICION -->
+    <div id="adminTab-reposicion" style="display:none">
+      <div class="card">
+        <div class="card-title">Configuracion del contenedor</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Estos datos son los mismos para todos los sabores y presentaciones, porque todo viaja junto en un solo contenedor desde el mismo origen. El sistema simula el acomodo fisico real (columnas x capas) usando las medidas estandar de un contenedor 40' o 40HQ - tu solo eliges cuanto espacio de aire dejar arriba.</p>
+        <div class="field"><label>Espacio de aire/ventilacion en el tope (cm)</label><input type="number" id="repoEspacioAire" placeholder="12"></div>
+        <p style="font-size:11px;color:#888;margin-top:-6px;margin-bottom:10px">Espacio que se deja libre entre la ultima capa de cajas y el techo del contenedor (tipico 10-15cm). Se resta de la altura antes de calcular cuantas capas caben. El tipo de contenedor (40' o 40HQ) se elige mas abajo, al calcular la sugerencia.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:110px"><label>Dias de produccion</label><input type="number" id="repoDiasProduccion"></div>
+          <div class="field" style="flex:1;min-width:110px"><label>Dias de envio (transito)</label><input type="number" id="repoDiasEnvio"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:110px"><label>Ciclo sugerido (dias entre pedidos)</label><input type="number" id="repoCiclo"></div>
+          <div class="field" style="flex:1;min-width:110px">
+            <label>Nivel de servicio deseado</label>
+            <select id="repoNivelServicio">
+              <option value="90">90% (colchon mas chico)</option>
+              <option value="95">95% (recomendado)</option>
+              <option value="97">97%</option>
+              <option value="98">98%</option>
+              <option value="99">99% (colchon mas grande)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Maximo % extra por producto al llenar espacio sobrante</label><input type="number" step="1" id="repoTopeExtra" placeholder="25"></div>
+        <p style="font-size:11px;color:#888;margin-top:-6px;margin-bottom:10px">Cuando sobra espacio en el contenedor, se reparte entre los productos de mayor rotacion, pero ninguno puede superar su cantidad ideal calculada en mas de este %. Evita que un solo sabor se lleve todo el espacio sobrante.</p>
+        <button class="btn btn-p btn-sm" onclick="guardarConfigReposicion()">Guardar configuracion</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Calcular sugerencia de pedido</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Analiza las ventas reales de cada sabor/presentacion en el rango que elijas, y sugiere cuanto pedir de cada uno para llenar el contenedor.</p>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">
+          <div class="field" style="flex:1;min-width:140px">
+            <label>Tipo de contenedor a usar</label>
+            <select id="repoTipoContenedor">
+              <option value="cbm40">40'</option>
+              <option value="cbm40hq">40HQ</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;min-width:170px">
+            <label>Ventas a analizar</label>
+            <select id="repoVentanaTipo" onchange="document.getElementById('repoRangoPersonalizado').style.display=(this.value==='personalizado')?'flex':'none'">
+              <option value="30">Ultimos 30 dias</option>
+              <option value="60">Ultimos 60 dias</option>
+              <option value="90" selected>Ultimos 90 dias</option>
+              <option value="180">Ultimos 180 dias</option>
+              <option value="365">Ultimo año</option>
+              <option value="todo">Todo el historial</option>
+              <option value="personalizado">Rango personalizado</option>
+            </select>
+          </div>
+          <button class="btn btn-p btn-sm" onclick="calcularReposicion()">Calcular sugerencia</button>
+        </div>
+        <div id="repoRangoPersonalizado" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <div class="field" style="flex:1;min-width:130px"><label>Desde</label><input type="date" id="repoFechaDesde"></div>
+          <div class="field" style="flex:1;min-width:130px"><label>Hasta</label><input type="date" id="repoFechaHasta"></div>
+        </div>
+        <div id="repoResultados"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Toca "Calcular sugerencia" para ver el analisis</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Historial de ordenes de reposicion</div>
+        <div id="repoHistorial"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Aun no hay ordenes guardadas</div></div>
       </div>
     </div>
   </div>
@@ -1403,6 +1477,34 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
+<!-- MODAL ELIMINAR DOCUMENTO DE CUENTAS POR COBRAR -->
+<div class="modal-bg" id="mEliminarDocCxC">
+  <div class="modal">
+    <h3 style="color:var(--rojo)">Eliminar documento de Cuentas por Cobrar</h3>
+    <p style="font-size:14px;color:#555;margin-bottom:16px">Esto borra el documento <strong id="mEliminarDocCxCNumero"></strong> de la base actual — <strong>no se puede deshacer</strong>. Usalo solo si quedo cargado duplicado o por error. Si el documento sigue existiendo en el proximo Excel que cargues, podria volver a aparecer. ¿Confirmas?</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:var(--rojo);color:#fff;font-weight:600" onclick="ejecutarEliminarDocCxC()">Eliminar definitivamente</button>
+      <button class="btn btn-s" onclick="cerrarModal('mEliminarDocCxC')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REAPLICAR ABONO A UN DOCUMENTO CXC -->
+<div class="modal-bg" id="mReaplicarAbono">
+  <div class="modal">
+    <h3 style="color:var(--ambar)">Reaplicar abono</h3>
+    <p style="font-size:14px;color:#555;margin-bottom:8px">Documento <strong id="reaplicarNumero"></strong> — <span id="reaplicarCliente"></span></p>
+    <div style="font-size:13px;margin-bottom:10px">Saldo actual cargado: <strong id="reaplicarSaldoActual"></strong></div>
+    <div class="field"><label>Monto a descontar (revisa y ajusta si hace falta)</label><input type="number" step="0.01" id="reaplicarMonto" oninput="actualizarReaplicarPreview()"></div>
+    <div style="font-size:13px;margin-bottom:10px">Saldo resultante: <strong id="reaplicarSaldoResultante" style="color:var(--azul)"></strong></div>
+    <p style="font-size:12px;color:#888;margin-bottom:16px">Este monto viene del pago ya confirmado. Si el saldo actual ya reflejaba parte de este cobro por otra via (ajuste directo en Profit, otro pago, etc.), cambia el monto antes de confirmar, o cancela y revisalo manualmente.</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:var(--ambar);color:#fff;font-weight:600" onclick="ejecutarReaplicarAbono()">Confirmar y aplicar</button>
+      <button class="btn btn-s" onclick="cerrarModal('mReaplicarAbono')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL IMAGEN AMPLIADA (lightbox de fotos de producto) -->
 <div class="modal-bg" id="mImagenAmpliada" onclick="cerrarModal('mImagenAmpliada')" style="background:rgba(0,0,0,.85);align-items:center;justify-content:center">
   <div style="max-width:92vw;max-height:88vh;display:flex;flex-direction:column;align-items:center;gap:10px" onclick="event.stopPropagation()">
@@ -1549,6 +1651,22 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="field" style="flex:1"><label>Presentacion (libre)</label><input type="text" id="productoTipo" placeholder="Ej: Bolsa, Display, Granel..."></div>
     </div>
     <div class="field"><label>Unidades por bulto</label><input type="number" id="productoUniVenta" placeholder="Ej: 36" value="1"></div>
+    <div class="field"><label>CBM por bulto/caja (para calcular cuanto cabe en el contenedor)</label><input type="number" step="0.0001" id="productoCbm" placeholder="Ej: 0.045"></div>
+    <div style="background:#F5F7FA;border-radius:8px;padding:10px;margin-bottom:12px">
+      <label style="font-size:11px;color:#666;text-transform:none;letter-spacing:0;display:block;margin-bottom:6px">O calcula el CBM desde las medidas de la caja</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
+        <div class="field" style="flex:1;min-width:70px;margin-bottom:0"><label>Largo</label><input type="number" step="0.01" id="productoLargo" oninput="calcularCbmDesdeMedidas()"></div>
+        <div class="field" style="flex:1;min-width:70px;margin-bottom:0"><label>Ancho</label><input type="number" step="0.01" id="productoAncho" oninput="calcularCbmDesdeMedidas()"></div>
+        <div class="field" style="flex:1;min-width:70px;margin-bottom:0"><label>Alto</label><input type="number" step="0.01" id="productoAlto" oninput="calcularCbmDesdeMedidas()"></div>
+        <div class="field" style="flex:1;min-width:90px;margin-bottom:0">
+          <label>Unidad</label>
+          <select id="productoUnidadMedida" onchange="calcularCbmDesdeMedidas()">
+            <option value="cm">Centimetros</option>
+            <option value="in">Pulgadas</option>
+          </select>
+        </div>
+      </div>
+    </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <div class="field" style="flex:1;min-width:70px"><label>Precio 1</label><input type="number" step="0.01" id="productoP1"></div>
       <div class="field" style="flex:1;min-width:70px"><label>Precio 2</label><input type="number" step="0.01" id="productoP2"></div>
@@ -1657,6 +1775,32 @@ var PRODUCTOS = PRODUCTOS_PROFIT.map(function(a) {
 });
 
 var VEND = null;
+
+// ═══ REPOSICION / CONTENEDOR ═══
+// Configuracion compartida para calcular cuando y cuanto pedir del
+// proveedor (un solo contenedor cubre TODOS los sabores/presentaciones).
+var REPO_CONFIG = {
+  diasProduccion: 20,  // dias que tarda producirse en origen
+  diasEnvio: 25,        // dias de transito maritimo hasta que llega
+  cicloSugeridoDias: 45, // cada cuanto se evalua pedir un contenedor
+  nivelServicio: 95,    // % de servicio deseado -> define el colchon de seguridad
+  topeExtraPct: 25,     // maximo % que un producto puede superar su cantidad ideal al repartir el espacio sobrante
+  // Medidas internas del contenedor (cm) para el calculo real de estiba por capas.
+  // Son medidas estandar de la industria - no se editan desde la UI, solo el
+  // espacio de aire que varia segun lo que decidas dejar en cada embarque.
+  contLargoCm: 1203,     // largo interno util (igual en 40' y 40HQ)
+  contAnchoCm: 235,      // ancho interno util
+  contAlto40Cm: 239,     // alto interno de un 40' estandar
+  contAlto40hqCm: 269,   // alto interno de un 40HQ
+  espacioAireCm: 12      // espacio de ventilacion que se deja libre en el tope (10-15cm tipico)
+};
+var REPO_HISTORIAL = [];
+var REPO_ULTIMO_CALCULO = null;
+
+function repoZScore(nivel){
+  var tabla={90:1.28,95:1.65,97:1.88,98:2.05,99:2.33};
+  return tabla[nivel]||1.65;
+}
 
 // ═══ SUPERVISORES ═══
 // Un supervisor es un vendedor normal (no administrador) al que 01/20 le
@@ -6007,7 +6151,7 @@ function ajustarModoCargaCxC(){
 }
 
 function adminTab(tab){
-  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico'];
+  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico','reposicion'];
   for(var i=0;i<tabs.length;i++){
     var el=document.getElementById('adminTab-'+tabs[i]);
     if(el) el.style.display=(tabs[i]===tab)?'block':'none';
@@ -6052,6 +6196,8 @@ function adminTab(tab){
     if(limEl) limEl.value=LIMITE_DEUDA_PEDIDOS>0?LIMITE_DEUDA_PEDIDOS:'';
     ajustarModoCargaCxC();
     renderResumenCxC();
+    var verifCard=document.getElementById('cxcVerificadorCard');
+    if(verifCard) verifCard.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'block':'none';
     document.getElementById('cxcPagosPendientesList').innerHTML='<div style="color:#aaa;text-align:center;padding:12px">Cargando...</div>';
     cargarTodosPagosCobranzaFirebase(function(pagos){
       PAGOS_COBRANZA_TODOS=pagos;
@@ -6064,6 +6210,388 @@ function adminTab(tab){
     document.getElementById('historicoInfo').innerHTML='';
     document.getElementById('historicoEstado').innerHTML='';
   }
+  if(tab==='reposicion'){
+    document.getElementById('repoDiasProduccion').value=REPO_CONFIG.diasProduccion;
+    document.getElementById('repoDiasEnvio').value=REPO_CONFIG.diasEnvio;
+    document.getElementById('repoCiclo').value=REPO_CONFIG.cicloSugeridoDias;
+    document.getElementById('repoNivelServicio').value=REPO_CONFIG.nivelServicio;
+    document.getElementById('repoTopeExtra').value=REPO_CONFIG.topeExtraPct;
+    document.getElementById('repoEspacioAire').value=REPO_CONFIG.espacioAireCm;
+    renderHistorialRepo();
+  }
+}
+
+// --- REPOSICION / CONTENEDOR ---
+function guardarConfigReposicion(){
+  REPO_CONFIG.diasProduccion=parseInt(document.getElementById('repoDiasProduccion').value)||REPO_CONFIG.diasProduccion;
+  REPO_CONFIG.diasEnvio=parseInt(document.getElementById('repoDiasEnvio').value)||REPO_CONFIG.diasEnvio;
+  REPO_CONFIG.cicloSugeridoDias=parseInt(document.getElementById('repoCiclo').value)||REPO_CONFIG.cicloSugeridoDias;
+  REPO_CONFIG.nivelServicio=parseInt(document.getElementById('repoNivelServicio').value)||REPO_CONFIG.nivelServicio;
+  REPO_CONFIG.topeExtraPct=parseFloat(document.getElementById('repoTopeExtra').value);
+  if(isNaN(REPO_CONFIG.topeExtraPct)) REPO_CONFIG.topeExtraPct=25;
+  REPO_CONFIG.espacioAireCm=parseFloat(document.getElementById('repoEspacioAire').value);
+  if(isNaN(REPO_CONFIG.espacioAireCm)) REPO_CONFIG.espacioAireCm=12;
+  db.collection('config').doc('reposicion').set({
+    diasProduccion:REPO_CONFIG.diasProduccion, diasEnvio:REPO_CONFIG.diasEnvio,
+    cicloSugeridoDias:REPO_CONFIG.cicloSugeridoDias, nivelServicio:REPO_CONFIG.nivelServicio,
+    topeExtraPct:REPO_CONFIG.topeExtraPct, espacioAireCm:REPO_CONFIG.espacioAireCm,
+    actualizado:new Date().toISOString()
+  }).then(function(){ toast('Configuracion guardada'); })
+  .catch(function(){ toast('Configuracion guardada localmente'); });
+}
+
+
+// Prueba las 6 formas posibles de acomodar una caja (cual medida queda
+// a lo largo, a lo ancho y a lo alto del contenedor) y elige la que
+// aprovecha mejor el espacio: mas cajas por cada cm de largo consumido.
+function mejorOrientacionEstiba(prod, anchoContCm, alturaUtilCm){
+  var factorCm=(prod.medUnidad==='in')?2.54:1;
+  var L=(parseFloat(prod.medLargo)||0)*factorCm;
+  var A=(parseFloat(prod.medAncho)||0)*factorCm;
+  var H=(parseFloat(prod.medAlto)||0)*factorCm;
+  if(!L||!A||!H) return null; // faltan medidas cargadas en la ficha del producto
+  var dims=[L,A,H];
+  var perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+  var mejor=null;
+  for(var p=0;p<perms.length;p++){
+    var largoDim=dims[perms[p][0]], anchoDim=dims[perms[p][1]], altoDim=dims[perms[p][2]];
+    var cols=Math.floor(anchoContCm/anchoDim);
+    var layers=Math.floor(alturaUtilCm/altoDim);
+    if(cols<1||layers<1) continue;
+    var cajasPorFila=cols*layers;
+    var densidad=cajasPorFila/largoDim; // cajas por cada cm de largo de contenedor usado
+    if(!mejor||densidad>mejor.densidad){
+      mejor={largoDim:largoDim, cajasPorFila:cajasPorFila, densidad:densidad, cols:cols, layers:layers};
+    }
+  }
+  return mejor;
+}
+
+function calcularReposicion(){
+  var resEl=document.getElementById('repoResultados');
+  resEl.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando ventas historicas...</div>';
+  cargarTodosFirebase(function(todos){
+    var ahora=new Date();
+    var tipoVentana=document.getElementById('repoVentanaTipo').value;
+    var desde, hasta=new Date(ahora);
+    if(tipoVentana==='personalizado'){
+      var fDesdeStr=document.getElementById('repoFechaDesde').value;
+      var fHastaStr=document.getElementById('repoFechaHasta').value;
+      desde=fDesdeStr?new Date(fDesdeStr+'T00:00:00'):null;
+      hasta=fHastaStr?new Date(fHastaStr+'T23:59:59'):hasta;
+      if(!desde || isNaN(desde.getTime())){
+        resEl.innerHTML='<div style="color:#C0392B;font-size:13px;text-align:center;padding:12px">Elige una fecha "Desde" para el rango personalizado.</div>';
+        return;
+      }
+    } else if(tipoVentana==='todo'){
+      // Buscar la fecha del pedido mas antiguo (no anulado) para usarla como inicio
+      var minFecha=null;
+      for(var i=0;i<todos.length;i++){
+        if(todos[i].anulado) continue;
+        var fISOtmp=fechaToISO(todos[i].fecha||'');
+        var fDtmp=new Date(fISOtmp);
+        if(isNaN(fDtmp.getTime())) continue;
+        if(!minFecha || fDtmp<minFecha) minFecha=fDtmp;
+      }
+      desde=minFecha||new Date(ahora.getFullYear(), ahora.getMonth()-3, ahora.getDate());
+    } else {
+      var diasVentanaSel=parseInt(tipoVentana,10)||90;
+      desde=new Date(ahora); desde.setDate(ahora.getDate()-diasVentanaSel);
+    }
+    // Cantidad real de dias que abarca el rango elegido (minimo 1, para no dividir entre 0)
+    var ventana=Math.max(1, Math.round((hasta-desde)/86400000)+1);
+
+    // Acumular ventas por producto y por dia (bultos), solo dentro del rango elegido
+    var porProductoDia={};
+    for(var i=0;i<PRODUCTOS.length;i++) porProductoDia[PRODUCTOS[i].id]={};
+    for(var i=0;i<todos.length;i++){
+      var p=todos[i];
+      if(p.anulado) continue;
+      var fISO=fechaToISO(p.fecha||'');
+      var fD=new Date(fISO);
+      if(isNaN(fD.getTime()) || fD<desde || fD>hasta) continue;
+      var ids=Object.keys(p.items||{});
+      for(var k=0;k<ids.length;k++){
+        var pid=ids[k], qty=p.items[pid]||0;
+        if(!qty) continue;
+        if(!porProductoDia[pid]) porProductoDia[pid]={};
+        porProductoDia[pid][fISO]=(porProductoDia[pid][fISO]||0)+qty;
+      }
+    }
+    var z=repoZScore(REPO_CONFIG.nivelServicio);
+    var leadTime=REPO_CONFIG.diasProduccion+REPO_CONFIG.diasEnvio;
+    var tipoCont=document.getElementById('repoTipoContenedor').value;
+    var alturaContCm=(tipoCont==='cbm40hq')?REPO_CONFIG.contAlto40hqCm:REPO_CONFIG.contAlto40Cm;
+    var largoContCm=REPO_CONFIG.contLargoCm;
+    var anchoContCm=REPO_CONFIG.contAnchoCm;
+    var aireCm=(REPO_CONFIG.espacioAireCm!==undefined?REPO_CONFIG.espacioAireCm:12);
+    var alturaUtilCm=alturaContCm-aireCm;
+
+    var filas=[];
+    var totalCbmSugerido=0;
+    for(var i=0;i<PRODUCTOS.length;i++){
+      var prod=PRODUCTOS[i];
+      if(prod.activo===false) continue;
+      var diasVenta=porProductoDia[prod.id]||{};
+      var valoresDias=[];
+      for(var d=0;d<ventana;d++){
+        var fecha=new Date(desde); fecha.setDate(desde.getDate()+d);
+        var fISO2=fecha.getFullYear()+'-'+String(fecha.getMonth()+1).padStart(2,'0')+'-'+String(fecha.getDate()).padStart(2,'0');
+        valoresDias.push(diasVenta[fISO2]||0);
+      }
+      var totalVentas=0; for(var vi=0;vi<valoresDias.length;vi++) totalVentas+=valoresDias[vi];
+      var promedioDiario=totalVentas/ventana;
+      var sumaCuad=0; for(var vi=0;vi<valoresDias.length;vi++) sumaCuad+=Math.pow(valoresDias[vi]-promedioDiario,2);
+      var stdDev=Math.sqrt(sumaCuad/ventana);
+      var stockActual=prod.stock||0;
+      var coberturaActualDias=promedioDiario>0?(stockActual/promedioDiario):999;
+      var safetyStock=z*stdDev*Math.sqrt(leadTime);
+      var nivelObjetivo=promedioDiario*(REPO_CONFIG.cicloSugeridoDias+leadTime)+safetyStock;
+      var cantidadSugerida=Math.max(0, Math.ceil(nivelObjetivo-stockActual));
+      var cbmCajaNominal=parseFloat(prod.cbmCaja)||0;
+      var cbmCaja=cbmCajaNominal; // solo informativo, ya no define la capacidad
+      var orientacion=mejorOrientacionEstiba(prod, anchoContCm, alturaUtilCm);
+      totalCbmSugerido+=cantidadSugerida*cbmCaja; // solo informativo
+      var estado='verde';
+      if(coberturaActualDias<leadTime) estado='rojo';
+      else if(coberturaActualDias<leadTime+REPO_CONFIG.cicloSugeridoDias*0.3) estado='amarillo';
+      filas.push({
+        id:prod.id, nombre:prod.nombre, sabor:prod.sabor||'', tipo:prod.tipo||'', cbmCaja:cbmCaja, cbmCajaNominal:cbmCajaNominal, stockActual:stockActual,
+        promedioDiario:promedioDiario, coberturaActualDias:coberturaActualDias,
+        cantidadSugerida:cantidadSugerida, estado:estado,
+        filaLargo:orientacion?orientacion.largoDim:0, cajasPorFila:orientacion?orientacion.cajasPorFila:0,
+        sinMedidas:!orientacion
+      });
+    }
+
+    // Ajustar contra la capacidad REAL del contenedor, simulando el
+    // acomodo fisico por capas (columnas x capas), con el espacio de aire
+    // de ventilacion ya restado de la altura util. Cada producto ocupa su
+    // propio "carril" a lo largo del contenedor; se suman los largos
+    // usados contra el largo interno disponible - esto es lo que de
+    // verdad limita cuanto entra, no el volumen en abstracto.
+    //
+    // Paso 1: partir de la cantidad IDEAL de cada producto (ya calculada
+    // arriba segun rotacion, cobertura y colchon de seguridad) - es el
+    // 100% de referencia para el % que se muestra en "Sugerido".
+    for(var i=0;i<filas.length;i++){
+      var f=filas[i];
+      if(f.sinMedidas || f.cajasPorFila<=0){
+        f.filasIdeal=0; f.largoIdeal=0; // no se puede calcular estiba sin medidas cargadas
+      } else {
+        f.filasIdeal=Math.ceil(f.cantidadSugerida/f.cajasPorFila);
+        f.largoIdeal=f.filasIdeal*f.filaLargo;
+      }
+    }
+    var totalLargoIdeal=0; for(var i=0;i<filas.length;i++) totalLargoIdeal+=filas[i].largoIdeal;
+
+    if(totalLargoIdeal>largoContCm && totalLargoIdeal>0){
+      // No alcanza el largo del contenedor para cubrir el ideal de todos:
+      // se recorta quitando una fila completa a la vez al producto que
+      // este usando MAS largo en relacion a su rotacion (el mas
+      // "sobre-representado" frente a lo que realmente rota).
+      for(var i=0;i<filas.length;i++){
+        filas[i].filasAsignadas=filas[i].filasIdeal;
+        filas[i].largoAsignado=filas[i].largoIdeal;
+      }
+      var largoActual=totalLargoIdeal, topeIter=100000;
+      while(largoActual>largoContCm && topeIter-->0){
+        var peor=null, peorScore=-Infinity;
+        for(var i=0;i<filas.length;i++){
+          var f=filas[i];
+          if(f.filasAsignadas<=0) continue;
+          var pesoRot=f.promedioDiario>0?f.promedioDiario:0.0001;
+          var score=f.largoAsignado/pesoRot;
+          if(score>peorScore){ peorScore=score; peor=f; }
+        }
+        if(!peor) break;
+        peor.filasAsignadas-=1;
+        peor.largoAsignado-=peor.filaLargo;
+        largoActual-=peor.filaLargo;
+      }
+    } else {
+      // Alcanza para cubrir el ideal de todos tal cual.
+      for(var i=0;i<filas.length;i++){
+        filas[i].filasAsignadas=filas[i].filasIdeal;
+        filas[i].largoAsignado=filas[i].largoIdeal;
+      }
+    }
+
+    // Paso 2: repartir el largo que sobra de forma JUSTA (metodo de
+    // divisor - el mismo principio con que se reparten escaños de forma
+    // proporcional). En cada vuelta se le da una fila extra al producto
+    // cuyo "costo relativo" (largo ya asignado entre su rotacion) es el
+    // mas bajo, favoreciendo un poco a los de mayor rotacion sin
+    // concentrar TODO el sobrante en uno solo. Nadie puede superar su
+    // largo ideal en mas del "topeExtraPct" configurado.
+    var topePct=(REPO_CONFIG.topeExtraPct!==undefined?REPO_CONFIG.topeExtraPct:25)/100;
+    var largoRestante=largoContCm; for(var i=0;i<filas.length;i++) largoRestante-=(filas[i].largoAsignado||0);
+    var seguirLlenando=true, tope=100000;
+    while(seguirLlenando && tope-->0){
+      var candidato=null, mejorScore=Infinity;
+      for(var i=0;i<filas.length;i++){
+        var f=filas[i];
+        if(!f.filaLargo || f.cajasPorFila<=0 || f.promedioDiario<=0) continue;
+        if(f.filaLargo>largoRestante+0.000001) continue;
+        var limiteMax=f.largoIdeal*(1+topePct);
+        if((f.largoAsignado+f.filaLargo)>limiteMax+0.000001) continue;
+        var score=(f.largoAsignado+f.filaLargo)/f.promedioDiario;
+        if(score<mejorScore){ mejorScore=score; candidato=f; }
+      }
+      if(!candidato){ seguirLlenando=false; }
+      else {
+        candidato.filasAsignadas+=1;
+        candidato.largoAsignado+=candidato.filaLargo;
+        largoRestante-=candidato.filaLargo;
+      }
+    }
+
+    for(var i=0;i<filas.length;i++){
+      var f=filas[i];
+      if(f.sinMedidas || f.cajasPorFila<=0){
+        // Sin medidas cargadas no se pudo validar contra el contenedor:
+        // se deja la cantidad ideal tal cual, marcada como no verificada.
+        f.cantidadSugeridaAjustada=f.cantidadSugerida;
+      } else {
+        f.cantidadSugeridaAjustada=f.filasAsignadas*f.cajasPorFila;
+      }
+      f.cbmAjustado=f.cantidadSugeridaAjustada*f.cbmCaja; // referencial
+    }
+
+    var largoUsadoTotal=0; for(var i=0;i<filas.length;i++) largoUsadoTotal+=(filas[i].largoAsignado||0);
+    var totalCbmFinal=0; for(var i=0;i<filas.length;i++) totalCbmFinal+=filas[i].cbmAjustado;
+    var totalBultosFinal=0; for(var i=0;i<filas.length;i++) totalBultosFinal+=filas[i].cantidadSugeridaAjustada;
+
+    // Guardar el resultado para poder persistirlo si el usuario confirma
+    REPO_ULTIMO_CALCULO={
+      tipoContenedor:tipoCont, largoUsado:largoUsadoTotal, largoDisponible:largoContCm,
+      aireCm:aireCm, cbmUsado:totalCbmFinal,
+      detalle:filas.map(function(f){return {id:f.id,nombre:f.nombre,cantidad:f.cantidadSugeridaAjustada,filas:f.sinMedidas?null:f.filasAsignadas,largoCm:f.sinMedidas?null:f.largoAsignado,cbm:f.cbmAjustado};})
+    };
+
+    // Agregados por sabor y por presentacion (tipo), para comparar unos contra otros
+    function agruparPor(campo){
+      var mapa={}, orden=[];
+      for(var i=0;i<filas.length;i++){
+        var clave=filas[i][campo]||'(sin definir)';
+        if(!mapa[clave]){ mapa[clave]={bultos:0,cbm:0}; orden.push(clave); }
+        mapa[clave].bultos+=filas[i].cantidadSugeridaAjustada;
+        mapa[clave].cbm+=filas[i].cbmAjustado;
+      }
+      return orden.map(function(k){return {nombre:k,bultos:mapa[k].bultos,cbm:mapa[k].cbm};});
+    }
+    var porSabor=agruparPor('sabor');
+    var porTipo=agruparPor('tipo');
+
+    function renderResumenGrupo(titulo, grupos){
+      if(grupos.length<2) return ''; // no hay nada que comparar
+      var h='<div style="margin-top:12px"><div style="font-weight:600;font-size:12px;margin-bottom:6px">'+titulo+'</div>';
+      for(var i=0;i<grupos.length;i++){
+        var g=grupos[i];
+        var pct=totalBultosFinal>0?(g.bultos/totalBultosFinal*100):0;
+        h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
+          '<div style="width:90px;font-size:12px;flex-shrink:0">'+g.nombre+'</div>'+
+          '<div style="flex:1;background:#eee;border-radius:4px;overflow:hidden;height:14px">'+
+            '<div style="width:'+pct.toFixed(0)+'%;background:var(--azul);height:100%"></div>'+
+          '</div>'+
+          '<div style="width:110px;text-align:right;font-size:12px;flex-shrink:0">'+g.bultos+' bto ('+pct.toFixed(0)+'%)</div>'+
+        '</div>';
+      }
+      h+='</div>';
+      return h;
+    }
+
+    // Render tabla
+    var colorEstado={rojo:'#C0392B',amarillo:'#D68910',verde:'#1E8449'};
+    var labelEstado={rojo:'Urgente',amarillo:'Vigilar',verde:'OK'};
+    var fmtFechaCorta=function(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); };
+    var html='<div style="font-size:11px;color:#888;margin-bottom:8px">Analizando ventas del '+fmtFechaCorta(desde)+' al '+fmtFechaCorta(hasta)+' ('+ventana+' dias)</div>';
+    var anchos=['22%','8%','10%','8%','9%','19%','9%','15%']; // graduales: mas espacio donde hay mas texto/valor
+    html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">';
+    html+='<colgroup>'+anchos.map(function(w){return '<col style="width:'+w+'">';}).join('')+'</colgroup>';
+    html+='<tr style="text-align:left;border-bottom:2px solid #ddd">'+
+      '<th style="padding:6px 6px 6px 0">Producto</th>'+
+      '<th style="padding:6px">Stock</th>'+
+      '<th style="padding:6px">Rotacion/dia</th>'+
+      '<th style="padding:6px">Cobertura</th>'+
+      '<th style="padding:6px">Estado</th>'+
+      '<th style="padding:6px">Sugerido</th>'+
+      '<th style="padding:6px">Filas</th>'+
+      '<th style="padding:6px">Largo usado</th>'+
+    '</tr>';
+    var hayProductosSinMedidas=false;
+    for(var i=0;i<filas.length;i++){
+      var f=filas[i];
+      var pctSugerido=totalBultosFinal>0?(f.cantidadSugeridaAjustada/totalBultosFinal*100):0;
+      if(f.sinMedidas) hayProductosSinMedidas=true;
+      html+='<tr style="border-bottom:1px solid #eee">'+
+        '<td style="padding:6px 6px 6px 0;font-weight:600;overflow:hidden;text-overflow:ellipsis">'+f.nombre+(f.sinMedidas?' <span title="Faltan medidas de la caja" style="color:#D68910">&#9888;</span>':'')+'</td>'+
+        '<td style="padding:6px">'+f.stockActual+' bto</td>'+
+        '<td style="padding:6px">'+f.promedioDiario.toFixed(2)+'</td>'+
+        '<td style="padding:6px">'+(f.coberturaActualDias>900?'999+':f.coberturaActualDias.toFixed(0))+' d</td>'+
+        '<td style="padding:6px"><span style="color:'+colorEstado[f.estado]+';font-weight:700">'+labelEstado[f.estado]+'</span></td>'+
+        '<td style="padding:6px;font-weight:700">'+f.cantidadSugeridaAjustada+' bto ('+pctSugerido.toFixed(0)+'%)</td>'+
+        '<td style="padding:6px">'+(f.sinMedidas?'-':f.filasAsignadas)+'</td>'+
+        '<td style="padding:6px">'+(f.sinMedidas?'-':f.largoAsignado.toFixed(0)+' cm')+'</td>'+
+      '</tr>';
+    }
+    html+='</table></div>';
+    html+='<div style="margin-top:10px;font-size:13px;font-weight:600">Largo usado: '+largoUsadoTotal.toFixed(0)+' / '+largoContCm.toFixed(0)+' cm disponibles ('+tipoCont.replace('cbm','').toUpperCase()+', dejando '+aireCm+'cm de aire arriba)</div>';
+    html+='<div style="font-size:11px;color:#888">Estiba simulada por capas: ancho '+anchoContCm+'cm x alto util '+alturaUtilCm+'cm (alto interno '+alturaContCm+'cm menos '+aireCm+'cm de aire) - cada producto probado en sus 6 orientaciones posibles.</div>';
+    if(hayProductosSinMedidas){
+      html+='<div style="margin-top:4px;font-size:12px;color:#D68910">&#9888; Uno o mas productos no tienen medidas de caja cargadas (Admin &gt; Productos) - su cantidad se muestra segun la demanda, sin validar si cabe fisicamente.</div>';
+    }
+    if(totalLargoIdeal>largoContCm){
+      html+='<div style="margin-top:4px;font-size:12px;color:#C0392B">La demanda calculada necesita mas largo del que tiene el contenedor: las cantidades se redujeron quitando filas completas a los productos menos afectados por la reduccion, priorizando a los de mayor rotacion. Considera pasar a un contenedor mas grande o adelantar el pedido.</div>';
+    } else if(largoRestante>1){
+      html+='<div style="margin-top:4px;font-size:12px;color:#888">Quedan '+largoRestante.toFixed(0)+' cm de largo sin usar: ya se llego al tope de '+(REPO_CONFIG.topeExtraPct!==undefined?REPO_CONFIG.topeExtraPct:25)+'% extra permitido por producto (o no entra ni una fila mas de nadie). Si quieres aprovechar mas el contenedor, sube ese % en la configuracion.</div>';
+    }
+    html+=renderResumenGrupo('Sabor vs. sabor (bultos sugeridos)', porSabor);
+    html+=renderResumenGrupo('Presentacion vs. presentacion (bultos sugeridos)', porTipo);
+    html+='<button class="btn btn-p btn-sm" style="margin-top:10px" onclick="guardarOrdenReposicion()">Guardar esta orden</button>';
+    resEl.innerHTML=html;
+  }, null);
+}
+
+function guardarOrdenReposicion(){
+  if(!REPO_ULTIMO_CALCULO){ toast('Primero calcula la sugerencia'); return; }
+  var orden=REPO_ULTIMO_CALCULO;
+  orden.fecha=new Date().toISOString();
+  orden.fechaLegible=new Date().toLocaleDateString('es-VE');
+  REPO_HISTORIAL.unshift(orden);
+  db.collection('config').doc('reposicion_historial').set({
+    data: JSON.stringify(REPO_HISTORIAL),
+    actualizado: new Date().toISOString()
+  }).then(function(){
+    toast('Orden de reposicion guardada');
+    renderHistorialRepo();
+  }).catch(function(){
+    toast('Orden guardada localmente');
+    renderHistorialRepo();
+  });
+}
+
+function renderHistorialRepo(){
+  var el=document.getElementById('repoHistorial');
+  if(!el) return;
+  if(!REPO_HISTORIAL.length){
+    el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Aun no hay ordenes guardadas</div>';
+    return;
+  }
+  var html='';
+  for(var i=0;i<REPO_HISTORIAL.length;i++){
+    var o=REPO_HISTORIAL[i];
+    var detalleTxt='';
+    for(var j=0;j<(o.detalle||[]).length;j++){
+      detalleTxt+=(j>0?' | ':'')+o.detalle[j].nombre+': '+o.detalle[j].cantidad+' bto';
+    }
+    html+='<div style="padding:10px 0;border-bottom:1px solid var(--borde)">'+
+      '<div style="font-weight:600;font-size:13px">'+(o.fechaLegible||'')+' - Contenedor '+(o.tipoContenedor||'').replace('cbm','').toUpperCase()+'</div>'+
+      '<div style="font-size:12px;color:#666">Largo usado: '+(o.largoUsado||0).toFixed(0)+' / '+(o.largoDisponible||0).toFixed(0)+' cm (aire '+(o.aireCm!==undefined?o.aireCm:'-')+'cm)</div>'+
+      '<div style="font-size:11px;color:#888">'+detalleTxt+'</div>'+
+    '</div>';
+  }
+  el.innerHTML=html;
 }
 
 // --- INVENTARIO ---
@@ -6192,6 +6720,18 @@ function renderAdminProductos(){
 var productoEditandoId=null;
 var productoFotoNueva=null;
 
+function calcularCbmDesdeMedidas(){
+  var largo=parseFloat(document.getElementById('productoLargo').value)||0;
+  var ancho=parseFloat(document.getElementById('productoAncho').value)||0;
+  var alto=parseFloat(document.getElementById('productoAlto').value)||0;
+  if(!largo||!ancho||!alto) return;
+  var unidad=document.getElementById('productoUnidadMedida').value;
+  var factorACm=(unidad==='in')?2.54:1; // convierte la unidad elegida a centimetros
+  var largoCm=largo*factorACm, anchoCm=ancho*factorACm, altoCm=alto*factorACm;
+  var cbm=(largoCm*anchoCm*altoCm)/1000000; // cm3 a m3
+  document.getElementById('productoCbm').value=cbm.toFixed(4);
+}
+
 function abrirNuevoProducto(){
   productoEditandoId=null;
   productoFotoNueva=null;
@@ -6202,6 +6742,11 @@ function abrirNuevoProducto(){
   document.getElementById('productoSabor').value='';
   document.getElementById('productoTipo').value='';
   document.getElementById('productoUniVenta').value='1';
+  document.getElementById('productoCbm').value='';
+  document.getElementById('productoLargo').value='';
+  document.getElementById('productoAncho').value='';
+  document.getElementById('productoAlto').value='';
+  document.getElementById('productoUnidadMedida').value='cm';
   document.getElementById('productoP1').value='';
   document.getElementById('productoP2').value='';
   document.getElementById('productoP3').value='';
@@ -6225,6 +6770,11 @@ function editarProducto(id){
   document.getElementById('productoSabor').value=p.sabor||'';
   document.getElementById('productoTipo').value=p.tipo||'';
   document.getElementById('productoUniVenta').value=p.uni_venta;
+  document.getElementById('productoCbm').value=p.cbmCaja||'';
+  document.getElementById('productoLargo').value=p.medLargo||'';
+  document.getElementById('productoAncho').value=p.medAncho||'';
+  document.getElementById('productoAlto').value=p.medAlto||'';
+  document.getElementById('productoUnidadMedida').value=p.medUnidad||'cm';
   document.getElementById('productoP1').value=p.precio1;
   document.getElementById('productoP2').value=p.precio2;
   document.getElementById('productoP3').value=p.precio3;
@@ -6259,6 +6809,11 @@ function guardarProducto(){
     toast('Ya existe un producto con ese codigo'); return;
   }
   var uniVenta=parseInt(document.getElementById('productoUniVenta').value,10)||1;
+  var cbmCaja=parseFloat(document.getElementById('productoCbm').value)||0;
+  var medLargo=parseFloat(document.getElementById('productoLargo').value)||0;
+  var medAncho=parseFloat(document.getElementById('productoAncho').value)||0;
+  var medAlto=parseFloat(document.getElementById('productoAlto').value)||0;
+  var medUnidad=document.getElementById('productoUnidadMedida').value;
   var p1=parseFloat(document.getElementById('productoP1').value)||0;
   var p2=parseFloat(document.getElementById('productoP2').value)||p1;
   var p3=parseFloat(document.getElementById('productoP3').value)||p2;
@@ -6276,7 +6831,8 @@ function guardarProducto(){
     var existente=PRODUCTOS.find(function(x){return x.id===codigo;});
     if(existente){
       existente.nombre=nombre; existente.sabor=sabor; existente.tipo=tipo;
-      existente.uni_venta=uniVenta; existente.precio1=p1; existente.precio2=p2;
+      existente.uni_venta=uniVenta; existente.cbmCaja=cbmCaja; existente.precio1=p1; existente.precio2=p2;
+      existente.medLargo=medLargo; existente.medAncho=medAncho; existente.medAlto=medAlto; existente.medUnidad=medUnidad;
       existente.precio3=p3; existente.precio4=p4; existente.precio5=p5;
       existente.activo=activo;
       if(fotoUrl) existente.fotoUrl=fotoUrl;
@@ -6286,7 +6842,8 @@ function guardarProducto(){
         nombre:nombre, sabor:sabor, tipo:tipo,
         color:colorAutoParaProducto(PRODUCTOS.length),
         precio1:p1, precio2:p2, precio3:p3, precio4:p4, precio5:p5,
-        stock:0, stock_und:0, uni_venta:uniVenta,
+        stock:0, stock_und:0, uni_venta:uniVenta, cbmCaja:cbmCaja,
+        medLargo:medLargo, medAncho:medAncho, medAlto:medAlto, medUnidad:medUnidad,
         activo:activo, fotoUrl:fotoUrl||''
       });
     }
@@ -7349,9 +7906,28 @@ function cargarConfigFirebase(callback){
     db.collection('config').doc('cuentas_cobrar_fiscal').get(),
     db.collection('config').doc('limite_deuda').get(),
     db.collection('config').doc('promociones_custom').get(),
-    db.collection('config').doc('catalogo_productos').get()
+    db.collection('config').doc('catalogo_productos').get(),
+    db.collection('config').doc('reposicion').get(),
+    db.collection('config').doc('reposicion_historial').get()
   ];
   Promise.all(promesas).then(function(docs){
+    // Catalogo completo de productos (reemplaza el listado inicial si ya
+    // se ha usado la gestion de productos en Admin - permite agregar
+    // articulos nuevos, fotos, sabores/tipos libres, etc.)
+    // IMPORTANTE: esto debe cargarse ANTES de aplicar stock/precios de abajo,
+    // porque reemplaza el arreglo PRODUCTOS completo. Si se cargara despues,
+    // pisaria el stock/precios recien actualizados con la foto vieja que
+    // haya quedado guardada en el catalogo la ultima vez que se edito un
+    // producto en Admin -> Productos.
+    try{
+      if(docs[10] && docs[10].exists){
+        var catalogo=JSON.parse(docs[10].data().data||'[]');
+        if(catalogo.length>0){
+          PRODUCTOS.length=0;
+          for(var i=0;i<catalogo.length;i++) PRODUCTOS.push(catalogo[i]);
+        }
+      }
+    }catch(e){}
     // Inventario
     try{
       if(docs[0].exists){
@@ -7399,18 +7975,6 @@ function cargarConfigFirebase(callback){
               break;
             }
           }
-        }
-      }
-    }catch(e){}
-    // Catalogo completo de productos (reemplaza el listado inicial si ya
-    // se ha usado la gestion de productos en Admin - permite agregar
-    // articulos nuevos, fotos, sabores/tipos libres, etc.)
-    try{
-      if(docs[10] && docs[10].exists){
-        var catalogo=JSON.parse(docs[10].data().data||'[]');
-        if(catalogo.length>0){
-          PRODUCTOS.length=0;
-          for(var i=0;i<catalogo.length;i++) PRODUCTOS.push(catalogo[i]);
         }
       }
     }catch(e){}
@@ -7475,6 +8039,26 @@ function cargarConfigFirebase(callback){
         for(var i=0;i<promosGuardadas.length;i++) PROMOCIONES_CUSTOM.push(promosGuardadas[i]);
       }
       migrarPromoBolsasOriginal();
+    }catch(e){}
+    // Configuracion de reposicion / contenedor
+    try{
+      if(docs[11] && docs[11].exists){
+        var repoCfg=docs[11].data();
+        if(repoCfg.diasProduccion!==undefined) REPO_CONFIG.diasProduccion=parseInt(repoCfg.diasProduccion)||REPO_CONFIG.diasProduccion;
+        if(repoCfg.diasEnvio!==undefined) REPO_CONFIG.diasEnvio=parseInt(repoCfg.diasEnvio)||REPO_CONFIG.diasEnvio;
+        if(repoCfg.cicloSugeridoDias!==undefined) REPO_CONFIG.cicloSugeridoDias=parseInt(repoCfg.cicloSugeridoDias)||REPO_CONFIG.cicloSugeridoDias;
+        if(repoCfg.nivelServicio!==undefined) REPO_CONFIG.nivelServicio=parseInt(repoCfg.nivelServicio)||REPO_CONFIG.nivelServicio;
+        if(repoCfg.topeExtraPct!==undefined) REPO_CONFIG.topeExtraPct=parseFloat(repoCfg.topeExtraPct);
+        if(repoCfg.espacioAireCm!==undefined) REPO_CONFIG.espacioAireCm=parseFloat(repoCfg.espacioAireCm);
+      }
+    }catch(e){}
+    // Historial de ordenes de reposicion ya guardadas
+    try{
+      if(docs[12] && docs[12].exists){
+        var repoHist=JSON.parse(docs[12].data().data||'[]');
+        REPO_HISTORIAL.length=0;
+        for(var i=0;i<repoHist.length;i++) REPO_HISTORIAL.push(repoHist[i]);
+      }
     }catch(e){}
     // Llamar callback cuando todo está listo
     if(callback) callback();
@@ -7771,6 +8355,200 @@ function renderResumenCxC(){
   renderListaCxCAdmin();
 }
 
+// Eliminar un documento puntual de Cuentas por Cobrar (por si quedo cargado
+// duplicado). Restringido a 01/20 - el boton que la llama ya solo se
+// renderiza para esos codigos, y se vuelve a validar aqui por seguridad.
+var docCxCEliminandoNumero=null;
+function confirmarEliminarDocCxC(numero){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  docCxCEliminandoNumero=numero;
+  var elNum=document.getElementById('mEliminarDocCxCNumero');
+  if(elNum) elNum.textContent=numero;
+  document.getElementById('mEliminarDocCxC').classList.add('open');
+}
+function ejecutarEliminarDocCxC(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))){ cerrarModal('mEliminarDocCxC'); return; }
+  var numero=docCxCEliminandoNumero;
+  var idx=-1;
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(CUENTAS_COBRAR[i].numero===numero){ idx=i; break; } }
+  if(idx<0){ cerrarModal('mEliminarDocCxC'); toast('No se encontro el documento (puede que ya se haya eliminado)'); return; }
+  CUENTAS_COBRAR.splice(idx,1);
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    cerrarModal('mEliminarDocCxC');
+    toast('Documento '+numero+' eliminado');
+    renderResumenCxC();
+  }).catch(function(){
+    toast('Error eliminando en Firebase, intenta de nuevo');
+  });
+}
+
+// ═══ VERIFICADOR DE INTEGRIDAD DE COBROS ═══
+// Detecta dos tipos de problema:
+// 1) Documentos duplicados: mismo "numero" repetido en la base actual
+//    (senal de que un Excel se cargo dos veces o el cruce genero copias).
+// 2) Cobros "huerfanos": un pago CONFIRMADO en el historial hace referencia
+//    a un documento que, en la base actualmente cargada, no tiene marcado
+//    el abono (por ejemplo porque una recarga de Excel lo sobreescribio sin
+//    que el saldo coincidiera con el guardado antes del pago).
+var VERIF_ULTIMO_DUPLICADOS=[];
+var VERIF_ULTIMO_HUERFANOS=[];
+var VERIF_FILTRO_ACTUAL='todos';
+
+function verificarIntegridadCobros(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  var el=document.getElementById('cxcVerificadorResultado');
+  el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Verificando...</div>';
+  cargarTodosPagosCobranzaFirebase(function(pagos){
+    PAGOS_COBRANZA_TODOS=pagos;
+
+    // 1) Duplicados por numero en la base actual
+    var porNumero={};
+    for(var i=0;i<CUENTAS_COBRAR.length;i++){
+      var num=CUENTAS_COBRAR[i].numero;
+      if(!porNumero[num]) porNumero[num]=[];
+      porNumero[num].push(CUENTAS_COBRAR[i]);
+    }
+    var duplicados=[];
+    for(var num in porNumero){
+      if(porNumero[num].length>1) duplicados.push({numero:num, copias:porNumero[num]});
+    }
+
+    // 2) Cobros confirmados cuyo documento actual no refleja el abono
+    var huerfanos=[];
+    for(var i=0;i<pagos.length;i++){
+      var pago=pagos[i];
+      if(pago.estado!=='confirmado') continue;
+      for(var j=0;j<(pago.documentos||[]).length;j++){
+        var num2=pago.documentos[j].numero;
+        var montoAplicado=pago.documentos[j].montoAplicado||0;
+        if(montoAplicado<=0.009) continue;
+        var docActual=null;
+        for(var k=0;k<CUENTAS_COBRAR.length;k++){ if(CUENTAS_COBRAR[k].numero===num2){ docActual=CUENTAS_COBRAR[k]; break; } }
+        if(!docActual){
+          huerfanos.push({numero:num2, cliente:pago.clienteNombre, monto:montoAplicado, fecha:pago.fecha, existe:false, motivo:'El documento ya no existe en la base actual'});
+        } else if(!docActual.abonadoEnApp){
+          huerfanos.push({numero:num2, cliente:pago.clienteNombre, monto:montoAplicado, fecha:pago.fecha, existe:true, motivo:'El documento cargado no tiene marcado el abono (posible sobre-escritura en una recarga de Excel)'});
+        }
+      }
+    }
+
+    VERIF_ULTIMO_DUPLICADOS=duplicados;
+    VERIF_ULTIMO_HUERFANOS=huerfanos;
+    VERIF_FILTRO_ACTUAL='todos';
+    renderVerificadorResultado();
+  });
+}
+
+function filtrarVerificador(tipo){
+  VERIF_FILTRO_ACTUAL=tipo;
+  renderVerificadorResultado();
+}
+
+function renderVerificadorResultado(){
+  var el=document.getElementById('cxcVerificadorResultado');
+  if(!el) return;
+  var duplicados=VERIF_ULTIMO_DUPLICADOS||[];
+  var huerfanos=VERIF_ULTIMO_HUERFANOS||[];
+  var totalProblemas=duplicados.length+huerfanos.length;
+
+  if(totalProblemas===0){
+    el.innerHTML='<div style="color:var(--verde);font-weight:600;font-size:13px;text-align:center;padding:12px">✓ Sin inconsistencias: no hay documentos duplicados ni cobros confirmados sin reflejar</div>';
+    return;
+  }
+
+  function btnFiltro(tipo, label, cant){
+    var activo=(VERIF_FILTRO_ACTUAL===tipo);
+    return '<button class="btn btn-sm '+(activo?'btn-p':'btn-s')+'" onclick="filtrarVerificador(\''+tipo+'\')">'+label+' ('+cant+')</button>';
+  }
+  var html='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+
+    btnFiltro('todos','Todos',totalProblemas)+
+    btnFiltro('duplicados','Duplicados',duplicados.length)+
+    btnFiltro('huerfanos','Sin abono marcado',huerfanos.length)+
+  '</div>';
+
+  if((VERIF_FILTRO_ACTUAL==='todos'||VERIF_FILTRO_ACTUAL==='duplicados') && duplicados.length>0){
+    html+='<div style="font-weight:600;font-size:13px;margin-bottom:6px;color:var(--rojo)">Documentos duplicados ('+duplicados.length+')</div>';
+    for(var d=0;d<duplicados.length;d++){
+      var dup=duplicados[d];
+      html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+        '<div style="font-weight:600">Doc.'+dup.numero+' aparece '+dup.copias.length+' veces</div>';
+      for(var c=0;c<dup.copias.length;c++){
+        var cp=dup.copias[c];
+        html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'+
+          '<span style="color:#888">Cliente '+cp.clienteId+' ('+cp.clienteNombre+') - saldo $'+formatearNumeroConMiles(cp.saldo,2)+'</span>'+
+          '<button class="btn btn-s btn-sm" style="color:var(--rojo)" onclick="confirmarEliminarDocCxC(\''+cp.numero+'\')">Eliminar</button>'+
+        '</div>';
+      }
+      html+='</div>';
+    }
+  }
+  if((VERIF_FILTRO_ACTUAL==='todos'||VERIF_FILTRO_ACTUAL==='huerfanos') && huerfanos.length>0){
+    html+='<div style="font-weight:600;font-size:13px;margin:10px 0 6px;color:var(--ambar)">Cobros confirmados sin reflejar ('+huerfanos.length+')</div>';
+    for(var h=0;h<huerfanos.length;h++){
+      var hf=huerfanos[h];
+      html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
+        '<div style="flex:1">'+
+        '<div style="font-weight:600">Doc.'+hf.numero+' - '+hf.cliente+'</div>'+
+        '<div style="color:#888">Pago confirmado el '+hf.fecha+' por $'+formatearNumeroConMiles(hf.monto,2)+'</div>'+
+        '<div style="color:var(--ambar)">'+hf.motivo+'</div>'+
+        '</div>'+
+        (hf.existe?'<button class="btn btn-s btn-sm" style="color:var(--ambar);flex-shrink:0" onclick="abrirReaplicarAbono(\''+hf.numero+'\','+hf.monto+',\''+(hf.cliente||'').replace(/'/g,"\\'")+'\')">Reaplicar abono</button>':'')+
+        '</div>'+
+      '</div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+// --- Reaplicar abono a un documento que quedo sin marcar (con confirmacion editable) ---
+var reaplicarAbonoData=null;
+function abrirReaplicarAbono(numero, monto, clienteNombre){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  var doc=null;
+  for(var k=0;k<CUENTAS_COBRAR.length;k++){ if(CUENTAS_COBRAR[k].numero===numero){ doc=CUENTAS_COBRAR[k]; break; } }
+  if(!doc){ toast('El documento ya no existe en la base actual'); return; }
+  reaplicarAbonoData={numero:numero, saldoActual:doc.saldo};
+  document.getElementById('reaplicarNumero').textContent=numero;
+  document.getElementById('reaplicarCliente').textContent=clienteNombre||'';
+  document.getElementById('reaplicarSaldoActual').textContent='$'+formatearNumeroConMiles(doc.saldo,2);
+  document.getElementById('reaplicarMonto').value=monto.toFixed(2);
+  actualizarReaplicarPreview();
+  document.getElementById('mReaplicarAbono').classList.add('open');
+}
+function actualizarReaplicarPreview(){
+  if(!reaplicarAbonoData) return;
+  var monto=parseFloat(document.getElementById('reaplicarMonto').value)||0;
+  var resultante=Math.round((reaplicarAbonoData.saldoActual-monto)*100)/100;
+  document.getElementById('reaplicarSaldoResultante').textContent='$'+formatearNumeroConMiles(resultante,2);
+}
+function ejecutarReaplicarAbono(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))){ cerrarModal('mReaplicarAbono'); return; }
+  if(!reaplicarAbonoData) return;
+  var monto=parseFloat(document.getElementById('reaplicarMonto').value)||0;
+  if(monto<=0){ toast('Indica un monto valido'); return; }
+  var doc=null;
+  for(var k=0;k<CUENTAS_COBRAR.length;k++){ if(CUENTAS_COBRAR[k].numero===reaplicarAbonoData.numero){ doc=CUENTAS_COBRAR[k]; break; } }
+  if(!doc){ cerrarModal('mReaplicarAbono'); toast('El documento ya no existe'); return; }
+  doc.saldoAntesUltimoPago=doc.saldo;
+  doc.saldo=Math.round((doc.saldo-monto)*100)/100;
+  doc.abonadoEnApp=true;
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    cerrarModal('mReaplicarAbono');
+    toast('Abono reaplicado al documento '+reaplicarAbonoData.numero);
+    renderResumenCxC();
+    verificarIntegridadCobros();
+  }).catch(function(){
+    toast('Error guardando en Firebase, intenta de nuevo');
+  });
+}
+
 // Listado completo y buscable de TODAS las cuentas por cobrar, para que el
 // administrador pueda ver la deuda de cualquier cliente sin tener que pasar
 // por el flujo de reportar un pago.
@@ -7808,10 +8586,16 @@ function renderListaCxCAdmin(){
         :(d.origenBase==='diferencia'
           ?' <span class="tag" style="background:#e3d9fc;color:#5b3fa0;font-size:9px">Dif DCTO.</span>'
           :(d.tieneCruce?' <span class="tag tag-v" style="font-size:9px">Cruzado</span>':''));
+      var puedeBorrarDoc=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'));
       html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:13px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
+        '<div style="flex:1">'+
         '<div style="font-weight:600">'+nombre+' <span style="font-weight:400;color:#888">(Cod: '+d.clienteId+')</span>'+origenTxt+'</div>'+
         '<div style="font-size:11px;color:#888">Doc.'+d.numero+' | VEND '+d.vendedor+' | Vence: '+d.vencimiento+diasTxt+'</div>'+
         '<div style="font-size:13px;font-weight:700;color:'+(esCredito?'var(--verde)':'var(--azul)')+'">'+(esCredito?'($'+formatearNumeroConMiles(Math.abs(d.saldo),2)+')':'$'+formatearNumeroConMiles(d.saldo,2))+'</div>'+
+        '</div>'+
+        (puedeBorrarDoc?'<button class="btn btn-s btn-sm" style="color:var(--rojo);flex-shrink:0" onclick="confirmarEliminarDocCxC(\''+d.numero+'\')">Eliminar</button>':'')+
+        '</div>'+
       '</div>';
     }
   }
