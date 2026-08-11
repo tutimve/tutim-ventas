@@ -358,7 +358,6 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="field"><label>Forma de pago</label>
         <select id="fPago">
           <option value="01">Contado</option>
-          <option value="05">Prepagado</option>
           <option value="02" selected>Credito 7 dias</option>
           <option value="03">Credito 15 dias</option>
           <option value="04">Credito 30 dias</option>
@@ -373,10 +372,6 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <input type="text" id="fPromo" placeholder="Se calcula automaticamente segun bultos de bolsa"></div>
       <div class="field"><label>Observaciones</label>
         <textarea id="fObs" rows="2" placeholder="Notas adicionales..."></textarea></div>
-      <div class="field" id="wrapDescGeneral" style="display:none">
-        <label>Descuento general del pedido (%)</label>
-        <input type="number" min="0" max="100" step="1" id="fDescGeneral" placeholder="0" oninput="actualizarTotales()">
-      </div>
       <button class="btn btn-p" onclick="abrirConfirmar()">Ver resumen</button>
       <button class="btn btn-s" style="margin-top:8px" onclick="volverPaso2()">Volver</button>
     </div>
@@ -600,6 +595,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <option value="0">Sin descuento</option>
           <option value="5">5%</option>
           <option value="10">10%</option>
+          <option value="12">12%</option>
           <option value="15">15%</option>
         </select>
       </div>
@@ -670,7 +666,6 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-docs" onclick="adminTab('docs')">Documentacion</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-cxc" onclick="adminTab('cxc')">Cuentas x Cobrar</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-historico" onclick="adminTab('historico')">Historico</button>
-      <button class="btn btn-s btn-sm admin-tab-btn" id="atab-reposicion" onclick="adminTab('reposicion')">Reposicion</button>
     </div>
 
     <!-- TAB INVENTARIO -->
@@ -816,6 +811,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <input type="file" id="cxcExcelInputFiscal" accept=".xlsx,.xls" onchange="cargarExcelCxC(this,'fiscal')">
         </div>
         <div id="cxcEstadoCarga" style="font-size:13px;margin-top:8px"></div>
+        <button class="btn btn-s btn-sm" style="margin-top:8px" onclick="verHistorialCargasCxC()">Ver historial de cargas</button>
       </div>
       <div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
         <div class="metric" style="padding:8px"><div class="num" style="font-size:18px" id="cxcResumDocs">0</div><div class="lbl">Documentos pendientes</div></div>
@@ -832,12 +828,6 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         </div>
         <div id="cxcListaCompleta"></div>
       </div>
-      <div class="card" id="cxcVerificadorCard" style="display:none">
-        <div class="card-title">Verificador de integridad de cobros</div>
-        <p style="font-size:12px;color:#666;margin-bottom:10px">Revisa si hay documentos duplicados en la base actual, o pagos ya confirmados cuyo documento cargado no refleja ese abono (por ejemplo, por una recarga de Excel que lo sobreescribio).</p>
-        <button class="btn btn-p btn-sm" onclick="verificarIntegridadCobros()">Verificar ahora</button>
-        <div id="cxcVerificadorResultado" style="margin-top:10px"></div>
-      </div>
     </div>
 
     <!-- TAB HISTORICO -->
@@ -852,84 +842,6 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <div id="historicoInfo" style="font-size:13px;color:#555;margin-top:10px"></div>
         <div id="historicoEstado" style="font-size:13px;margin-top:6px"></div>
         <button class="btn btn-p" onclick="cargarHistoricoProfit()" id="btnCargarHistorico" style="margin-top:8px" disabled>Guardar en Firebase</button>
-      </div>
-    </div>
-
-    <!-- TAB REPOSICION -->
-    <div id="adminTab-reposicion" style="display:none">
-      <div class="card">
-        <div class="card-title">Configuracion del contenedor</div>
-        <p style="font-size:12px;color:#666;margin-bottom:10px">Estos datos son los mismos para todos los sabores y presentaciones, porque todo viaja junto en un solo contenedor desde el mismo origen. El sistema simula el acomodo fisico real (columnas x capas) usando las medidas estandar de un contenedor 40' o 40HQ - tu solo eliges cuanto espacio de aire dejar arriba.</p>
-        <div class="field"><label>Espacio de aire/ventilacion en el tope (cm)</label><input type="number" id="repoEspacioAire" placeholder="12"></div>
-        <p style="font-size:11px;color:#888;margin-top:-6px;margin-bottom:10px">Espacio que se deja libre entre la ultima capa de cajas y el techo del contenedor (tipico 10-15cm). Se resta de la altura antes de calcular cuantas capas caben. El tipo de contenedor (40' o 40HQ) se elige mas abajo, al calcular la sugerencia.</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <div class="field" style="flex:1;min-width:110px"><label>Dias de produccion</label><input type="number" id="repoDiasProduccion"></div>
-          <div class="field" style="flex:1;min-width:110px"><label>Dias de envio (transito)</label><input type="number" id="repoDiasEnvio"></div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <div class="field" style="flex:1;min-width:110px"><label>Ciclo sugerido (dias entre pedidos)</label><input type="number" id="repoCiclo"></div>
-          <div class="field" style="flex:1;min-width:110px">
-            <label>Nivel de servicio deseado</label>
-            <select id="repoNivelServicio">
-              <option value="90">90% (colchon mas chico)</option>
-              <option value="95">95% (recomendado)</option>
-              <option value="97">97%</option>
-              <option value="98">98%</option>
-              <option value="99">99% (colchon mas grande)</option>
-            </select>
-          </div>
-        </div>
-        <div class="field"><label>Maximo % extra por producto al llenar espacio sobrante</label><input type="number" step="1" id="repoTopeExtra" placeholder="25"></div>
-        <p style="font-size:11px;color:#888;margin-top:-6px;margin-bottom:10px">Cuando sobra espacio en el contenedor, se reparte entre los productos de mayor rotacion, pero ninguno puede superar su cantidad ideal calculada en mas de este %. Evita que un solo sabor se lleve todo el espacio sobrante.</p>
-        <button class="btn btn-p btn-sm" onclick="guardarConfigReposicion()">Guardar configuracion</button>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Calcular sugerencia de pedido</div>
-        <p style="font-size:12px;color:#666;margin-bottom:10px">Analiza las ventas reales de cada sabor/presentacion en el rango que elijas, y sugiere cuanto pedir de cada uno para llenar el contenedor.</p>
-        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">
-          <div class="field" style="flex:1;min-width:140px">
-            <label>Tipo de contenedor a usar</label>
-            <select id="repoTipoContenedor">
-              <option value="cbm40">40'</option>
-              <option value="cbm40hq">40HQ</option>
-            </select>
-          </div>
-          <div class="field" style="flex:1;min-width:170px">
-            <label>Ventas a analizar</label>
-            <select id="repoVentanaTipo" onchange="document.getElementById('repoRangoPersonalizado').style.display=(this.value==='personalizado')?'flex':'none'">
-              <option value="30">Ultimos 30 dias</option>
-              <option value="60">Ultimos 60 dias</option>
-              <option value="90" selected>Ultimos 90 dias</option>
-              <option value="180">Ultimos 180 dias</option>
-              <option value="365">Ultimo año</option>
-              <option value="todo">Todo el historial</option>
-              <option value="personalizado">Rango personalizado</option>
-            </select>
-          </div>
-          <button class="btn btn-p btn-sm" onclick="calcularReposicion()">Calcular sugerencia</button>
-        </div>
-        <div id="repoRangoPersonalizado" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          <div class="field" style="flex:1;min-width:130px"><label>Desde</label><input type="date" id="repoFechaDesde"></div>
-          <div class="field" style="flex:1;min-width:130px"><label>Hasta</label><input type="date" id="repoFechaHasta"></div>
-        </div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;margin-bottom:10px;cursor:pointer">
-          <input type="checkbox" id="repoIncluirBonif" checked style="width:16px;height:16px">
-          Incluir unidades gratis de promociones (ej. Promo Bultos Bolsa) en el consumo real
-        </label>
-        <div id="repoResultados"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Toca "Calcular sugerencia" para ver el analisis</div></div>
-      </div>
-
-      <div class="card" id="repoBackfillCard" style="display:none">
-        <div class="card-title">Recuperar bonificaciones de pedidos antiguos</div>
-        <p style="font-size:12px;color:#666;margin-bottom:10px">Los pedidos creados antes de este cambio solo guardaron la bonificacion como texto (ej. "+144 unid gratis"), no de forma estructurada. Esto revisa ese texto en pedidos viejos e intenta reconstruir cuantas unidades gratis se dieron de cada producto, para que Reposicion tambien las cuente. Es un proceso de una sola vez - los pedidos que ya tengan la bonificacion estructurada no se tocan.</p>
-        <button class="btn btn-p btn-sm" onclick="analizarBonificacionesHistoricas()">Analizar historico</button>
-        <div id="repoBackfillResultado" style="margin-top:10px"></div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Historial de ordenes de reposicion</div>
-        <div id="repoHistorial"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Aun no hay ordenes guardadas</div></div>
       </div>
     </div>
   </div>
@@ -985,11 +897,11 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
             <option value="todos">Todos los vendedores</option>
           </select>
         </div>
-        <div class="field" style="margin-bottom:8px;position:relative">
+        <div class="field" style="margin-bottom:8px">
           <label>Cliente</label>
-          <input type="text" id="rptClienteBusq" placeholder="Todos los clientes (escribe para buscar)" autocomplete="off" oninput="filtrarRptClienteOpciones()" onfocus="filtrarRptClienteOpciones()" onblur="setTimeout(function(){var d=document.getElementById('rptClienteOpciones'); if(d) d.style.display='none';},150)">
-          <input type="hidden" id="rptCliente" value="todos">
-          <div id="rptClienteOpciones" style="display:none;position:absolute;z-index:20;background:#fff;border:1px solid var(--borde);border-radius:8px;max-height:220px;overflow-y:auto;width:100%;box-shadow:0 4px 12px rgba(0,0,0,.12);font-size:13px"></div>
+          <select id="rptCliente" onchange="renderReportes()">
+            <option value="todos">Todos los clientes</option>
+          </select>
         </div>
         <div id="rptPorVendedor"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
       </div>
@@ -1196,7 +1108,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     </div>
     <div class="field">
       <label>Facturas recientes (minimo 2 fotos) <span id="ncChkFact" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
-      <input type="file" accept="image/*,application/pdf" id="ncDocFact" multiple onchange="previewFacturas('ncDocFact','ncDocFactPrev');actualizarChecksDocsNC();">
+      <input type="file" accept="image/*" id="ncDocFact" multiple onchange="previewFacturas('ncDocFact','ncDocFactPrev');actualizarChecksDocsNC();">
       <div id="ncDocFactPrev" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
     </div>
     <div class="field">
@@ -1372,7 +1284,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div class="field">
       <label>Facturas recientes (minimo 2 fotos) <span id="dcChkFact" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
       <div id="dcArchFactExistente" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-      <input type="file" accept="image/*,application/pdf" id="dcArchFact" multiple onchange="previewFacturas('dcArchFact','dcArchFactPrev');actualizarChecksDocsDC();">
+      <input type="file" accept="image/*" id="dcArchFact" multiple onchange="previewFacturas('dcArchFact','dcArchFactPrev');actualizarChecksDocsDC();">
       <div id="dcArchFactPrev" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
       <label id="dcAprobFacturasWrap" class="hidden" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:12px;color:#856404;font-weight:600">
         <input type="checkbox" id="dcAprobFacturas" onchange="actualizarChecksDocsDC()" style="width:15px;height:15px">
@@ -1493,30 +1405,25 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
-<!-- MODAL ELIMINAR DOCUMENTO DE CUENTAS POR COBRAR -->
-<div class="modal-bg" id="mEliminarDocCxC">
+<!-- MODAL DETALLE DE CARGA DE CUENTAS POR COBRAR -->
+<div class="modal-bg" id="mDetalleCargaCxC">
   <div class="modal">
-    <h3 style="color:var(--rojo)">Eliminar documento de Cuentas por Cobrar</h3>
-    <p style="font-size:14px;color:#555;margin-bottom:16px">Esto borra el documento <strong id="mEliminarDocCxCNumero"></strong> de la base actual — <strong>no se puede deshacer</strong>. Usalo solo si quedo cargado duplicado o por error. Si el documento sigue existiendo en el proximo Excel que cargues, podria volver a aparecer. ¿Confirmas?</p>
-    <div style="display:flex;gap:8px">
-      <button class="btn" style="background:var(--rojo);color:#fff;font-weight:600" onclick="ejecutarEliminarDocCxC()">Eliminar definitivamente</button>
-      <button class="btn btn-s" onclick="cerrarModal('mEliminarDocCxC')">Cancelar</button>
+    <h3>Detalle de la carga</h3>
+    <div id="detalleCargaCxCContenido" style="max-height:70vh;overflow-y:auto"></div>
+    <div style="margin-top:16px">
+      <button class="btn btn-s" onclick="cerrarModal('mDetalleCargaCxC')">Cerrar</button>
     </div>
   </div>
 </div>
 
-<!-- MODAL REAPLICAR ABONO A UN DOCUMENTO CXC -->
-<div class="modal-bg" id="mReaplicarAbono">
+<!-- MODAL HISTORIAL DE CARGAS DE CxC -->
+<div class="modal-bg" id="mHistorialCargasCxC">
   <div class="modal">
-    <h3 style="color:var(--ambar)">Reaplicar abono</h3>
-    <p style="font-size:14px;color:#555;margin-bottom:8px">Documento <strong id="reaplicarNumero"></strong> — <span id="reaplicarCliente"></span></p>
-    <div style="font-size:13px;margin-bottom:10px">Saldo actual cargado: <strong id="reaplicarSaldoActual"></strong></div>
-    <div class="field"><label>Monto a descontar (revisa y ajusta si hace falta)</label><input type="number" step="0.01" id="reaplicarMonto" oninput="actualizarReaplicarPreview()"></div>
-    <div style="font-size:13px;margin-bottom:10px">Saldo resultante: <strong id="reaplicarSaldoResultante" style="color:var(--azul)"></strong></div>
-    <p style="font-size:12px;color:#888;margin-bottom:16px">Este monto viene del pago ya confirmado. Si el saldo actual ya reflejaba parte de este cobro por otra via (ajuste directo en Profit, otro pago, etc.), cambia el monto antes de confirmar, o cancela y revisalo manualmente.</p>
-    <div style="display:flex;gap:8px">
-      <button class="btn" style="background:var(--ambar);color:#fff;font-weight:600" onclick="ejecutarReaplicarAbono()">Confirmar y aplicar</button>
-      <button class="btn btn-s" onclick="cerrarModal('mReaplicarAbono')">Cancelar</button>
+    <h3>Historial de cargas</h3>
+    <p style="font-size:12px;color:#666;margin-bottom:10px">Se guardan las ultimas 20 cargas. Toca cualquiera para ver su detalle completo.</p>
+    <div id="historialCargasCxCContenido" style="max-height:70vh;overflow-y:auto"></div>
+    <div style="margin-top:16px">
+      <button class="btn btn-s" onclick="cerrarModal('mHistorialCargasCxC')">Cerrar</button>
     </div>
   </div>
 </div>
@@ -1667,22 +1574,6 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="field" style="flex:1"><label>Presentacion (libre)</label><input type="text" id="productoTipo" placeholder="Ej: Bolsa, Display, Granel..."></div>
     </div>
     <div class="field"><label>Unidades por bulto</label><input type="number" id="productoUniVenta" placeholder="Ej: 36" value="1"></div>
-    <div class="field"><label>CBM por bulto/caja (para calcular cuanto cabe en el contenedor)</label><input type="number" step="0.0001" id="productoCbm" placeholder="Ej: 0.045"></div>
-    <div style="background:#F5F7FA;border-radius:8px;padding:10px;margin-bottom:12px">
-      <label style="font-size:11px;color:#666;text-transform:none;letter-spacing:0;display:block;margin-bottom:6px">O calcula el CBM desde las medidas de la caja</label>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
-        <div class="field" style="flex:1;min-width:70px;margin-bottom:0"><label>Largo</label><input type="number" step="0.01" id="productoLargo" oninput="calcularCbmDesdeMedidas()"></div>
-        <div class="field" style="flex:1;min-width:70px;margin-bottom:0"><label>Ancho</label><input type="number" step="0.01" id="productoAncho" oninput="calcularCbmDesdeMedidas()"></div>
-        <div class="field" style="flex:1;min-width:70px;margin-bottom:0"><label>Alto</label><input type="number" step="0.01" id="productoAlto" oninput="calcularCbmDesdeMedidas()"></div>
-        <div class="field" style="flex:1;min-width:90px;margin-bottom:0">
-          <label>Unidad</label>
-          <select id="productoUnidadMedida" onchange="calcularCbmDesdeMedidas()">
-            <option value="cm">Centimetros</option>
-            <option value="in">Pulgadas</option>
-          </select>
-        </div>
-      </div>
-    </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <div class="field" style="flex:1;min-width:70px"><label>Precio 1</label><input type="number" step="0.01" id="productoP1"></div>
       <div class="field" style="flex:1;min-width:70px"><label>Precio 2</label><input type="number" step="0.01" id="productoP2"></div>
@@ -1766,7 +1657,7 @@ var CLIENTES_PROFIT = [{"id": "0001", "nombre": "LA BODEGUITA DEL PORTU 13225, C
 var PRODUCTOS_PROFIT = [{"id": "GU9000", "nombre": "GOMA DE MASCAR SABOR A MENTA (BOLSA) - TUTIM", "ean": "7750170001439", "uni_venta": 36, "precio": 111.6, "precio2": 106.2, "precio3": 100.8, "precio4": 95.4, "precio5": 90.0, "stock_und": 41, "stock": 1}, {"id": "GU9001", "nombre": "GOMA DE MASCAR SABOR A MENTA (DISPLAY) - TUTIM", "ean": "7750170001446", "uni_venta": 24, "precio": 74.4, "precio2": 70.8, "precio3": 67.2, "precio4": 63.6, "precio5": 60.0, "stock_und": 5084, "stock": 211}, {"id": "GU9010", "nombre": "GOMA DE MASCAR GRAGEADO TUTTI FRUTTI (BOLSA) - TUTIM", "ean": "7750170001460", "uni_venta": 36, "precio": 111.6, "precio2": 106.2, "precio3": 100.8, "precio4": 95.4, "precio5": 90.0, "stock_und": 44, "stock": 1}, {"id": "GU9011", "nombre": "GOMA DE MASCAR GRAGEADO TUTTI FRUTTI (DISPLAY) - TUTIM", "ean": "7750170001477", "uni_venta": 24, "precio": 74.4, "precio2": 70.8, "precio3": 67.2, "precio4": 63.6, "precio5": 60.0, "stock_und": 45, "stock": 1}];
 var WA_RESUMEN='584149157233';var WA_DETALLE='584149164433';
 var STOCK_REAL = {"GU9000":41,"GU9001":5084,"GU9010":44,"GU9011":45};
-var FP_LABELS = {"01":"Contado","05":"Prepagado","02":"Credito 7 dias","03":"Credito 15 dias","04":"Credito 30 dias"};
+var FP_LABELS = {"01":"Contado","02":"Credito 7 dias","03":"Credito 15 dias","04":"Credito 30 dias"};
 var FF_LABELS = {"tipo1":"Tipo 1","tipo2":"Tipo 2","tipo3":"Tipo 3"};
 var PROD_COLORES = {"GU9000":"#1B2A6B","GU9001":"#2E44A8","GU9010":"#A32D2D","GU9011":"#C0392B"};
 
@@ -1792,32 +1683,6 @@ var PRODUCTOS = PRODUCTOS_PROFIT.map(function(a) {
 
 var VEND = null;
 
-// ═══ REPOSICION / CONTENEDOR ═══
-// Configuracion compartida para calcular cuando y cuanto pedir del
-// proveedor (un solo contenedor cubre TODOS los sabores/presentaciones).
-var REPO_CONFIG = {
-  diasProduccion: 20,  // dias que tarda producirse en origen
-  diasEnvio: 25,        // dias de transito maritimo hasta que llega
-  cicloSugeridoDias: 45, // cada cuanto se evalua pedir un contenedor
-  nivelServicio: 95,    // % de servicio deseado -> define el colchon de seguridad
-  topeExtraPct: 25,     // maximo % que un producto puede superar su cantidad ideal al repartir el espacio sobrante
-  // Medidas internas del contenedor (cm) para el calculo real de estiba por capas.
-  // Son medidas estandar de la industria - no se editan desde la UI, solo el
-  // espacio de aire que varia segun lo que decidas dejar en cada embarque.
-  contLargoCm: 1203,     // largo interno util (igual en 40' y 40HQ)
-  contAnchoCm: 235,      // ancho interno util
-  contAlto40Cm: 239,     // alto interno de un 40' estandar
-  contAlto40hqCm: 269,   // alto interno de un 40HQ
-  espacioAireCm: 12      // espacio de ventilacion que se deja libre en el tope (10-15cm tipico)
-};
-var REPO_HISTORIAL = [];
-var REPO_ULTIMO_CALCULO = null;
-
-function repoZScore(nivel){
-  var tabla={90:1.28,95:1.65,97:1.88,98:2.05,99:2.33};
-  return tabla[nivel]||1.65;
-}
-
 // ═══ SUPERVISORES ═══
 // Un supervisor es un vendedor normal (no administrador) al que 01/20 le
 // vincularon otros vendedores. Puede ver los pedidos/cobros/reportes de su
@@ -1826,15 +1691,6 @@ function repoZScore(nivel){
 function esAdminCompleto(){
   return VEND && (VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
 }
-
-// Solo 01 y 20 pueden aplicar descuentos manuales (por producto o generales)
-// al crear o editar un pedido - a diferencia de esAdminCompleto(), 00 NO
-// entra aqui a proposito.
-function puedeAplicarDescuentos(){
-  return VEND && (VEND.codigo==='01'||VEND.codigo==='20');
-}
-var DESCUENTOS_ITEM={}; // {productoId: pct} - descuentos por producto del pedido en curso (crear)
-var DESCUENTOS_ITEM_EDIT={}; // idem, pero para el modal de Editar pedido
 
 function datosVendedorActual(){
   if(!VEND) return null;
@@ -2615,7 +2471,6 @@ function goScreen(name){
 
 function resetPedido(){
   pedido={cliente:null,items:{},paso:1};
-  DESCUENTOS_ITEM={};
   document.getElementById('paso1').classList.remove('hidden');
   document.getElementById('paso2').classList.add('hidden');
   document.getElementById('paso3').classList.add('hidden');
@@ -2630,9 +2485,9 @@ function resetPedido(){
   var selPago=document.getElementById('fPago');
   if(selPago){
     if(esAdmin){
-      selPago.innerHTML='<option value="01">Contado</option><option value="05">Prepagado</option><option value="02" selected>Credito 7 dias</option><option value="03">Credito 15 dias</option><option value="04">Credito 30 dias</option>';
+      selPago.innerHTML='<option value="01">Contado</option><option value="02" selected>Credito 7 dias</option><option value="03">Credito 15 dias</option><option value="04">Credito 30 dias</option>';
     } else {
-      selPago.innerHTML='<option value="01">Contado</option><option value="05">Prepagado</option><option value="02" selected>Credito 7 dias</option>';
+      selPago.innerHTML='<option value="01">Contado</option><option value="02" selected>Credito 7 dias</option>';
     }
   }
   // Limpiar aviso promo display
@@ -2758,7 +2613,6 @@ function renderProds(){
   actualizarPromoCustomOverrides();
   var lp=1;
   try{lp=parseInt(document.getElementById('listaPrecio').value)||1;}catch(e){}
-  var puedeDesc=puedeAplicarDescuentos();
   var html='';
   for(var i=0;i<PRODUCTOS.length;i++){
     var p=PRODUCTOS[i];
@@ -2775,20 +2629,10 @@ function renderProds(){
     var iconoHtml=p.fotoUrl
       ? '<div class="prod-icon" style="background:'+p.color+';padding:0;overflow:hidden;cursor:pointer" onclick="event.stopPropagation();ampliarImagenProducto(&quot;'+p.fotoUrl+'&quot;,&quot;'+p.nombre.replace(/"/g,'&quot;')+'&quot;)"><img src="'+p.fotoUrl+'" style="width:100%;height:100%;object-fit:cover"></div>'
       : '<div class="prod-icon" style="background:'+p.color+'">'+inicialesProducto(p)+'</div>';
-    var descItemHtml=puedeDesc?(
-      '<div style="display:flex;align-items:center;gap:4px;margin-top:4px">'+
-        '<input type="number" min="0" max="100" step="1" value="'+(DESCUENTOS_ITEM[p.id]||'')+'" placeholder="0" '+
-          'id="descItem-'+p.id+'" oninput="cambDescuentoItem(&quot;'+p.id+'&quot;,this.value)" '+
-          'style="width:44px;height:24px;text-align:center;font-size:11px;border:1px solid var(--borde);border-radius:5px;padding:0">'+
-        '<span style="font-size:10px;color:#888">% dcto item</span>'+
-      '</div>'
-    ):'';
     html+='<div class="prod-card"'+op+'>'+iconoHtml+
       '<div class="prod-info"><div class="prod-name">'+p.nombre+'</div>'+
       '<div style="font-size:11px;color:#aaa;margin-top:1px">Ref: '+p.co_art+'</div>'+
-      '<div class="prod-sub" id="precioTxt-'+p.id+'">$'+precio.toFixed(2)+'/bulto - '+(agotado?'Agotado':p.stock+' btos')+promoTxt+'</div>'+
-      descItemHtml+
-      '</div>'+
+      '<div class="prod-sub" id="precioTxt-'+p.id+'">$'+precio.toFixed(2)+'/bulto - '+(agotado?'Agotado':p.stock+' btos')+promoTxt+'</div></div>'+
       '<div class="qty-ctrl">'+
         '<button class="qty-btn" onclick="cambQty(&quot;'+p.id+'&quot;,-1)"'+dis+'>-</button>'+
         '<input type="number" min="0" value="'+qty+'" '+
@@ -2802,26 +2646,6 @@ function renderProds(){
   }
   document.getElementById('listaProd').innerHTML=html;
   actualizarTotales();
-}
-
-// Precio final de un producto para crear/editar un pedido, aplicando el
-// descuento manual por producto (solo 01/20) encima del precio de lista
-// (que ya incluye promociones). mapaDescuentos es DESCUENTOS_ITEM (crear)
-// o DESCUENTOS_ITEM_EDIT (editar).
-function precioConDescuentoItem(precioBase, productId, mapaDescuentos){
-  if(!puedeAplicarDescuentos()) return precioBase;
-  var pct=(mapaDescuentos && mapaDescuentos[productId])||0;
-  if(!pct) return precioBase;
-  return Math.round(precioBase*(1-pct/100)*100)/100;
-}
-
-function cambDescuentoItem(id, val){
-  var pct=parseFloat(val);
-  if(isNaN(pct)||pct<0) pct=0;
-  if(pct>100) pct=100;
-  if(pct===0) delete DESCUENTOS_ITEM[id]; else DESCUENTOS_ITEM[id]=pct;
-  actualizarTotales();
-  actualizarPreciosProductos();
 }
 
 function actualizarBonif(){
@@ -2872,13 +2696,11 @@ function actualizarPreciosProductos(){
     var p=PRODUCTOS[i];
     var el=document.getElementById('precioTxt-'+p.id);
     if(!el) continue;
-    var precioBase=getPrecio(p,lp,fpAt,totalDisplaysAt);
-    var precio=precioConDescuentoItem(precioBase,p.id,DESCUENTOS_ITEM);
+    var precio=getPrecio(p,lp,fpAt,totalDisplaysAt);
     var overridePromo=PROMO_CUSTOM_OVERRIDES[p.id];
     var promoTxt=overridePromo?(' <span style="color:var(--verde);font-weight:600">('+overridePromo.nombrePromo+')</span>'):'';
-    var descTxt=(precio<precioBase)?(' <s style="color:#bbb">$'+precioBase.toFixed(2)+'</s>'):'';
     var agotado=p.stock===0;
-    el.innerHTML='$'+precio.toFixed(2)+'/bulto'+descTxt+' - '+(agotado?'Agotado':p.stock+' btos')+promoTxt;
+    el.innerHTML='$'+precio.toFixed(2)+'/bulto - '+(agotado?'Agotado':p.stock+' btos')+promoTxt;
   }
 }
 
@@ -2894,8 +2716,7 @@ function actualizarTotales(){
       if(PRODUCTOS[j].id===ids[i]){
         var tdAt=(pedido.items['GU9001']||0)+(pedido.items['GU9011']||0);
         var fpAt=''; try{fpAt=document.getElementById('fPago')?document.getElementById('fPago').value:'02';}catch(e){}
-        var precioAt=precioConDescuentoItem(getPrecio(PRODUCTOS[j],lp,fpAt,tdAt),ids[i],DESCUENTOS_ITEM);
-        bultos+=qty;monto+=qty*precioAt;break;
+        bultos+=qty;monto+=qty*getPrecio(PRODUCTOS[j],lp,fpAt,tdAt);break;
       }
     }
   }
@@ -2910,8 +2731,6 @@ function irPaso3(){
   if(total===0){toast('Agrega al menos un producto');return;}
   document.getElementById('paso2').classList.add('hidden');
   document.getElementById('paso3').classList.remove('hidden');
-  var wrapDesc=document.getElementById('wrapDescGeneral');
-  if(wrapDesc) wrapDesc.style.display=puedeAplicarDescuentos()?'block':'none';
   // Calcular bonificación de bolsas / promociones personalizadas
   var bonif = calcularBonificacion(pedido.items);
   var campoBonif = document.getElementById('fPromo');
@@ -2935,15 +2754,7 @@ function abrirConfirmar(){
   var ff=document.getElementById('fFact').value;
   var promo=document.getElementById('fPromo').value;
   var obs=document.getElementById('fObs').value;
-  var descGeneralPct=0;
-  if(puedeAplicarDescuentos()){
-    var elDG=document.getElementById('fDescGeneral');
-    descGeneralPct=elDG?(parseFloat(elDG.value)||0):0;
-    if(descGeneralPct<0) descGeneralPct=0;
-    if(descGeneralPct>100) descGeneralPct=100;
-  }
-  var bultos=0,montoBruto=0,itemsHtml='';
-  var preciosUnitariosConf={};
+  var bultos=0,monto=0,itemsHtml='';
   itemsHtml+='<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px">';
   itemsHtml+='<tr style="background:var(--azul-c);color:var(--azul)">';
   itemsHtml+='<th style="padding:6px 4px;text-align:left;font-weight:600">Ref.</th>';
@@ -2959,29 +2770,20 @@ function abrirConfirmar(){
       if(PRODUCTOS[j].id===ids[i]){
         var p=PRODUCTOS[j];
         var tdConf=(pedido.items['GU9001']||0)+(pedido.items['GU9011']||0);
-        var precioBase=getPrecio(p,lp,fp,tdConf);
-        var precio=precioConDescuentoItem(precioBase,p.id,DESCUENTOS_ITEM);
-        preciosUnitariosConf[p.id]=precio;
+        var precio=getPrecio(p,lp,fp,tdConf);
         var sub=qty*precio;
-        bultos+=qty;montoBruto+=sub;
+        bultos+=qty;monto+=sub;
         var rowBg=i%2===0?'#fff':'var(--azul-c)';
-        var precioTxt=(precio<precioBase)?('<s style="color:#bbb;font-size:11px">$'+precioBase.toFixed(2)+'</s> $'+precio.toFixed(2)):('$'+precio.toFixed(2));
         itemsHtml+='<tr style="background:'+rowBg+'">';
         itemsHtml+='<td style="padding:6px 4px;color:#666;font-size:12px">'+p.co_art+'</td>';
         itemsHtml+='<td style="padding:6px 4px;font-weight:500">'+p.nombre+'</td>';
         itemsHtml+='<td style="padding:6px 4px;text-align:center;font-weight:700">'+qty+'</td>';
-        itemsHtml+='<td style="padding:6px 4px;text-align:right">'+precioTxt+'</td>';
+        itemsHtml+='<td style="padding:6px 4px;text-align:right">$'+precio.toFixed(2)+'</td>';
         itemsHtml+='<td style="padding:6px 4px;text-align:right;font-weight:700;color:var(--azul)">$'+sub.toFixed(2)+'</td>';
         itemsHtml+='</tr>';
         break;
       }
     }
-  }
-  var montoDescGeneral=Math.round(montoBruto*descGeneralPct/100*100)/100;
-  var monto=Math.round((montoBruto-montoDescGeneral)*100)/100;
-  if(descGeneralPct>0){
-    itemsHtml+='<tr><td colspan="4" style="padding:6px 4px;text-align:right;color:var(--rojo)">Descuento general ('+descGeneralPct+'%)</td>'+
-      '<td style="padding:6px 4px;text-align:right;color:var(--rojo)">-$'+montoDescGeneral.toFixed(2)+'</td></tr>';
   }
   itemsHtml+='<tr style="border-top:2px solid var(--azul)">';
   itemsHtml+='<td colspan="2" style="padding:8px 4px;font-weight:700;color:var(--azul)">TOTAL</td>';
@@ -2999,11 +2801,7 @@ function abrirConfirmar(){
     if(obsFinal.indexOf(obsProm)<0) obsFinal=obsFinal?obsFinal+' | '+obsProm:obsProm;
   }
   if(obsFinal!==obs) document.getElementById('fObs').value=obsFinal;
-  pedido.temp={fp:fp,fpL:FP_LABELS[fp]||fp,ff:ff,ffL:FF_LABELS[ff]||ff,promo:promo,obs:obsFinal,bultos:bultos,
-    monto:monto,montoBruto:montoBruto,lp:lp,
-    descuentosItem:JSON.parse(JSON.stringify(DESCUENTOS_ITEM)),descuentoGeneralPct:descGeneralPct,
-    montoDescuentoGeneral:montoDescGeneral,preciosUnitarios:preciosUnitariosConf,
-    bonificacionesUnidades:promosInfoConf.bonificacionesUnidades};
+  pedido.temp={fp:fp,fpL:FP_LABELS[fp]||fp,ff:ff,ffL:FF_LABELS[ff]||ff,promo:promo,obs:obsFinal,bultos:bultos,monto:monto,lp:lp};
   var alertaHtml=esNuevo(pedido.cliente)?'<div class="alerta-nvo">CLIENTE NUEVO - crear en Profit antes de facturar</div>':'';
   var cli=pedido.cliente;
   document.getElementById('resumenPed').innerHTML=
@@ -3028,51 +2826,34 @@ function abrirConfirmar(){
 var _pedidoYaGuardado=false;
 function crearObj(){
   var t=pedido.temp;
-  var bultosFinal=0;
+  var montoFinal=0,bultosFinal=0;
   var ids=Object.keys(pedido.items);
   var tdFinal=(pedido.items['GU9001']||0)+(pedido.items['GU9011']||0);
   var preciosUnitarios={};
-  var montoBrutoFinal=0;
   for(var i=0;i<ids.length;i++){
     var qty=pedido.items[ids[i]];
     bultosFinal+=qty;
     for(var j=0;j<PRODUCTOS.length;j++){
       if(PRODUCTOS[j].id===ids[i]){
-        // Si abrirConfirmar() ya calculo el precio (con cualquier descuento
-        // manual por producto aplicado), se reutiliza tal cual para que el
-        // pedido guardado sea exactamente lo que se vio en el resumen.
-        var precioReal=(t.preciosUnitarios && t.preciosUnitarios[ids[i]]!==undefined)
-          ? t.preciosUnitarios[ids[i]]
-          : getPrecio(PRODUCTOS[j],t.lp,t.fp,tdFinal);
+        var precioReal=getPrecio(PRODUCTOS[j],t.lp,t.fp,tdFinal);
         preciosUnitarios[ids[i]]=precioReal;
-        montoBrutoFinal+=qty*precioReal;
+        montoFinal+=qty*precioReal;
         break;
       }
     }
   }
-  var descGeneralPctFinal=t.descuentoGeneralPct||0;
-  var montoDescGeneralFinal=Math.round(montoBrutoFinal*descGeneralPctFinal/100*100)/100;
-  var montoFinal=Math.round((montoBrutoFinal-montoDescGeneralFinal)*100)/100;
   var obj={id:Date.now(),fecha:new Date().toLocaleDateString('es-VE'),
     hora:new Date().toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit'}),
     cliente:JSON.parse(JSON.stringify(pedido.cliente)),
     items:JSON.parse(JSON.stringify(pedido.items)),
     // Precio EXACTO que se cobro por cada producto (ya con cualquier
-    // promocion o descuento manual aplicado). Se guarda aparte del
-    // "listaPrecio" para que el WhatsApp, correo y Excel de este pedido
-    // sigan mostrando lo que realmente se cobro, incluso si mas adelante
-    // cambian los precios o las promociones dejan de estar activas.
+    // promocion aplicada). Se guarda aparte del "listaPrecio" para que
+    // el WhatsApp, correo y Excel de este pedido sigan mostrando lo que
+    // realmente se cobro, incluso si mas adelante cambian los precios o
+    // las promociones dejan de estar activas.
     preciosUnitarios:preciosUnitarios,
     formaPago:t.fp,formaPagoL:t.fpL,tipoFact:t.ff,tipoFactL:t.ffL,
-    promo:t.promo,obs:t.obs,bultos:bultosFinal,
-    montoBruto:montoBrutoFinal,descuentoGeneralPct:descGeneralPctFinal,
-    montoDescuentoGeneral:montoDescGeneralFinal,monto:montoFinal,
-    descuentosItem:t.descuentosItem||{},
-    // Unidades gratis por producto que otorgo una promocion tipo "unidades
-    // gratis" (ej. Promo Bultos Bolsa). No se suman a "items" (que refleja
-    // lo facturado/vendido), pero SI consumen inventario real - se usan en
-    // Reposicion para calcular el verdadero consumo, no solo lo vendido.
-    bonificacionesUnidades:t.bonificacionesUnidades||{},
+    promo:t.promo,obs:t.obs,bultos:bultosFinal,monto:montoFinal,
     listaPrecio:t.lp,vendedor:VEND.codigo,vendedorNombre:VEND.nombre,
     zona:VEND.zona,status:'pendiente'};
   if(pedido.bloqueoDeudaOmitido){
@@ -3152,20 +2933,14 @@ function genCSV(){
   var hoy=new Date().toLocaleDateString('es-VE');
   var fechaDbf=new Date().toISOString().slice(0,10).replace(/-/g,'');
   var nvo=esNuevo(cli)?'SI':'NO';
-  var descGeneralCsv=t.descuentoGeneralPct||0;
-  var csv='CO_CLI,NOMBRE,RIF,TEL,CO_VEN,FEC_EMIS,CO_ART,DESCRIPCION,CANTIDAD,PRECIO,DCTO_ITEM_%,SUBTOTAL,DCTO_GENERAL_%,TOTAL,FORMA_PAG,TIPO_FACT,LISTA_PRECIO,PROMO,OBS,CLIENTE_NUEVO'+nl();
+  var csv='CO_CLI,NOMBRE,RIF,TEL,CO_VEN,FEC_EMIS,CO_ART,DESCRIPCION,CANTIDAD,PRECIO,SUBTOTAL,TOTAL,FORMA_PAG,TIPO_FACT,LISTA_PRECIO,PROMO,OBS,CLIENTE_NUEVO'+nl();
   var ids=Object.keys(pedido.items);
   for(var i=0;i<ids.length;i++){
     var qty=pedido.items[ids[i]];
     for(var j=0;j<PRODUCTOS.length;j++){
       if(PRODUCTOS[j].id===ids[i]){
-        var p=PRODUCTOS[j];
-        // Se usa el precio YA calculado en abrirConfirmar() (con cualquier
-        // descuento manual por producto aplicado), no el precio de lista
-        // sin descontar - antes el Excel/CSV siempre traia el precio lleno.
-        var precio=(t.preciosUnitarios && t.preciosUnitarios[ids[i]]!==undefined)?t.preciosUnitarios[ids[i]]:getPrecio(p,lp);
-        var descItemCsv=(t.descuentosItem && t.descuentosItem[ids[i]])||0;
-        csv+='"'+cli.id+'","'+cli.nombre+'","'+cli.rif+'","'+(cli.tel||'')+'","'+VEND.codigo+'","'+fechaDbf+'","'+p.co_art+'","'+p.nombre+'",'+qty+','+precio.toFixed(2)+','+descItemCsv+','+(qty*precio).toFixed(2)+','+descGeneralCsv+','+t.monto.toFixed(2)+',"'+t.fp+'","'+t.ff+'",'+lp+',"'+(t.promo||'')+'","'+(t.obs||'')+'","'+nvo+'"'+nl();
+        var p=PRODUCTOS[j],precio=getPrecio(p,lp);
+        csv+='"'+cli.id+'","'+cli.nombre+'","'+cli.rif+'","'+(cli.tel||'')+'","'+VEND.codigo+'","'+fechaDbf+'","'+p.co_art+'","'+p.nombre+'",'+qty+','+precio.toFixed(2)+','+(qty*precio).toFixed(2)+','+t.monto.toFixed(2)+',"'+t.fp+'","'+t.ff+'",'+lp+',"'+(t.promo||'')+'","'+(t.obs||'')+'","'+nvo+'"'+nl();
         break;
       }
     }
@@ -3183,19 +2958,12 @@ function genExcel(){
     var qty=pedido.items[ids[i]];
     for(var j=0;j<PRODUCTOS.length;j++){
       if(PRODUCTOS[j].id===ids[i]){
-        var p=PRODUCTOS[j];
-        // Igual que en genCSV(): usar el precio YA con el descuento por
-        // producto aplicado (calculado en abrirConfirmar), no el precio
-        // de lista sin descontar.
-        var precio=(t.preciosUnitarios && t.preciosUnitarios[ids[i]]!==undefined)?t.preciosUnitarios[ids[i]]:getPrecio(p,lp);
-        var descItemXls=(t.descuentosItem && t.descuentosItem[ids[i]])||0;
-        filas+='<tr><td>'+p.co_art+'</td><td>'+p.nombre+'</td><td>'+qty+'</td><td>$'+precio.toFixed(2)+'</td><td>'+(descItemXls?descItemXls+'%':'-')+'</td><td>$'+(qty*precio).toFixed(2)+'</td></tr>';
+        var p=PRODUCTOS[j],precio=getPrecio(p,lp);
+        filas+='<tr><td>'+p.co_art+'</td><td>'+p.nombre+'</td><td>'+qty+'</td><td>$'+precio.toFixed(2)+'</td><td>$'+(qty*precio).toFixed(2)+'</td></tr>';
         break;
       }
     }
   }
-  var descGeneralXls=t.descuentoGeneralPct||0;
-  var filaDescGeneral=descGeneralXls?('<tr><td colspan="5" style="text-align:right;color:#C0392B">Descuento general ('+descGeneralXls+'%)</td><td style="text-align:right;color:#C0392B">-$'+(t.montoDescuentoGeneral||0).toFixed(2)+'</td></tr>'):'';
   var xls='<html><head><meta charset="UTF-8"><style>th{background:#1B2A6B;color:#fff;padding:6px}td{padding:5px;border-bottom:1px solid #eee}</style></head><body>'+
     '<h2>PEDIDO TUTIM - '+hoy+'</h2>'+
     (esNuevo(cli)?'<p style="color:#E8509A;font-weight:bold">CLIENTE NUEVO - Crear en Profit antes de facturar</p>':'')+
@@ -3203,8 +2971,8 @@ function genExcel(){
     '<p><b>Cod. Cliente:</b> '+cli.id+' &nbsp;|&nbsp; <b>Cliente:</b> '+cli.nombre+' &nbsp;|&nbsp; <b>RIF:</b> '+cli.rif+(cli.tel?' &nbsp;|&nbsp; <b>Tel:</b> '+cli.tel:'')+'</p>'+
     '<p><b>Pago:</b> '+t.fpL+' - <b>Fact:</b> '+t.ffL+' - <b>Precio:</b> Lista '+lp+'</p>'+
     (t.promo?'<p><b>Promo:</b> '+t.promo+'</p>':'')+
-    '<table><tr><th>Codigo</th><th>Producto</th><th>Bultos</th><th>Precio</th><th>% Dcto</th><th>Subtotal</th></tr>'+filas+filaDescGeneral+
-    '<tr><td colspan="5" style="text-align:right;font-weight:bold">TOTAL</td><td style="font-weight:bold;color:#1B2A6B">$'+t.monto.toFixed(2)+'</td></tr></table>'+
+    '<table><tr><th>Codigo</th><th>Producto</th><th>Bultos</th><th>Precio</th><th>Subtotal</th></tr>'+filas+
+    '<tr><td colspan="4" style="text-align:right;font-weight:bold">TOTAL</td><td style="font-weight:bold;color:#1B2A6B">$'+t.monto.toFixed(2)+'</td></tr></table>'+
     (t.obs?'<p><b>Obs:</b> '+t.obs+'</p>':'')+
     '</body></html>';
   descargar(xls,'application/vnd.ms-excel','pedido_'+hoy.replace(/\//g,'-')+'.xls');
@@ -3375,10 +3143,9 @@ function renderPedidoCard(p){
   var anulado=p.anulado;
   var cardBorder=anulado?'var(--rojo)':(p.recibidoOficina?'var(--azul)':(p.enviado?'var(--verde)':'var(--borde)'));
   var cardOpacity=anulado?'opacity:.55':'';
-  var puedeEditarSiempre=(VEND && (VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20'));
-  var btnEditar=(p.recibidoOficina && !puedeEditarSiempre)
+  var btnEditar=p.recibidoOficina
     ?'<button disabled style="background:#eee;color:#aaa;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:not-allowed">Editar</button>'
-    :'<button onclick="event.stopPropagation();editarPedido(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Editar'+(p.recibidoOficina?' ⚠':'')+'</button>';
+    :'<button onclick="event.stopPropagation();editarPedido(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Editar</button>';
   var btnAnular='<button onclick="event.stopPropagation();confirmarAnular(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Anular</button>';
   var btnReactivar=puedeReactivar(p)?'<button onclick="event.stopPropagation();confirmarReactivar(&quot;'+p.id+'&quot;)" style="background:var(--verde-c);color:var(--verde);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Reactivar</button>':'';
   var esAdminElim=(VEND.codigo==='01'||VEND.codigo==='20');
@@ -3444,10 +3211,6 @@ function verDetallePedidoLista(id){
     itemsHtml+='<td style="padding:6px 4px;text-align:right">$'+precio.toFixed(2)+'</td>';
     itemsHtml+='<td style="padding:6px 4px;text-align:right;font-weight:700;color:var(--azul)">$'+sub.toFixed(2)+'</td>';
     itemsHtml+='</tr>';
-  }
-  if(ped.descuentoGeneralPct){
-    itemsHtml+='<tr><td colspan="4" style="padding:6px 4px;text-align:right;color:var(--rojo)">Descuento general ('+ped.descuentoGeneralPct+'%)</td>'+
-      '<td style="padding:6px 4px;text-align:right;color:var(--rojo)">-$'+(ped.montoDescuentoGeneral||0).toFixed(2)+'</td></tr>';
   }
   itemsHtml+='<tr style="border-top:2px solid var(--azul)">';
   itemsHtml+='<td colspan="2" style="padding:8px 4px;font-weight:700;color:var(--azul)">TOTAL</td>';
@@ -3600,20 +3363,13 @@ function enviarDetalleWA(){
           var p=PRODUCTOS[k];
           var precio=precioUnitarioPedido(ped, ids[j], p);
           var sub=qty*precio;
-          var descItemWA=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
           lineas.push('  Ref: '+p.co_art+' - '+p.nombre);
-          lineas.push('  '+qty+' btos x $'+precio.toFixed(2)+(descItemWA?' (-'+descItemWA+'%)':'')+' = $'+sub.toFixed(2));
+          lineas.push('  '+qty+' btos x $'+precio.toFixed(2)+' = $'+sub.toFixed(2));
           break;
         }
       }
     }
-    if(ped.descuentoGeneralPct){
-      lineas.push('Subtotal: $'+(ped.montoBruto||ped.monto).toFixed(2)+' ('+ped.bultos+' btos)');
-      lineas.push('Descuento general ('+ped.descuentoGeneralPct+'%): -$'+(ped.montoDescuentoGeneral||0).toFixed(2));
-      lineas.push('Total: $'+ped.monto.toFixed(2));
-    } else {
-      lineas.push('Subtotal: $'+ped.monto.toFixed(2)+' ('+ped.bultos+' btos)');
-    }
+    lineas.push('Subtotal: $'+ped.monto.toFixed(2)+' ('+ped.bultos+' btos)');
     lineas.push('Pago: '+(ped.formaPagoL||ped.formaPago)+' | Fact: '+(ped.tipoFactL||ped.tipoFact));
     lineas.push('Lista precio: Precio '+lp);
     if(ped.promo) lineas.push('Promo: '+ped.promo);
@@ -3735,8 +3491,8 @@ function enviarCorreo(){
       lineas.push('DIRECCION DE DESPACHO DIFERENTE A LA FISCAL: '+ped.cliente.dirEntrega);
     }
     lineas.push('');
-    lineas.push('Ref.       Articulo              Btos   P.Unit   %Dcto    Total');
-    lineas.push('---------- -------------------- ------ --------- ----- ---------');
+    lineas.push('Ref.       Articulo              Btos   P.Unit    Total');
+    lineas.push('---------- -------------------- ------ --------- ---------');
     var ids=Object.keys(ped.items);
     for(var j=0;j<ids.length;j++){
       var qty=ped.items[ids[j]];
@@ -3745,26 +3501,18 @@ function enviarCorreo(){
           var p=PRODUCTOS[k];
           var pr=precioUnitarioPedido(ped, ids[j], p);
           var sub=qty*pr;
-          var descItemCo=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
           var col1=(p.co_art+'          ').slice(0,10);
           var col2=(p.nombre+'                    ').slice(0,20);
           var col3=('      '+qty).slice(-6);
           var col4=('    $'+pr.toFixed(2)).slice(-9);
-          var col4b=(descItemCo?('   '+descItemCo+'%'):'     -').slice(-5);
           var col5=('    $'+sub.toFixed(2)).slice(-9);
-          lineas.push(col1+' '+col2+' '+col3+' '+col4+' '+col4b+' '+col5);
+          lineas.push(col1+' '+col2+' '+col3+' '+col4+' '+col5);
           break;
         }
       }
     }
-    lineas.push('---------- -------------------- ------ --------- ----- ---------');
-    if(ped.descuentoGeneralPct){
-      lineas.push('                        SUBTOTAL'+('      '+ped.bultos).slice(-6)+'                '+'    $'+(ped.montoBruto||ped.monto).toFixed(2));
-      lineas.push('                        DESCUENTO GENERAL ('+ped.descuentoGeneralPct+'%)                  -$'+(ped.montoDescuentoGeneral||0).toFixed(2));
-      lineas.push('                        TOTAL'+('      '+ped.bultos).slice(-6)+'                '+'    $'+ped.monto.toFixed(2));
-    } else {
-      lineas.push('                        SUBTOTAL'+('      '+ped.bultos).slice(-6)+'                '+'    $'+ped.monto.toFixed(2));
-    }
+    lineas.push('---------- -------------------- ------ --------- ---------');
+    lineas.push('                        SUBTOTAL'+('      '+ped.bultos).slice(-6)+'          '+'    $'+ped.monto.toFixed(2));
     lineas.push('');
     lineas.push('Pago     : '+(ped.formaPagoL||ped.formaPago));
     lineas.push('Tipo     : '+(ped.tipoFactL||ped.tipoFact));
@@ -3791,18 +3539,16 @@ function exportarCSVDia(){
   var pedHoy=getPedidosSeleccionados();
   if(pedHoy.length===0){toast('No hay pedidos para exportar');return;}
   var fechaDbf=new Date().toISOString().slice(0,10).replace(/-/g,'');
-  var csv='CO_CLI,NOMBRE,RIF,CO_VEN,NOMBRE_VENDEDOR,FEC_EMIS,CO_ART,DESCRIPCION,CANTIDAD,PRECIO,DCTO_ITEM_%,SUBTOTAL,DCTO_GENERAL_%,TOTAL,FORMA_PAG,TIPO_FACT,LISTA_PRECIO,PROMO,CLIENTE_NUEVO'+nl();
+  var csv='CO_CLI,NOMBRE,RIF,CO_VEN,NOMBRE_VENDEDOR,FEC_EMIS,CO_ART,DESCRIPCION,CANTIDAD,PRECIO,SUBTOTAL,TOTAL,FORMA_PAG,TIPO_FACT,LISTA_PRECIO,PROMO,CLIENTE_NUEVO'+nl();
   for(var i=0;i<pedHoy.length;i++){
     var ped=pedHoy[i],lp=ped.listaPrecio||1,nvo=esNuevo(ped.cliente)?'SI':'NO';
     var ids=Object.keys(ped.items);
-    var descGeneralDia=ped.descuentoGeneralPct||0;
     for(var j=0;j<ids.length;j++){
       var qty=ped.items[ids[j]];
       for(var k=0;k<PRODUCTOS.length;k++){
         if(PRODUCTOS[k].id===ids[j]){
           var p=PRODUCTOS[k],precio=precioUnitarioPedido(ped, ids[j], p);
-          var descItemDia=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
-          csv+='"'+ped.cliente.id+'","'+ped.cliente.nombre+'","'+ped.cliente.rif+'","'+(ped.vendedor||VEND.codigo)+'","'+(ped.vendedorNombre||VEND.nombre)+'","'+fechaDbf+'","'+p.co_art+'","'+p.nombre+'",'+qty+','+precio.toFixed(2)+','+descItemDia+','+(qty*precio).toFixed(2)+','+descGeneralDia+','+ped.monto.toFixed(2)+',"'+ped.formaPago+'","'+ped.tipoFact+'",'+lp+',"'+(ped.promo||'')+'","'+nvo+'"'+nl();
+          csv+='"'+ped.cliente.id+'","'+ped.cliente.nombre+'","'+ped.cliente.rif+'","'+(ped.vendedor||VEND.codigo)+'","'+(ped.vendedorNombre||VEND.nombre)+'","'+fechaDbf+'","'+p.co_art+'","'+p.nombre+'",'+qty+','+precio.toFixed(2)+','+(qty*precio).toFixed(2)+','+ped.monto.toFixed(2)+',"'+ped.formaPago+'","'+ped.tipoFact+'",'+lp+',"'+(ped.promo||'')+'","'+nvo+'"'+nl();
           break;
         }
       }
@@ -3852,7 +3598,7 @@ function exportarExcelDia(){
       contenido+='<table style="width:100%;margin-bottom:4px"><tr><td class="hdr-vend">VEND '+vid2+' — '+vd.nombre+'</td></tr></table>';
       // Tabla de pedidos de este vendedor
       contenido+='<table style="width:100%;border-collapse:collapse;margin-bottom:16px">';
-      contenido+='<tr><th>Cod.Cli</th><th>Cliente</th><th>RIF</th><th>Fecha</th><th>Ref.</th><th>Producto</th><th>Btos</th><th>P.Unit</th><th>% Dcto</th><th>Subtotal</th><th>Dcto Gral</th><th>Pago</th><th>Tipo Pedido</th><th>Promo</th><th>Obs</th></tr>';
+      contenido+='<tr><th>Cod.Cli</th><th>Cliente</th><th>RIF</th><th>Fecha</th><th>Ref.</th><th>Producto</th><th>Btos</th><th>P.Unit</th><th>Subtotal</th><th>Pago</th><th>Tipo Pedido</th><th>Promo</th><th>Obs</th></tr>';
       var vTotB=0,vTotM=0;
       for(var c=0;c<vd.ordenCli.length;c++){
         var cid2=vd.ordenCli[c];
@@ -3873,8 +3619,6 @@ function exportarExcelDia(){
             for(var k=0;k<PRODUCTOS.length;k++){
               if(PRODUCTOS[k].id===ids[j]){
                 var p=PRODUCTOS[k],precio=precioUnitarioPedido(ped, ids[j], p),sub=qty*precio;
-                var descItemOf=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
-                var descGeneralOf=ped.descuentoGeneralPct||0;
                 totB+=qty;totM+=sub;vTotB+=qty;vTotM+=sub;
                 var bgRow=c%2===0?'#fff':'#F8F9FF';
                 contenido+='<tr style="background:'+bgRow+'">';
@@ -3886,9 +3630,7 @@ function exportarExcelDia(){
                 contenido+='<td>'+p.nombre+'</td>';
                 contenido+='<td style="text-align:center">'+qty+'</td>';
                 contenido+='<td style="text-align:right">$'+precio.toFixed(2)+'</td>';
-                contenido+='<td style="text-align:center">'+(descItemOf?descItemOf+'%':'-')+'</td>';
                 contenido+='<td style="text-align:right">$'+sub.toFixed(2)+'</td>';
-                contenido+='<td style="text-align:center">'+(firstProd&&descGeneralOf?descGeneralOf+'%':'')+'</td>';
                 contenido+='<td>'+(firstProd?(ped.formaPagoL||ped.formaPago):'')+'</td>';
                 contenido+='<td>'+(firstProd?(ped.tipoFactL||ped.tipoFact):'')+'</td>';
                 contenido+='<td>'+(firstProd&&ped.promo?ped.promo:'')+'</td>';
@@ -3902,8 +3644,8 @@ function exportarExcelDia(){
         }
       }
       contenido+='<tr class="tot-row"><td colspan="6" style="text-align:right">TOTAL VEND '+vid2+'</td>';
-      contenido+='<td style="text-align:center">'+vTotB+'</td><td></td><td></td>';
-      contenido+='<td style="text-align:right;color:#1B2A6B">$'+vTotM.toFixed(2)+'</td><td></td><td colspan="4"></td></tr>';
+      contenido+='<td style="text-align:center">'+vTotB+'</td><td></td>';
+      contenido+='<td style="text-align:right;color:#1B2A6B">$'+vTotM.toFixed(2)+'</td><td colspan="4"></td></tr>';
       contenido+='</table>';
     }
   } else {
@@ -3918,7 +3660,7 @@ function exportarExcelDia(){
     }
     contenido+='<p><b>Vendedor:</b> '+VEND.nombre+' (VEND '+VEND.codigo+')</p>';
     contenido+='<table style="width:100%;border-collapse:collapse">';
-    contenido+='<tr><th>Cod.Cli</th><th>Cliente</th><th>RIF</th><th>Fecha</th><th>Ref.</th><th>Producto</th><th>Btos</th><th>P.Unit</th><th>% Dcto</th><th>Subtotal</th><th>Dcto Gral</th><th>Pago</th><th>Tipo Pedido</th><th>Promo</th><th>Obs</th></tr>';
+    contenido+='<tr><th>Cod.Cli</th><th>Cliente</th><th>RIF</th><th>Fecha</th><th>Ref.</th><th>Producto</th><th>Btos</th><th>P.Unit</th><th>Subtotal</th><th>Pago</th><th>Tipo Pedido</th><th>Promo</th><th>Obs</th></tr>';
     for(var c=0;c<ordenCliXls.length;c++){
       var cid2=ordenCliXls[c];
       var cdat=porCliXls[cid2];
@@ -3938,8 +3680,6 @@ function exportarExcelDia(){
           for(var k=0;k<PRODUCTOS.length;k++){
             if(PRODUCTOS[k].id===ids[j]){
               var p=PRODUCTOS[k],precio=precioUnitarioPedido(ped, ids[j], p),sub=qty*precio;
-              var descItemNo=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
-              var descGeneralNo=ped.descuentoGeneralPct||0;
               totB+=qty;totM+=sub;
               var bgRow=c%2===0?'#fff':'#F8F9FF';
               contenido+='<tr style="background:'+bgRow+'">';
@@ -3951,9 +3691,7 @@ function exportarExcelDia(){
               contenido+='<td>'+p.nombre+'</td>';
               contenido+='<td style="text-align:center">'+qty+'</td>';
               contenido+='<td style="text-align:right">$'+precio.toFixed(2)+'</td>';
-              contenido+='<td style="text-align:center">'+(descItemNo?descItemNo+'%':'-')+'</td>';
               contenido+='<td style="text-align:right">$'+sub.toFixed(2)+'</td>';
-              contenido+='<td style="text-align:center">'+(firstProd&&descGeneralNo?descGeneralNo+'%':'')+'</td>';
               contenido+='<td>'+(firstProd?(ped.formaPagoL||ped.formaPago):'')+'</td>';
               contenido+='<td>'+(firstProd?(ped.tipoFactL||ped.tipoFact):'')+'</td>';
               contenido+='<td>'+(firstProd&&ped.promo?ped.promo:'')+'</td>';
@@ -3967,8 +3705,8 @@ function exportarExcelDia(){
       }
     }
     contenido+='<tr class="tot-row"><td colspan="6" style="text-align:right">TOTAL</td>';
-    contenido+='<td style="text-align:center">'+totB+'</td><td></td><td></td>';
-    contenido+='<td style="text-align:right;color:#1B2A6B">$'+totM.toFixed(2)+'</td><td></td><td colspan="4"></td></tr>';
+    contenido+='<td style="text-align:center">'+totB+'</td><td></td>';
+    contenido+='<td style="text-align:right;color:#1B2A6B">$'+totM.toFixed(2)+'</td><td colspan="4"></td></tr>';
     contenido+='</table>';
   }
 
@@ -4475,13 +4213,6 @@ function previewFacturas(inputId, previewId){
   var previewEl=document.getElementById(previewId);
   previewEl.innerHTML='';
   files.forEach(function(file){
-    if(file.type==='application/pdf'){
-      var divPdf=document.createElement('div');
-      divPdf.style.cssText='width:60px;height:60px;border-radius:8px;border:1.5px solid var(--borde);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;color:var(--azul);text-align:center;padding:2px;overflow:hidden';
-      divPdf.innerHTML='📄<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:56px">'+file.name+'</div>';
-      previewEl.appendChild(divPdf);
-      return;
-    }
     var reader=new FileReader();
     reader.onload=function(e){
       var div=document.createElement('div');
@@ -5116,10 +4847,6 @@ function editarPedido(pid){
 
   // Cargar datos en el modal
   var lp = ped.listaPrecio || 1;
-  var puedeDescEdit=puedeAplicarDescuentos();
-  // Precargar los descuentos por producto que ya tuviera el pedido (si se
-  // creo o edito antes con descuento), para poder seguir ajustandolos
-  DESCUENTOS_ITEM_EDIT=JSON.parse(JSON.stringify(ped.descuentosItem||{}));
   // Recalcular que promociones aplican segun los productos de ESTE pedido
   // (editar es una edicion en vivo: al guardar se recalculan montos con el
   // estado actual de precios/promociones, asi que los precios mostrados
@@ -5132,19 +4859,9 @@ function editarPedido(pid){
     var p = PRODUCTOS[i];
     var qty = ped.items[p.id] || 0;
     var precio = getPrecio(p, lp);
-    var descItemHtmlEdit=puedeDescEdit?(
-      '<div style="display:flex;align-items:center;gap:4px;margin-top:4px">'+
-        '<input type="number" min="0" max="100" step="1" value="'+(DESCUENTOS_ITEM_EDIT[p.id]||'')+'" placeholder="0" '+
-          'id="edescItem-'+p.id+'" oninput="cambDescuentoItemEdit(&quot;'+p.id+'&quot;,this.value)" '+
-          'style="width:44px;height:24px;text-align:center;font-size:11px;border:1px solid var(--borde);border-radius:5px;padding:0">'+
-        '<span style="font-size:10px;color:#888">% dcto item</span>'+
-      '</div>'
-    ):'';
     prodRows += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--borde)">' +
       '<div style="flex:1"><div style="font-size:13px;font-weight:600">'+p.nombre+'</div>' +
-      '<div style="font-size:11px;color:#aaa" id="eprecio-'+p.id+'">'+p.co_art+' · $'+precio.toFixed(2)+'/bto</div>'+
-      descItemHtmlEdit+
-      '</div>' +
+      '<div style="font-size:11px;color:#aaa">'+p.co_art+' · $'+precio.toFixed(2)+'/bto</div></div>' +
       '<div style="display:flex;align-items:center;gap:6px">' +
         '<button onclick="cambQtyEdit(&quot;'+p.id+'&quot;,this,-1)" style="width:30px;height:30px;border:1.5px solid var(--borde);border-radius:6px;background:#fff;font-size:18px;cursor:pointer;color:var(--azul)">-</button>' +
         '<span id="eqty-'+p.id+'" style="font-size:16px;font-weight:700;min-width:24px;text-align:center;color:var(--azul)">'+qty+'</span>' +
@@ -5156,11 +4873,6 @@ function editarPedido(pid){
   var cliNombre = ped.cliente.nombre;
   var cliRif = ped.cliente.rif;
 
-  var descGeneralHtml=puedeDescEdit?(
-    '<div class="field"><label>Descuento general del pedido (%)</label>' +
-    '<input type="number" min="0" max="100" step="1" id="eDescGeneral" value="'+(ped.descuentoGeneralPct||'')+'" placeholder="0" oninput="recalcularEdicionPrecios()"></div>'
-  ):'';
-
   var html =
     '<div class="field"><label>Cliente</label>' +
     '<input type="text" id="eCliNom" value="'+cliNombre+'" placeholder="Nombre cliente"></div>' +
@@ -5170,14 +4882,9 @@ function editarPedido(pid){
     '<input type="text" id="eCliTel" value="'+(ped.cliente.tel||'')+'"></div>' +
     '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Productos</div>'+prodRows+'</div>' +
     '<div class="field"><label>Lista de precio</label>' +
-    '<select id="eListaPrecio" onchange="recalcularEdicionPrecios()"><option value="1" '+(lp===1?'selected':'')+'>Precio 1</option><option value="2" '+(lp===2?'selected':'')+'>Precio 2</option><option value="3" '+(lp===3?'selected':'')+'>Precio 3</option><option value="4" '+(lp===4?'selected':'')+'>Precio 4</option><option value="5" '+(lp===5?'selected':'')+'>Precio 5</option></select></div>' +
-    descGeneralHtml +
-    '<div style="background:var(--azul-c);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">' +
-      '<span style="font-size:13px;font-weight:600;color:var(--azul)">Total del pedido</span>' +
-      '<span id="eTotalPreview" style="font-size:18px;font-weight:700;color:var(--azul)">$0.00</span>' +
-    '</div>' +
+    '<select id="eListaPrecio"><option value="1" '+(lp===1?'selected':'')+'>Precio 1</option><option value="2" '+(lp===2?'selected':'')+'>Precio 2</option><option value="3" '+(lp===3?'selected':'')+'>Precio 3</option><option value="4" '+(lp===4?'selected':'')+'>Precio 4</option><option value="5" '+(lp===5?'selected':'')+'>Precio 5</option></select></div>' +
     '<div class="field"><label>Forma de pago</label>' +
-    '<select id="ePago"><option value="01" '+(ped.formaPago==='01'?'selected':'')+'>Contado</option><option value="05" '+(ped.formaPago==='05'?'selected':'')+'>Prepagado</option><option value="02" '+(ped.formaPago==='02'?'selected':'')+'>Credito 7 dias</option><option value="03" '+(ped.formaPago==='03'?'selected':'')+'>Credito 15 dias</option><option value="04" '+(ped.formaPago==='04'?'selected':'')+'>Credito 30 dias</option></select></div>' +
+    '<select id="ePago"><option value="01" '+(ped.formaPago==='01'?'selected':'')+'>Contado</option><option value="02" '+(ped.formaPago==='02'?'selected':'')+'>Credito 7 dias</option><option value="03" '+(ped.formaPago==='03'?'selected':'')+'>Credito 15 dias</option><option value="04" '+(ped.formaPago==='04'?'selected':'')+'>Credito 30 dias</option></select></div>' +
     '<div class="field"><label>Facturacion</label>' +
     '<select id="eFact"><option value="fiscal" '+(ped.tipoFact==='fiscal'?'selected':'')+'>100% Fiscal</option><option value="nota" '+(ped.tipoFact==='nota'?'selected':'')+'>Solo N.Entrega</option><option value="mixto" '+(ped.tipoFact==='mixto'?'selected':'')+'>50% Fiscal / 50% N.Entrega</option></select></div>' +
     '<div class="field"><label>Promo</label><input type="text" id="ePromo" value="'+(ped.promo||'')+'"></div>' +
@@ -5185,15 +4892,6 @@ function editarPedido(pid){
 
   document.getElementById('editarContenido').innerHTML = html;
   document.getElementById('mEditarPedido').classList.add('open');
-  recalcularEdicionPrecios();
-}
-
-function cambDescuentoItemEdit(id, val){
-  var pct=parseFloat(val);
-  if(isNaN(pct)||pct<0) pct=0;
-  if(pct>100) pct=100;
-  if(pct===0) delete DESCUENTOS_ITEM_EDIT[id]; else DESCUENTOS_ITEM_EDIT[id]=pct;
-  recalcularEdicionPrecios();
 }
 
 function cambQtyEdit(id, btn, delta){
@@ -5201,59 +4899,6 @@ function cambQtyEdit(id, btn, delta){
   var actual = parseInt(span.textContent) || 0;
   var nuevo = Math.max(0, actual + delta);
   span.textContent = nuevo;
-  recalcularEdicionPrecios();
-}
-
-// Recalcula precios por producto, promociones aplicables y el total, en
-// vivo, cada vez que cambia la lista de precio o alguna cantidad dentro
-// del modal de edicion. Antes esto solo se calculaba UNA vez al abrir el
-// modal, asi que cambiar la lista de precio no se reflejaba en pantalla
-// (aunque el monto SI se guardaba bien al final) - se veia como si la
-// edicion no hubiera hecho nada.
-function recalcularEdicionPrecios(){
-  if(!pedidoEditandoId) return;
-  var lpEl=document.getElementById('eListaPrecio');
-  if(!lpEl) return;
-  var lp=parseInt(lpEl.value)||1;
-
-  // Leer las cantidades actuales del formulario para recalcular que
-  // promociones aplican con el estado actual (no el que tenia el pedido
-  // al momento de abrir la edicion)
-  var itemsActuales={};
-  for(var i=0;i<PRODUCTOS.length;i++){
-    var pid=PRODUCTOS[i].id;
-    var qtyEl=document.getElementById('eqty-'+pid);
-    if(!qtyEl) continue;
-    var qty=parseInt(qtyEl.textContent)||0;
-    if(qty>0) itemsActuales[pid]=qty;
-  }
-  PROMO_CUSTOM_OVERRIDES = calcularPromosCustomAplicables(itemsActuales).overrides;
-
-  var total=0;
-  for(var i=0;i<PRODUCTOS.length;i++){
-    var p=PRODUCTOS[i];
-    var precioBase=getPrecio(p, lp);
-    var precio=precioConDescuentoItem(precioBase,p.id,DESCUENTOS_ITEM_EDIT);
-    var precioEl=document.getElementById('eprecio-'+p.id);
-    if(precioEl){
-      var overridePromo=PROMO_CUSTOM_OVERRIDES[p.id];
-      var promoTxt=overridePromo?(' <span style="color:var(--verde);font-weight:600">('+overridePromo.nombrePromo+')</span>'):'';
-      var descTxt=(precio<precioBase)?(' <s style="color:#bbb">$'+precioBase.toFixed(2)+'</s>'):'';
-      precioEl.innerHTML=p.co_art+' · $'+precio.toFixed(2)+'/bto'+descTxt+promoTxt;
-    }
-    var qty=itemsActuales[p.id]||0;
-    total+=qty*precio;
-  }
-  var descGeneralPctEdit=0;
-  if(puedeAplicarDescuentos()){
-    var elDGEdit=document.getElementById('eDescGeneral');
-    descGeneralPctEdit=elDGEdit?(parseFloat(elDGEdit.value)||0):0;
-    if(descGeneralPctEdit<0) descGeneralPctEdit=0;
-    if(descGeneralPctEdit>100) descGeneralPctEdit=100;
-  }
-  var totalConDescGeneral=Math.round(total*(1-descGeneralPctEdit/100)*100)/100;
-  var totalEl=document.getElementById('eTotalPreview');
-  if(totalEl) totalEl.textContent='$'+totalConDescGeneral.toFixed(2)+(descGeneralPctEdit>0?' (bruto $'+total.toFixed(2)+')':'');
 }
 
 function guardarEdicion(){
@@ -5270,48 +4915,21 @@ function guardarEdicion(){
       ped.cliente.rif = document.getElementById('eCliRif').value.trim() || ped.cliente.rif;
       ped.cliente.tel = document.getElementById('eCliTel').value.trim();
 
-      // Actualizar items y recalcular totales, y el precio EXACTO
-      // congelado por producto ("preciosUnitarios") - es lo que usa el
-      // detalle del pedido, WhatsApp, Excel y reportes. Antes esto no se
-      // actualizaba al editar: el total de arriba quedaba correcto pero
-      // cada linea del detalle seguia mostrando el precio de cuando se
-      // creo el pedido, quedando inconsistente con el total.
+      // Actualizar items y recalcular totales
       var nuevosItems = {};
-      var nuevosPreciosUnitarios = {};
-      var bultos = 0, montoBruto = 0;
+      var bultos = 0, monto = 0;
       for(var j=0;j<PRODUCTOS.length;j++){
         var p = PRODUCTOS[j];
         var qty = parseInt(document.getElementById('eqty-'+p.id).textContent) || 0;
         if(qty > 0){
-          var precioActual = precioConDescuentoItem(getPrecio(p, lp),p.id,DESCUENTOS_ITEM_EDIT);
           nuevosItems[p.id] = qty;
-          nuevosPreciosUnitarios[p.id] = precioActual;
           bultos += qty;
-          montoBruto += qty * precioActual;
+          monto += qty * getPrecio(p, lp);
         }
       }
       if(bultos === 0){ toast('Agrega al menos un producto'); return; }
 
-      var descGeneralPctGuardar=0;
-      if(puedeAplicarDescuentos()){
-        var elDGGuardar=document.getElementById('eDescGeneral');
-        descGeneralPctGuardar=elDGGuardar?(parseFloat(elDGGuardar.value)||0):0;
-        if(descGeneralPctGuardar<0) descGeneralPctGuardar=0;
-        if(descGeneralPctGuardar>100) descGeneralPctGuardar=100;
-      }
-      var montoDescGeneralGuardar=Math.round(montoBruto*descGeneralPctGuardar/100*100)/100;
-      var monto=Math.round((montoBruto-montoDescGeneralGuardar)*100)/100;
-
       ped.items = nuevosItems;
-      ped.preciosUnitarios = nuevosPreciosUnitarios;
-      ped.descuentosItem = JSON.parse(JSON.stringify(DESCUENTOS_ITEM_EDIT));
-      ped.descuentoGeneralPct = descGeneralPctGuardar;
-      ped.montoDescuentoGeneral = montoDescGeneralGuardar;
-      ped.montoBruto = montoBruto;
-      // Recalcular la bonificacion de unidades gratis con los items ya
-      // editados (si cambiaron cantidades, la promo puede haber cambiado
-      // de tramo o dejar de aplicar)
-      ped.bonificacionesUnidades = calcularPromosCustomAplicables(nuevosItems).bonificacionesUnidades;
       ped.bultos = bultos;
       ped.monto = monto;
       ped.listaPrecio = lp;
@@ -5729,40 +5347,6 @@ function onCambioRptDiasInactivo(){
   renderReportes();
 }
 
-// Buscador de cliente para Reportes: reemplaza el <select> nativo por un
-// campo de texto + lista de sugerencias, para poder filtrar escribiendo
-// solo una parte del nombre en vez de tener que buscar en un combo largo.
-var RPT_CLIENTES_DISPONIBLES=[]; // {id,nombre} - se llena en cada renderReportes()
-
-function filtrarRptClienteOpciones(){
-  var q=(document.getElementById('rptClienteBusq').value||'').trim().toLowerCase();
-  var cont=document.getElementById('rptClienteOpciones');
-  if(!cont) return;
-  var filtrados = q ? RPT_CLIENTES_DISPONIBLES.filter(function(c){
-    return c.nombre.toLowerCase().indexOf(q)>=0 || c.id.toLowerCase().indexOf(q)>=0;
-  }) : RPT_CLIENTES_DISPONIBLES;
-  var html='<div style="padding:8px 10px;cursor:pointer;font-weight:600;color:var(--azul);border-bottom:1px solid var(--borde)" onmousedown="seleccionarRptCliente(\'todos\',\'\')">Todos los clientes</div>';
-  if(filtrados.length===0){
-    html+='<div style="padding:8px 10px;color:#aaa">Sin coincidencias</div>';
-  } else {
-    filtrados.slice(0,50).forEach(function(c){
-      var nombreEsc=c.nombre.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-      html+='<div style="padding:8px 10px;cursor:pointer" onmousedown="seleccionarRptCliente(\''+c.id+'\',\''+nombreEsc+'\')">'+c.nombre+' <span style="color:#aaa;font-size:11px">(Cod: '+c.id+')</span></div>';
-    });
-    if(filtrados.length>50) html+='<div style="padding:6px 10px;color:#aaa;font-size:11px">Y '+(filtrados.length-50)+' mas... sigue escribiendo para acotar</div>';
-  }
-  cont.innerHTML=html;
-  cont.style.display='block';
-}
-
-function seleccionarRptCliente(id, nombre){
-  document.getElementById('rptCliente').value=id;
-  document.getElementById('rptClienteBusq').value = (id==='todos') ? '' : nombre;
-  var cont=document.getElementById('rptClienteOpciones');
-  if(cont) cont.style.display='none';
-  renderReportes();
-}
-
 function renderReportes(){
   var lista=rptGetPedidosFiltrados();
   var vendSel=document.getElementById('rptVendedor').value;
@@ -5882,11 +5466,13 @@ function renderReportes(){
     if(!clisPeriodo[p.cliente.id]) clisPeriodo[p.cliente.id]=p.cliente.nombre;
   }
   var cidsTodos=Object.keys(clisPeriodo).sort(function(a,b){return clisPeriodo[a].localeCompare(clisPeriodo[b]);});
-  RPT_CLIENTES_DISPONIBLES=cidsTodos.map(function(cid){ return {id:cid, nombre:clisPeriodo[cid]}; });
-  // Si el cliente actualmente elegido ya no aparece en este periodo/vendedor
-  // filtrado, se mantiene igual el valor (para no perder la seleccion al
-  // cambiar de filtro) - el buscador de texto solo se re-llena con nuevas
-  // opciones cuando el usuario vuelve a escribir/enfocar el campo.
+  var selCliEl=document.getElementById('rptCliente');
+  var selCliVal=selCliEl.value;
+  var optsCliHtml='<option value="todos">Todos los clientes</option>';
+  for(var c=0;c<cidsTodos.length;c++){
+    optsCliHtml+='<option value="'+cidsTodos[c]+'"'+(cidsTodos[c]===selCliVal?' selected':'')+'>'+clisPeriodo[cidsTodos[c]]+' (Cod: '+cidsTodos[c]+')</option>';
+  }
+  selCliEl.innerHTML=optsCliHtml;
 
   // Reporte: Ticket promedio (monto y bultos) y forma de pago
   var ticketProm=totPedidos>0?(totMonto/totPedidos):0;
@@ -6229,7 +5815,7 @@ function verDetallePedidoRpt(pedId){
       '<span>'+nombre+' x'+qty+'</span><span style="font-weight:600">$'+(precio*qty).toFixed(2)+'</span>'+
     '</div>';
   }
-  var formaPagoTxt={'01':'Contado','05':'Prepagado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'}[p.formaPago]||p.formaPago||'';
+  var formaPagoTxt={'01':'Contado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'}[p.formaPago]||p.formaPago||'';
   var factTxt={'fiscal':'100% Fiscal','nota':'Solo N.Entrega','mixto':'50% Fiscal / 50% N.Entrega'}[p.tipoFact]||p.tipoFact||'';
   var estadoTxt=p.anulado?'<span class="tag tag-r">Anulado</span>':(p.recibidoOficina?'<span class="tag tag-v">Recibido x Oficina</span>':(p.enviado?'<span class="tag tag-a">Enviado</span>':'<span class="tag" style="background:#FFF3CD;color:#856404">Pendiente</span>'));
   var html=
@@ -6390,19 +5976,12 @@ function confirmarWAPersonalizado(){
           var p=PRODUCTOS[k];
           var precio=precioUnitarioPedido(ped, ids[j], p);
           var sub=qty*precio;
-          var descItemWAP=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
-          lineas.push('  '+p.co_art+' - '+p.nombre+': '+qty+' btos x $'+precio.toFixed(2)+(descItemWAP?' (-'+descItemWAP+'%)':'')+' = $'+sub.toFixed(2));
+          lineas.push('  '+p.co_art+' - '+p.nombre+': '+qty+' btos x $'+precio.toFixed(2)+' = $'+sub.toFixed(2));
           break;
         }
       }
     }
-    if(ped.descuentoGeneralPct){
-      lineas.push('Subtotal: $'+(ped.montoBruto||ped.monto).toFixed(2)+' ('+ped.bultos+' btos)');
-      lineas.push('Descuento general ('+ped.descuentoGeneralPct+'%): -$'+(ped.montoDescuentoGeneral||0).toFixed(2));
-      lineas.push('Total: $'+ped.monto.toFixed(2));
-    } else {
-      lineas.push('Subtotal: $'+ped.monto.toFixed(2)+' ('+ped.bultos+' btos)');
-    }
+    lineas.push('Subtotal: $'+ped.monto.toFixed(2)+' ('+ped.bultos+' btos)');
     lineas.push('Pago: '+(ped.formaPagoL||ped.formaPago));
     if(ped.promo) lineas.push('Promo: '+ped.promo);
     if(ped.obs) lineas.push('Obs: '+ped.obs);
@@ -6453,7 +6032,7 @@ function ajustarModoCargaCxC(){
 }
 
 function adminTab(tab){
-  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico','reposicion'];
+  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico'];
   for(var i=0;i<tabs.length;i++){
     var el=document.getElementById('adminTab-'+tabs[i]);
     if(el) el.style.display=(tabs[i]===tab)?'block':'none';
@@ -6498,8 +6077,6 @@ function adminTab(tab){
     if(limEl) limEl.value=LIMITE_DEUDA_PEDIDOS>0?LIMITE_DEUDA_PEDIDOS:'';
     ajustarModoCargaCxC();
     renderResumenCxC();
-    var verifCard=document.getElementById('cxcVerificadorCard');
-    if(verifCard) verifCard.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'block':'none';
     document.getElementById('cxcPagosPendientesList').innerHTML='<div style="color:#aaa;text-align:center;padding:12px">Cargando...</div>';
     cargarTodosPagosCobranzaFirebase(function(pagos){
       PAGOS_COBRANZA_TODOS=pagos;
@@ -6512,409 +6089,6 @@ function adminTab(tab){
     document.getElementById('historicoInfo').innerHTML='';
     document.getElementById('historicoEstado').innerHTML='';
   }
-  if(tab==='reposicion'){
-    document.getElementById('repoDiasProduccion').value=REPO_CONFIG.diasProduccion;
-    document.getElementById('repoDiasEnvio').value=REPO_CONFIG.diasEnvio;
-    document.getElementById('repoCiclo').value=REPO_CONFIG.cicloSugeridoDias;
-    document.getElementById('repoNivelServicio').value=REPO_CONFIG.nivelServicio;
-    document.getElementById('repoTopeExtra').value=REPO_CONFIG.topeExtraPct;
-    document.getElementById('repoEspacioAire').value=REPO_CONFIG.espacioAireCm;
-    var backfillCard=document.getElementById('repoBackfillCard');
-    if(backfillCard) backfillCard.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'block':'none';
-    renderHistorialRepo();
-  }
-}
-
-// --- REPOSICION / CONTENEDOR ---
-function guardarConfigReposicion(){
-  REPO_CONFIG.diasProduccion=parseInt(document.getElementById('repoDiasProduccion').value)||REPO_CONFIG.diasProduccion;
-  REPO_CONFIG.diasEnvio=parseInt(document.getElementById('repoDiasEnvio').value)||REPO_CONFIG.diasEnvio;
-  REPO_CONFIG.cicloSugeridoDias=parseInt(document.getElementById('repoCiclo').value)||REPO_CONFIG.cicloSugeridoDias;
-  REPO_CONFIG.nivelServicio=parseInt(document.getElementById('repoNivelServicio').value)||REPO_CONFIG.nivelServicio;
-  REPO_CONFIG.topeExtraPct=parseFloat(document.getElementById('repoTopeExtra').value);
-  if(isNaN(REPO_CONFIG.topeExtraPct)) REPO_CONFIG.topeExtraPct=25;
-  REPO_CONFIG.espacioAireCm=parseFloat(document.getElementById('repoEspacioAire').value);
-  if(isNaN(REPO_CONFIG.espacioAireCm)) REPO_CONFIG.espacioAireCm=12;
-  db.collection('config').doc('reposicion').set({
-    diasProduccion:REPO_CONFIG.diasProduccion, diasEnvio:REPO_CONFIG.diasEnvio,
-    cicloSugeridoDias:REPO_CONFIG.cicloSugeridoDias, nivelServicio:REPO_CONFIG.nivelServicio,
-    topeExtraPct:REPO_CONFIG.topeExtraPct, espacioAireCm:REPO_CONFIG.espacioAireCm,
-    actualizado:new Date().toISOString()
-  }).then(function(){ toast('Configuracion guardada'); })
-  .catch(function(){ toast('Configuracion guardada localmente'); });
-}
-
-
-// Prueba las 6 formas posibles de acomodar una caja (cual medida queda
-// a lo largo, a lo ancho y a lo alto del contenedor) y elige la que
-// aprovecha mejor el espacio: mas cajas por cada cm de largo consumido.
-function mejorOrientacionEstiba(prod, anchoContCm, alturaUtilCm){
-  var factorCm=(prod.medUnidad==='in')?2.54:1;
-  var L=(parseFloat(prod.medLargo)||0)*factorCm;
-  var A=(parseFloat(prod.medAncho)||0)*factorCm;
-  var H=(parseFloat(prod.medAlto)||0)*factorCm;
-  if(!L||!A||!H) return null; // faltan medidas cargadas en la ficha del producto
-  var dims=[L,A,H];
-  var perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
-  var mejor=null;
-  for(var p=0;p<perms.length;p++){
-    var largoDim=dims[perms[p][0]], anchoDim=dims[perms[p][1]], altoDim=dims[perms[p][2]];
-    var cols=Math.floor(anchoContCm/anchoDim);
-    var layers=Math.floor(alturaUtilCm/altoDim);
-    if(cols<1||layers<1) continue;
-    var cajasPorFila=cols*layers;
-    var densidad=cajasPorFila/largoDim; // cajas por cada cm de largo de contenedor usado
-    if(!mejor||densidad>mejor.densidad){
-      mejor={largoDim:largoDim, cajasPorFila:cajasPorFila, densidad:densidad, cols:cols, layers:layers};
-    }
-  }
-  return mejor;
-}
-
-function calcularReposicion(){
-  var resEl=document.getElementById('repoResultados');
-  resEl.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando ventas historicas...</div>';
-  cargarTodosFirebase(function(todos){
-    var ahora=new Date();
-    var tipoVentana=document.getElementById('repoVentanaTipo').value;
-    var desde, hasta=new Date(ahora);
-    if(tipoVentana==='personalizado'){
-      var fDesdeStr=document.getElementById('repoFechaDesde').value;
-      var fHastaStr=document.getElementById('repoFechaHasta').value;
-      desde=fDesdeStr?new Date(fDesdeStr+'T00:00:00'):null;
-      hasta=fHastaStr?new Date(fHastaStr+'T23:59:59'):hasta;
-      if(!desde || isNaN(desde.getTime())){
-        resEl.innerHTML='<div style="color:#C0392B;font-size:13px;text-align:center;padding:12px">Elige una fecha "Desde" para el rango personalizado.</div>';
-        return;
-      }
-    } else if(tipoVentana==='todo'){
-      // Buscar la fecha del pedido mas antiguo (no anulado) para usarla como inicio
-      var minFecha=null;
-      for(var i=0;i<todos.length;i++){
-        if(todos[i].anulado) continue;
-        var fISOtmp=fechaToISO(todos[i].fecha||'');
-        var fDtmp=new Date(fISOtmp);
-        if(isNaN(fDtmp.getTime())) continue;
-        if(!minFecha || fDtmp<minFecha) minFecha=fDtmp;
-      }
-      desde=minFecha||new Date(ahora.getFullYear(), ahora.getMonth()-3, ahora.getDate());
-    } else {
-      var diasVentanaSel=parseInt(tipoVentana,10)||90;
-      desde=new Date(ahora); desde.setDate(ahora.getDate()-diasVentanaSel);
-    }
-    // Cantidad real de dias que abarca el rango elegido (minimo 1, para no dividir entre 0)
-    var ventana=Math.max(1, Math.round((hasta-desde)/86400000)+1);
-
-    // Acumular ventas por producto y por dia (bultos), solo dentro del rango elegido
-    var incluirBonifRepo=document.getElementById('repoIncluirBonif')?document.getElementById('repoIncluirBonif').checked:true;
-    var porProductoDia={};
-    for(var i=0;i<PRODUCTOS.length;i++) porProductoDia[PRODUCTOS[i].id]={};
-    for(var i=0;i<todos.length;i++){
-      var p=todos[i];
-      if(p.anulado) continue;
-      var fISO=fechaToISO(p.fecha||'');
-      var fD=new Date(fISO);
-      if(isNaN(fD.getTime()) || fD<desde || fD>hasta) continue;
-      var ids=Object.keys(p.items||{});
-      for(var k=0;k<ids.length;k++){
-        var pid=ids[k], qty=p.items[pid]||0;
-        if(!qty) continue;
-        if(!porProductoDia[pid]) porProductoDia[pid]={};
-        porProductoDia[pid][fISO]=(porProductoDia[pid][fISO]||0)+qty;
-      }
-      // Las unidades gratis de promociones (ej. Promo Bultos Bolsa) tambien
-      // salen del inventario real, aunque no se hayan facturado - se suman
-      // aqui como bultos-equivalente para que la rotacion calculada
-      // refleje el consumo verdadero, no solo lo vendido.
-      if(incluirBonifRepo && p.bonificacionesUnidades){
-        var bonifIds=Object.keys(p.bonificacionesUnidades);
-        for(var bk=0;bk<bonifIds.length;bk++){
-          var bpid=bonifIds[bk];
-          var bonifUnid=p.bonificacionesUnidades[bpid]||0;
-          if(!bonifUnid) continue;
-          var prodBonif=null;
-          for(var pb=0;pb<PRODUCTOS.length;pb++){ if(PRODUCTOS[pb].id===bpid){ prodBonif=PRODUCTOS[pb]; break; } }
-          var uniVentaBonif=prodBonif?(parseInt(prodBonif.uni_venta)||1):1;
-          var bultosBonif=bonifUnid/uniVentaBonif;
-          if(!porProductoDia[bpid]) porProductoDia[bpid]={};
-          porProductoDia[bpid][fISO]=(porProductoDia[bpid][fISO]||0)+bultosBonif;
-        }
-      }
-    }
-    var z=repoZScore(REPO_CONFIG.nivelServicio);
-    var leadTime=REPO_CONFIG.diasProduccion+REPO_CONFIG.diasEnvio;
-    var tipoCont=document.getElementById('repoTipoContenedor').value;
-    var alturaContCm=(tipoCont==='cbm40hq')?REPO_CONFIG.contAlto40hqCm:REPO_CONFIG.contAlto40Cm;
-    var largoContCm=REPO_CONFIG.contLargoCm;
-    var anchoContCm=REPO_CONFIG.contAnchoCm;
-    var aireCm=(REPO_CONFIG.espacioAireCm!==undefined?REPO_CONFIG.espacioAireCm:12);
-    var alturaUtilCm=alturaContCm-aireCm;
-
-    var filas=[];
-    var totalCbmSugerido=0;
-    for(var i=0;i<PRODUCTOS.length;i++){
-      var prod=PRODUCTOS[i];
-      if(prod.activo===false) continue;
-      var diasVenta=porProductoDia[prod.id]||{};
-      var valoresDias=[];
-      for(var d=0;d<ventana;d++){
-        var fecha=new Date(desde); fecha.setDate(desde.getDate()+d);
-        var fISO2=fecha.getFullYear()+'-'+String(fecha.getMonth()+1).padStart(2,'0')+'-'+String(fecha.getDate()).padStart(2,'0');
-        valoresDias.push(diasVenta[fISO2]||0);
-      }
-      var totalVentas=0; for(var vi=0;vi<valoresDias.length;vi++) totalVentas+=valoresDias[vi];
-      var promedioDiario=totalVentas/ventana;
-      var sumaCuad=0; for(var vi=0;vi<valoresDias.length;vi++) sumaCuad+=Math.pow(valoresDias[vi]-promedioDiario,2);
-      var stdDev=Math.sqrt(sumaCuad/ventana);
-      var stockActual=prod.stock||0;
-      var coberturaActualDias=promedioDiario>0?(stockActual/promedioDiario):999;
-      var safetyStock=z*stdDev*Math.sqrt(leadTime);
-      var nivelObjetivo=promedioDiario*(REPO_CONFIG.cicloSugeridoDias+leadTime)+safetyStock;
-      var cantidadSugerida=Math.max(0, Math.ceil(nivelObjetivo-stockActual));
-      var cbmCajaNominal=parseFloat(prod.cbmCaja)||0;
-      var cbmCaja=cbmCajaNominal; // solo informativo, ya no define la capacidad
-      var orientacion=mejorOrientacionEstiba(prod, anchoContCm, alturaUtilCm);
-      totalCbmSugerido+=cantidadSugerida*cbmCaja; // solo informativo
-      var estado='verde';
-      if(coberturaActualDias<leadTime) estado='rojo';
-      else if(coberturaActualDias<leadTime+REPO_CONFIG.cicloSugeridoDias*0.3) estado='amarillo';
-      filas.push({
-        id:prod.id, nombre:prod.nombre, sabor:prod.sabor||'', tipo:prod.tipo||'', cbmCaja:cbmCaja, cbmCajaNominal:cbmCajaNominal, stockActual:stockActual,
-        promedioDiario:promedioDiario, coberturaActualDias:coberturaActualDias,
-        cantidadSugerida:cantidadSugerida, estado:estado,
-        filaLargo:orientacion?orientacion.largoDim:0, cajasPorFila:orientacion?orientacion.cajasPorFila:0,
-        sinMedidas:!orientacion
-      });
-    }
-
-    // Ajustar contra la capacidad REAL del contenedor, simulando el
-    // acomodo fisico por capas (columnas x capas), con el espacio de aire
-    // de ventilacion ya restado de la altura util. Cada producto ocupa su
-    // propio "carril" a lo largo del contenedor; se suman los largos
-    // usados contra el largo interno disponible - esto es lo que de
-    // verdad limita cuanto entra, no el volumen en abstracto.
-    //
-    // Paso 1: partir de la cantidad IDEAL de cada producto (ya calculada
-    // arriba segun rotacion, cobertura y colchon de seguridad) - es el
-    // 100% de referencia para el % que se muestra en "Sugerido".
-    for(var i=0;i<filas.length;i++){
-      var f=filas[i];
-      if(f.sinMedidas || f.cajasPorFila<=0){
-        f.filasIdeal=0; f.largoIdeal=0; // no se puede calcular estiba sin medidas cargadas
-      } else {
-        f.filasIdeal=Math.ceil(f.cantidadSugerida/f.cajasPorFila);
-        f.largoIdeal=f.filasIdeal*f.filaLargo;
-      }
-    }
-    var totalLargoIdeal=0; for(var i=0;i<filas.length;i++) totalLargoIdeal+=filas[i].largoIdeal;
-
-    if(totalLargoIdeal>largoContCm && totalLargoIdeal>0){
-      // No alcanza el largo del contenedor para cubrir el ideal de todos:
-      // se recorta quitando una fila completa a la vez al producto que
-      // este usando MAS largo en relacion a su rotacion (el mas
-      // "sobre-representado" frente a lo que realmente rota).
-      for(var i=0;i<filas.length;i++){
-        filas[i].filasAsignadas=filas[i].filasIdeal;
-        filas[i].largoAsignado=filas[i].largoIdeal;
-      }
-      var largoActual=totalLargoIdeal, topeIter=100000;
-      while(largoActual>largoContCm && topeIter-->0){
-        var peor=null, peorScore=-Infinity;
-        for(var i=0;i<filas.length;i++){
-          var f=filas[i];
-          if(f.filasAsignadas<=0) continue;
-          var pesoRot=f.promedioDiario>0?f.promedioDiario:0.0001;
-          var score=f.largoAsignado/pesoRot;
-          if(score>peorScore){ peorScore=score; peor=f; }
-        }
-        if(!peor) break;
-        peor.filasAsignadas-=1;
-        peor.largoAsignado-=peor.filaLargo;
-        largoActual-=peor.filaLargo;
-      }
-    } else {
-      // Alcanza para cubrir el ideal de todos tal cual.
-      for(var i=0;i<filas.length;i++){
-        filas[i].filasAsignadas=filas[i].filasIdeal;
-        filas[i].largoAsignado=filas[i].largoIdeal;
-      }
-    }
-
-    // Paso 2: repartir el largo que sobra de forma JUSTA (metodo de
-    // divisor - el mismo principio con que se reparten escaños de forma
-    // proporcional). En cada vuelta se le da una fila extra al producto
-    // cuyo "costo relativo" (largo ya asignado entre su rotacion) es el
-    // mas bajo, favoreciendo un poco a los de mayor rotacion sin
-    // concentrar TODO el sobrante en uno solo. Nadie puede superar su
-    // largo ideal en mas del "topeExtraPct" configurado.
-    var topePct=(REPO_CONFIG.topeExtraPct!==undefined?REPO_CONFIG.topeExtraPct:25)/100;
-    var largoRestante=largoContCm; for(var i=0;i<filas.length;i++) largoRestante-=(filas[i].largoAsignado||0);
-    var seguirLlenando=true, tope=100000;
-    while(seguirLlenando && tope-->0){
-      var candidato=null, mejorScore=Infinity;
-      for(var i=0;i<filas.length;i++){
-        var f=filas[i];
-        if(!f.filaLargo || f.cajasPorFila<=0 || f.promedioDiario<=0) continue;
-        if(f.filaLargo>largoRestante+0.000001) continue;
-        var limiteMax=f.largoIdeal*(1+topePct);
-        if((f.largoAsignado+f.filaLargo)>limiteMax+0.000001) continue;
-        var score=(f.largoAsignado+f.filaLargo)/f.promedioDiario;
-        if(score<mejorScore){ mejorScore=score; candidato=f; }
-      }
-      if(!candidato){ seguirLlenando=false; }
-      else {
-        candidato.filasAsignadas+=1;
-        candidato.largoAsignado+=candidato.filaLargo;
-        largoRestante-=candidato.filaLargo;
-      }
-    }
-
-    for(var i=0;i<filas.length;i++){
-      var f=filas[i];
-      if(f.sinMedidas || f.cajasPorFila<=0){
-        // Sin medidas cargadas no se pudo validar contra el contenedor:
-        // se deja la cantidad ideal tal cual, marcada como no verificada.
-        f.cantidadSugeridaAjustada=f.cantidadSugerida;
-      } else {
-        f.cantidadSugeridaAjustada=f.filasAsignadas*f.cajasPorFila;
-      }
-      f.cbmAjustado=f.cantidadSugeridaAjustada*f.cbmCaja; // referencial
-    }
-
-    var largoUsadoTotal=0; for(var i=0;i<filas.length;i++) largoUsadoTotal+=(filas[i].largoAsignado||0);
-    var totalCbmFinal=0; for(var i=0;i<filas.length;i++) totalCbmFinal+=filas[i].cbmAjustado;
-    var totalBultosFinal=0; for(var i=0;i<filas.length;i++) totalBultosFinal+=filas[i].cantidadSugeridaAjustada;
-
-    // Guardar el resultado para poder persistirlo si el usuario confirma
-    REPO_ULTIMO_CALCULO={
-      tipoContenedor:tipoCont, largoUsado:largoUsadoTotal, largoDisponible:largoContCm,
-      aireCm:aireCm, cbmUsado:totalCbmFinal,
-      detalle:filas.map(function(f){return {id:f.id,nombre:f.nombre,cantidad:f.cantidadSugeridaAjustada,filas:f.sinMedidas?null:f.filasAsignadas,largoCm:f.sinMedidas?null:f.largoAsignado,cbm:f.cbmAjustado};})
-    };
-
-    // Agregados por sabor y por presentacion (tipo), para comparar unos contra otros
-    function agruparPor(campo){
-      var mapa={}, orden=[];
-      for(var i=0;i<filas.length;i++){
-        var clave=filas[i][campo]||'(sin definir)';
-        if(!mapa[clave]){ mapa[clave]={bultos:0,cbm:0}; orden.push(clave); }
-        mapa[clave].bultos+=filas[i].cantidadSugeridaAjustada;
-        mapa[clave].cbm+=filas[i].cbmAjustado;
-      }
-      return orden.map(function(k){return {nombre:k,bultos:mapa[k].bultos,cbm:mapa[k].cbm};});
-    }
-    var porSabor=agruparPor('sabor');
-    var porTipo=agruparPor('tipo');
-
-    function renderResumenGrupo(titulo, grupos){
-      if(grupos.length<2) return ''; // no hay nada que comparar
-      var h='<div style="margin-top:12px"><div style="font-weight:600;font-size:12px;margin-bottom:6px">'+titulo+'</div>';
-      for(var i=0;i<grupos.length;i++){
-        var g=grupos[i];
-        var pct=totalBultosFinal>0?(g.bultos/totalBultosFinal*100):0;
-        h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
-          '<div style="width:90px;font-size:12px;flex-shrink:0">'+g.nombre+'</div>'+
-          '<div style="flex:1;background:#eee;border-radius:4px;overflow:hidden;height:14px">'+
-            '<div style="width:'+pct.toFixed(0)+'%;background:var(--azul);height:100%"></div>'+
-          '</div>'+
-          '<div style="width:110px;text-align:right;font-size:12px;flex-shrink:0">'+g.bultos+' bto ('+pct.toFixed(0)+'%)</div>'+
-        '</div>';
-      }
-      h+='</div>';
-      return h;
-    }
-
-    // Render tabla
-    var colorEstado={rojo:'#C0392B',amarillo:'#D68910',verde:'#1E8449'};
-    var labelEstado={rojo:'Urgente',amarillo:'Vigilar',verde:'OK'};
-    var fmtFechaCorta=function(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); };
-    var html='<div style="font-size:11px;color:#888;margin-bottom:8px">Analizando ventas del '+fmtFechaCorta(desde)+' al '+fmtFechaCorta(hasta)+' ('+ventana+' dias)'+(incluirBonifRepo?' - incluye unidades gratis de promociones':' - NO incluye unidades gratis de promociones')+'</div>';
-    var anchos=['22%','8%','10%','8%','9%','19%','9%','15%']; // graduales: mas espacio donde hay mas texto/valor
-    html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">';
-    html+='<colgroup>'+anchos.map(function(w){return '<col style="width:'+w+'">';}).join('')+'</colgroup>';
-    html+='<tr style="text-align:left;border-bottom:2px solid #ddd">'+
-      '<th style="padding:6px 6px 6px 0">Producto</th>'+
-      '<th style="padding:6px">Stock</th>'+
-      '<th style="padding:6px">Rotacion/dia</th>'+
-      '<th style="padding:6px">Cobertura</th>'+
-      '<th style="padding:6px">Estado</th>'+
-      '<th style="padding:6px">Sugerido</th>'+
-      '<th style="padding:6px">Filas</th>'+
-      '<th style="padding:6px">Largo usado</th>'+
-    '</tr>';
-    var hayProductosSinMedidas=false;
-    for(var i=0;i<filas.length;i++){
-      var f=filas[i];
-      var pctSugerido=totalBultosFinal>0?(f.cantidadSugeridaAjustada/totalBultosFinal*100):0;
-      if(f.sinMedidas) hayProductosSinMedidas=true;
-      html+='<tr style="border-bottom:1px solid #eee">'+
-        '<td style="padding:6px 6px 6px 0;font-weight:600;overflow:hidden;text-overflow:ellipsis">'+f.nombre+(f.sinMedidas?' <span title="Faltan medidas de la caja" style="color:#D68910">&#9888;</span>':'')+'</td>'+
-        '<td style="padding:6px">'+f.stockActual+' bto</td>'+
-        '<td style="padding:6px">'+f.promedioDiario.toFixed(2)+'</td>'+
-        '<td style="padding:6px">'+(f.coberturaActualDias>900?'999+':f.coberturaActualDias.toFixed(0))+' d</td>'+
-        '<td style="padding:6px"><span style="color:'+colorEstado[f.estado]+';font-weight:700">'+labelEstado[f.estado]+'</span></td>'+
-        '<td style="padding:6px;font-weight:700">'+f.cantidadSugeridaAjustada+' bto ('+pctSugerido.toFixed(0)+'%)</td>'+
-        '<td style="padding:6px">'+(f.sinMedidas?'-':f.filasAsignadas)+'</td>'+
-        '<td style="padding:6px">'+(f.sinMedidas?'-':f.largoAsignado.toFixed(0)+' cm')+'</td>'+
-      '</tr>';
-    }
-    html+='</table></div>';
-    html+='<div style="margin-top:10px;font-size:13px;font-weight:600">Largo usado: '+largoUsadoTotal.toFixed(0)+' / '+largoContCm.toFixed(0)+' cm disponibles ('+tipoCont.replace('cbm','').toUpperCase()+', dejando '+aireCm+'cm de aire arriba)</div>';
-    html+='<div style="font-size:11px;color:#888">Estiba simulada por capas: ancho '+anchoContCm+'cm x alto util '+alturaUtilCm+'cm (alto interno '+alturaContCm+'cm menos '+aireCm+'cm de aire) - cada producto probado en sus 6 orientaciones posibles.</div>';
-    if(hayProductosSinMedidas){
-      html+='<div style="margin-top:4px;font-size:12px;color:#D68910">&#9888; Uno o mas productos no tienen medidas de caja cargadas (Admin &gt; Productos) - su cantidad se muestra segun la demanda, sin validar si cabe fisicamente.</div>';
-    }
-    if(totalLargoIdeal>largoContCm){
-      html+='<div style="margin-top:4px;font-size:12px;color:#C0392B">La demanda calculada necesita mas largo del que tiene el contenedor: las cantidades se redujeron quitando filas completas a los productos menos afectados por la reduccion, priorizando a los de mayor rotacion. Considera pasar a un contenedor mas grande o adelantar el pedido.</div>';
-    } else if(largoRestante>1){
-      html+='<div style="margin-top:4px;font-size:12px;color:#888">Quedan '+largoRestante.toFixed(0)+' cm de largo sin usar: ya se llego al tope de '+(REPO_CONFIG.topeExtraPct!==undefined?REPO_CONFIG.topeExtraPct:25)+'% extra permitido por producto (o no entra ni una fila mas de nadie). Si quieres aprovechar mas el contenedor, sube ese % en la configuracion.</div>';
-    }
-    html+=renderResumenGrupo('Sabor vs. sabor (bultos sugeridos)', porSabor);
-    html+=renderResumenGrupo('Presentacion vs. presentacion (bultos sugeridos)', porTipo);
-    html+='<button class="btn btn-p btn-sm" style="margin-top:10px" onclick="guardarOrdenReposicion()">Guardar esta orden</button>';
-    resEl.innerHTML=html;
-  }, null);
-}
-
-function guardarOrdenReposicion(){
-  if(!REPO_ULTIMO_CALCULO){ toast('Primero calcula la sugerencia'); return; }
-  var orden=REPO_ULTIMO_CALCULO;
-  orden.fecha=new Date().toISOString();
-  orden.fechaLegible=new Date().toLocaleDateString('es-VE');
-  REPO_HISTORIAL.unshift(orden);
-  db.collection('config').doc('reposicion_historial').set({
-    data: JSON.stringify(REPO_HISTORIAL),
-    actualizado: new Date().toISOString()
-  }).then(function(){
-    toast('Orden de reposicion guardada');
-    renderHistorialRepo();
-  }).catch(function(){
-    toast('Orden guardada localmente');
-    renderHistorialRepo();
-  });
-}
-
-function renderHistorialRepo(){
-  var el=document.getElementById('repoHistorial');
-  if(!el) return;
-  if(!REPO_HISTORIAL.length){
-    el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Aun no hay ordenes guardadas</div>';
-    return;
-  }
-  var html='';
-  for(var i=0;i<REPO_HISTORIAL.length;i++){
-    var o=REPO_HISTORIAL[i];
-    var detalleTxt='';
-    for(var j=0;j<(o.detalle||[]).length;j++){
-      detalleTxt+=(j>0?' | ':'')+o.detalle[j].nombre+': '+o.detalle[j].cantidad+' bto';
-    }
-    html+='<div style="padding:10px 0;border-bottom:1px solid var(--borde)">'+
-      '<div style="font-weight:600;font-size:13px">'+(o.fechaLegible||'')+' - Contenedor '+(o.tipoContenedor||'').replace('cbm','').toUpperCase()+'</div>'+
-      '<div style="font-size:12px;color:#666">Largo usado: '+(o.largoUsado||0).toFixed(0)+' / '+(o.largoDisponible||0).toFixed(0)+' cm (aire '+(o.aireCm!==undefined?o.aireCm:'-')+'cm)</div>'+
-      '<div style="font-size:11px;color:#888">'+detalleTxt+'</div>'+
-    '</div>';
-  }
-  el.innerHTML=html;
 }
 
 // --- INVENTARIO ---
@@ -7043,18 +6217,6 @@ function renderAdminProductos(){
 var productoEditandoId=null;
 var productoFotoNueva=null;
 
-function calcularCbmDesdeMedidas(){
-  var largo=parseFloat(document.getElementById('productoLargo').value)||0;
-  var ancho=parseFloat(document.getElementById('productoAncho').value)||0;
-  var alto=parseFloat(document.getElementById('productoAlto').value)||0;
-  if(!largo||!ancho||!alto) return;
-  var unidad=document.getElementById('productoUnidadMedida').value;
-  var factorACm=(unidad==='in')?2.54:1; // convierte la unidad elegida a centimetros
-  var largoCm=largo*factorACm, anchoCm=ancho*factorACm, altoCm=alto*factorACm;
-  var cbm=(largoCm*anchoCm*altoCm)/1000000; // cm3 a m3
-  document.getElementById('productoCbm').value=cbm.toFixed(4);
-}
-
 function abrirNuevoProducto(){
   productoEditandoId=null;
   productoFotoNueva=null;
@@ -7065,11 +6227,6 @@ function abrirNuevoProducto(){
   document.getElementById('productoSabor').value='';
   document.getElementById('productoTipo').value='';
   document.getElementById('productoUniVenta').value='1';
-  document.getElementById('productoCbm').value='';
-  document.getElementById('productoLargo').value='';
-  document.getElementById('productoAncho').value='';
-  document.getElementById('productoAlto').value='';
-  document.getElementById('productoUnidadMedida').value='cm';
   document.getElementById('productoP1').value='';
   document.getElementById('productoP2').value='';
   document.getElementById('productoP3').value='';
@@ -7093,11 +6250,6 @@ function editarProducto(id){
   document.getElementById('productoSabor').value=p.sabor||'';
   document.getElementById('productoTipo').value=p.tipo||'';
   document.getElementById('productoUniVenta').value=p.uni_venta;
-  document.getElementById('productoCbm').value=p.cbmCaja||'';
-  document.getElementById('productoLargo').value=p.medLargo||'';
-  document.getElementById('productoAncho').value=p.medAncho||'';
-  document.getElementById('productoAlto').value=p.medAlto||'';
-  document.getElementById('productoUnidadMedida').value=p.medUnidad||'cm';
   document.getElementById('productoP1').value=p.precio1;
   document.getElementById('productoP2').value=p.precio2;
   document.getElementById('productoP3').value=p.precio3;
@@ -7132,11 +6284,6 @@ function guardarProducto(){
     toast('Ya existe un producto con ese codigo'); return;
   }
   var uniVenta=parseInt(document.getElementById('productoUniVenta').value,10)||1;
-  var cbmCaja=parseFloat(document.getElementById('productoCbm').value)||0;
-  var medLargo=parseFloat(document.getElementById('productoLargo').value)||0;
-  var medAncho=parseFloat(document.getElementById('productoAncho').value)||0;
-  var medAlto=parseFloat(document.getElementById('productoAlto').value)||0;
-  var medUnidad=document.getElementById('productoUnidadMedida').value;
   var p1=parseFloat(document.getElementById('productoP1').value)||0;
   var p2=parseFloat(document.getElementById('productoP2').value)||p1;
   var p3=parseFloat(document.getElementById('productoP3').value)||p2;
@@ -7154,8 +6301,7 @@ function guardarProducto(){
     var existente=PRODUCTOS.find(function(x){return x.id===codigo;});
     if(existente){
       existente.nombre=nombre; existente.sabor=sabor; existente.tipo=tipo;
-      existente.uni_venta=uniVenta; existente.cbmCaja=cbmCaja; existente.precio1=p1; existente.precio2=p2;
-      existente.medLargo=medLargo; existente.medAncho=medAncho; existente.medAlto=medAlto; existente.medUnidad=medUnidad;
+      existente.uni_venta=uniVenta; existente.precio1=p1; existente.precio2=p2;
       existente.precio3=p3; existente.precio4=p4; existente.precio5=p5;
       existente.activo=activo;
       if(fotoUrl) existente.fotoUrl=fotoUrl;
@@ -7165,8 +6311,7 @@ function guardarProducto(){
         nombre:nombre, sabor:sabor, tipo:tipo,
         color:colorAutoParaProducto(PRODUCTOS.length),
         precio1:p1, precio2:p2, precio3:p3, precio4:p4, precio5:p5,
-        stock:0, stock_und:0, uni_venta:uniVenta, cbmCaja:cbmCaja,
-        medLargo:medLargo, medAncho:medAncho, medAlto:medAlto, medUnidad:medUnidad,
+        stock:0, stock_und:0, uni_venta:uniVenta,
         activo:activo, fotoUrl:fotoUrl||''
       });
     }
@@ -7418,10 +6563,6 @@ function calcularPromosCustomAplicables(items){
   var overrides={};
   var notas=[];
   var observaciones=[];
-  // Unidades gratis por producto, en UNIDADES (no bultos), para poder sumar
-  // el verdadero consumo de inventario en Reposicion (bultos vendidos +
-  // bonificacion), no solo lo facturado.
-  var bonificacionesUnidades={};
   for(var i=0;i<PROMOCIONES_CUSTOM.length;i++){
     var promo=PROMOCIONES_CUSTOM[i];
     if(!promo.activa) continue;
@@ -7438,40 +6579,12 @@ function calcularPromosCustomAplicables(items){
     if(!rangoAplicable) continue;
     if(promo.tipoBeneficio==='unidades_gratis'){
       var unidadTxt=promo.unidadBeneficio==='bultos'?'bulto':'unid';
-      var cantidad=0;
       if(rangoAplicable.cada){
         var veces=Math.floor(totalBultos/rangoAplicable.cada);
-        cantidad=veces*rangoAplicable.valor;
+        var cantidad=veces*rangoAplicable.valor;
         if(cantidad>0) notas.push(promo.nombre+': +'+cantidad+' '+unidadTxt+(cantidad!==1?(unidadTxt==='bulto'?'s':''):'')+' gratis ('+totalBultos+' btos, '+rangoAplicable.valor+' '+unidadTxt+' cada '+rangoAplicable.cada+' btos)');
       } else {
-        cantidad=rangoAplicable.valor;
         notas.push(promo.nombre+': +'+rangoAplicable.valor+' '+unidadTxt+(rangoAplicable.valor!==1?(unidadTxt==='bulto'?'s':''):'')+' gratis ('+totalBultos+' btos)');
-      }
-      if(cantidad>0){
-        // Convertir a unidades si el beneficio esta definido en bultos
-        var cantidadUnidades=cantidad;
-        if(promo.unidadBeneficio==='bultos'){
-          // Usa el uni_venta del primer producto que califico como referencia
-          var uniVentaRef=1;
-          for(var pj=0;pj<promo.productos.length;pj++){
-            if((items[promo.productos[pj]]||0)>0){
-              var prodRef=null;
-              for(var pk=0;pk<PRODUCTOS.length;pk++){ if(PRODUCTOS[pk].id===promo.productos[pj]){ prodRef=PRODUCTOS[pk]; break; } }
-              if(prodRef){ uniVentaRef=parseInt(prodRef.uni_venta)||1; break; }
-            }
-          }
-          cantidadUnidades=cantidad*uniVentaRef;
-        }
-        // Repartir proporcionalmente entre los productos que calificaron,
-        // segun cuantos bultos aporto cada uno al total (asume que el
-        // regalo es del mismo tipo de producto que se esta comprando)
-        for(var j=0;j<promo.productos.length;j++){
-          var pid=promo.productos[j];
-          var bultosProd=items[pid]||0;
-          if(bultosProd<=0) continue;
-          var parte=Math.round(cantidadUnidades*(bultosProd/totalBultos));
-          if(parte>0) bonificacionesUnidades[pid]=(bonificacionesUnidades[pid]||0)+parte;
-        }
       }
     } else {
       for(var j=0;j<promo.productos.length;j++){
@@ -7480,193 +6593,7 @@ function calcularPromosCustomAplicables(items){
     }
     if(promo.observacion) observaciones.push(promo.observacion);
   }
-  return {overrides:overrides, notas:notas, observaciones:observaciones, bonificacionesUnidades:bonificacionesUnidades};
-}
-
-// ═══ RECUPERACION DE BONIFICACIONES HISTORICAS ═══
-// Pedidos creados antes de que "bonificacionesUnidades" existiera solo
-// guardaron la bonificacion como texto en el campo "promo" (ej. "Promo
-// Bultos Bolsa: +144 unid gratis (20 btos, 36 unid cada 5 btos)"). Esto
-// intenta reconstruir la estructura {productoId: unidades} leyendo ese
-// texto, para pedidos que no tengan ya el dato estructurado.
-function parsearSegmentosBonificacion(promoTexto){
-  if(!promoTexto) return [];
-  var segmentos=promoTexto.split('|');
-  var resultado=[];
-  for(var i=0;i<segmentos.length;i++){
-    var seg=segmentos[i].trim();
-    // Formato generado por el sistema: "Nombre promo: +N unid/bulto(s) gratis (..."
-    var m=seg.match(/^(.+?):\s*\+(\d+)\s*(unid|bultos?)\s*gratis/i);
-    if(!m) continue;
-    var nombrePromo=m[1].trim();
-    var cantidad=parseInt(m[2],10);
-    var unidad=/bulto/i.test(m[3])?'bultos':'unidades';
-    if(cantidad>0) resultado.push({nombrePromo:nombrePromo, cantidad:cantidad, unidad:unidad});
-  }
-  return resultado;
-}
-
-// Intenta reconstruir bonificacionesUnidades para UN pedido ya guardado,
-// usando su texto de "promo" + los productos que efectivamente llevaba
-// (items). Devuelve null si no hay nada que recuperar (o si el pedido ya
-// tiene el dato estructurado, para no pisarlo).
-function estimarBonificacionHistorica(ped){
-  if(ped.bonificacionesUnidades && Object.keys(ped.bonificacionesUnidades).length>0) return null;
-  var segmentos=parsearSegmentosBonificacion(ped.promo);
-  if(segmentos.length===0) return null;
-  var bonifAcc={};
-  for(var s=0;s<segmentos.length;s++){
-    var seg=segmentos[s];
-    // Buscar la promo por nombre en la configuracion actual para saber que
-    // productos calificaban. Si no existe (se borro o cambio de nombre),
-    // se usa un respaldo conocido para "Promo Bultos Bolsa".
-    var promoDef=null;
-    for(var i=0;i<PROMOCIONES_CUSTOM.length;i++){
-      if(PROMOCIONES_CUSTOM[i].nombre.trim().toLowerCase()===seg.nombrePromo.toLowerCase()){ promoDef=PROMOCIONES_CUSTOM[i]; break; }
-    }
-    var productos=promoDef?promoDef.productos:(/bolsa/i.test(seg.nombrePromo)?['GU9000','GU9010']:null);
-    if(!productos) continue; // no se puede saber a que producto(s) corresponde
-    var totalBultos=0;
-    for(var j=0;j<productos.length;j++){ totalBultos+=(ped.items&&ped.items[productos[j]])||0; }
-    if(totalBultos<=0) continue;
-    var cantidadUnidades=seg.cantidad;
-    if(seg.unidad==='bultos'){
-      var uniVentaRef=1;
-      for(var pj=0;pj<productos.length;pj++){
-        if((ped.items[productos[pj]]||0)>0){
-          for(var pk=0;pk<PRODUCTOS.length;pk++){ if(PRODUCTOS[pk].id===productos[pj]){ uniVentaRef=parseInt(PRODUCTOS[pk].uni_venta)||1; break; } }
-          break;
-        }
-      }
-      cantidadUnidades=seg.cantidad*uniVentaRef;
-    }
-    for(var j=0;j<productos.length;j++){
-      var pid=productos[j];
-      var bultosProd=ped.items[pid]||0;
-      if(bultosProd<=0) continue;
-      var parte=Math.round(cantidadUnidades*(bultosProd/totalBultos));
-      if(parte>0) bonifAcc[pid]=(bonifAcc[pid]||0)+parte;
-    }
-  }
-  return Object.keys(bonifAcc).length>0?bonifAcc:null;
-}
-
-var REPO_BACKFILL_CANDIDATOS=[];
-
-function analizarBonificacionesHistoricas(){
-  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
-  var el=document.getElementById('repoBackfillResultado');
-  el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Analizando pedidos historicos...</div>';
-  cargarTodosFirebase(function(todos){
-    var candidatos=[];
-    for(var i=0;i<todos.length;i++){
-      var ped=todos[i];
-      var bonif=estimarBonificacionHistorica(ped);
-      if(bonif) candidatos.push({ped:ped, bonif:bonif});
-    }
-    REPO_BACKFILL_CANDIDATOS=candidatos;
-    if(candidatos.length===0){
-      el.innerHTML='<div style="color:var(--verde);font-weight:600;font-size:13px;text-align:center;padding:12px">✓ No hay bonificaciones pendientes por recuperar (o ya estan todas estructuradas)</div>';
-      return;
-    }
-    var totalBultosEquiv=0;
-    var detalleHtml='';
-    for(var c=0;c<Math.min(candidatos.length,8);c++){
-      var cand=candidatos[c];
-      var partesTxt=[];
-      var pids=Object.keys(cand.bonif);
-      for(var pj=0;pj<pids.length;pj++){
-        var pid=pids[pj];
-        var prod=null;
-        for(var pk=0;pk<PRODUCTOS.length;pk++){ if(PRODUCTOS[pk].id===pid){ prod=PRODUCTOS[pk]; break; } }
-        var uniVenta=prod?(parseInt(prod.uni_venta)||1):1;
-        var bultosEquiv=cand.bonif[pid]/uniVenta;
-        totalBultosEquiv+=bultosEquiv;
-        partesTxt.push((prod?prod.nombre:pid)+': +'+cand.bonif[pid]+' unid (~'+bultosEquiv.toFixed(1)+' bto)');
-      }
-      detalleHtml+='<div style="padding:6px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
-        '<div style="font-weight:600">'+cand.ped.fecha+' - '+cand.ped.cliente.nombre+'</div>'+
-        '<div style="color:#888">'+partesTxt.join(', ')+'</div>'+
-      '</div>';
-    }
-    // Sumar el total real (no solo la muestra) para el resumen
-    var totalBultosEquivReal=0;
-    for(var c=0;c<candidatos.length;c++){
-      var pids2=Object.keys(candidatos[c].bonif);
-      for(var pj=0;pj<pids2.length;pj++){
-        var pid2=pids2[pj];
-        var prod2=null;
-        for(var pk=0;pk<PRODUCTOS.length;pk++){ if(PRODUCTOS[pk].id===pid2){ prod2=PRODUCTOS[pk]; break; } }
-        var uniVenta2=prod2?(parseInt(prod2.uni_venta)||1):1;
-        totalBultosEquivReal+=candidatos[c].bonif[pid2]/uniVenta2;
-      }
-    }
-    var html='<div style="font-weight:600;font-size:13px;margin-bottom:6px">Se encontraron '+candidatos.length+' pedido(s) con bonificacion recuperable (~'+totalBultosEquivReal.toFixed(1)+' bultos-equivalente en total)</div>';
-    html+=detalleHtml;
-    if(candidatos.length>8) html+='<div style="font-size:11px;color:#888;padding:6px 0">Y '+(candidatos.length-8)+' mas...</div>';
-    html+='<button class="btn btn-p btn-sm" style="margin-top:10px" onclick="aplicarBonificacionesHistoricas()">Aplicar y guardar en Firebase</button>';
-    el.innerHTML=html;
-  });
-}
-
-function aplicarBonificacionesHistoricas(){
-  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
-  if(REPO_BACKFILL_CANDIDATOS.length===0){ toast('No hay nada que aplicar'); return; }
-  var el=document.getElementById('repoBackfillResultado');
-  el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Guardando en Firebase...</div>';
-
-  // Agrupar candidatos por vendedor dueno del pedido, para escribir un solo
-  // documento por vendedor con todos sus pedidos actualizados
-  var vendedoresAfectados={};
-  for(var c=0;c<REPO_BACKFILL_CANDIDATOS.length;c++){
-    var cand=REPO_BACKFILL_CANDIDATOS[c];
-    var vid=cand.ped.vendedor||'??';
-    if(!vendedoresAfectados[vid]) vendedoresAfectados[vid]=[];
-    vendedoresAfectados[vid].push(cand);
-  }
-  var vids=Object.keys(vendedoresAfectados);
-  var promesas=vids.map(function(vid){
-    return db.collection('vendedores').doc(vid).get().then(function(doc){ return {vid:vid, doc:doc}; });
-  });
-  Promise.all(promesas).then(function(resultados){
-    var escrituras=[];
-    var totalAplicados=0;
-    for(var r=0;r<resultados.length;r++){
-      var vid=resultados[r].vid, doc=resultados[r].doc;
-      if(!doc.exists) continue;
-      var data=doc.data();
-      var peds=[];
-      try{ peds=data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
-      var candidatosVend=vendedoresAfectados[vid];
-      for(var cv=0;cv<candidatosVend.length;cv++){
-        var cand=candidatosVend[cv];
-        for(var k=0;k<peds.length;k++){
-          if(String(peds[k].id)===String(cand.ped.id)){
-            peds[k].bonificacionesUnidades=cand.bonif;
-            totalAplicados++;
-            break;
-          }
-        }
-      }
-      escrituras.push(db.collection('vendedores').doc(vid).set({
-        pedidos: JSON.stringify(peds),
-        visitas: data.visitas||'[]',
-        clientesNuevos: data.clientesNuevos||'[]',
-        ultimaActualizacion: new Date().toISOString()
-      }, {merge:true}));
-    }
-    Promise.all(escrituras).then(function(){
-      REPO_BACKFILL_CANDIDATOS=[];
-      el.innerHTML='<div style="color:var(--verde);font-weight:600;font-size:13px;text-align:center;padding:12px">✓ '+totalAplicados+' pedido(s) actualizados. Ya se pueden usar en el calculo de Reposicion.</div>';
-      toast('Bonificaciones historicas guardadas');
-      cargarTodosFirebase(function(todos){ PEDIDOS=todos; });
-    }).catch(function(){
-      toast('Error guardando en Firebase, intenta de nuevo');
-      el.innerHTML='<div style="color:var(--rojo);font-size:13px;text-align:center;padding:12px">Error al guardar. Intenta de nuevo.</div>';
-    });
-  }).catch(function(){
-    toast('Error al conectar con Firebase');
-  });
+  return {overrides:overrides, notas:notas, observaciones:observaciones};
 }
 
 function cargarCSVPrecios(input){
@@ -8447,28 +7374,9 @@ function cargarConfigFirebase(callback){
     db.collection('config').doc('cuentas_cobrar_fiscal').get(),
     db.collection('config').doc('limite_deuda').get(),
     db.collection('config').doc('promociones_custom').get(),
-    db.collection('config').doc('catalogo_productos').get(),
-    db.collection('config').doc('reposicion').get(),
-    db.collection('config').doc('reposicion_historial').get()
+    db.collection('config').doc('catalogo_productos').get()
   ];
   Promise.all(promesas).then(function(docs){
-    // Catalogo completo de productos (reemplaza el listado inicial si ya
-    // se ha usado la gestion de productos en Admin - permite agregar
-    // articulos nuevos, fotos, sabores/tipos libres, etc.)
-    // IMPORTANTE: esto debe cargarse ANTES de aplicar stock/precios de abajo,
-    // porque reemplaza el arreglo PRODUCTOS completo. Si se cargara despues,
-    // pisaria el stock/precios recien actualizados con la foto vieja que
-    // haya quedado guardada en el catalogo la ultima vez que se edito un
-    // producto en Admin -> Productos.
-    try{
-      if(docs[10] && docs[10].exists){
-        var catalogo=JSON.parse(docs[10].data().data||'[]');
-        if(catalogo.length>0){
-          PRODUCTOS.length=0;
-          for(var i=0;i<catalogo.length;i++) PRODUCTOS.push(catalogo[i]);
-        }
-      }
-    }catch(e){}
     // Inventario
     try{
       if(docs[0].exists){
@@ -8516,6 +7424,18 @@ function cargarConfigFirebase(callback){
               break;
             }
           }
+        }
+      }
+    }catch(e){}
+    // Catalogo completo de productos (reemplaza el listado inicial si ya
+    // se ha usado la gestion de productos en Admin - permite agregar
+    // articulos nuevos, fotos, sabores/tipos libres, etc.)
+    try{
+      if(docs[10] && docs[10].exists){
+        var catalogo=JSON.parse(docs[10].data().data||'[]');
+        if(catalogo.length>0){
+          PRODUCTOS.length=0;
+          for(var i=0;i<catalogo.length;i++) PRODUCTOS.push(catalogo[i]);
         }
       }
     }catch(e){}
@@ -8580,26 +7500,6 @@ function cargarConfigFirebase(callback){
         for(var i=0;i<promosGuardadas.length;i++) PROMOCIONES_CUSTOM.push(promosGuardadas[i]);
       }
       migrarPromoBolsasOriginal();
-    }catch(e){}
-    // Configuracion de reposicion / contenedor
-    try{
-      if(docs[11] && docs[11].exists){
-        var repoCfg=docs[11].data();
-        if(repoCfg.diasProduccion!==undefined) REPO_CONFIG.diasProduccion=parseInt(repoCfg.diasProduccion)||REPO_CONFIG.diasProduccion;
-        if(repoCfg.diasEnvio!==undefined) REPO_CONFIG.diasEnvio=parseInt(repoCfg.diasEnvio)||REPO_CONFIG.diasEnvio;
-        if(repoCfg.cicloSugeridoDias!==undefined) REPO_CONFIG.cicloSugeridoDias=parseInt(repoCfg.cicloSugeridoDias)||REPO_CONFIG.cicloSugeridoDias;
-        if(repoCfg.nivelServicio!==undefined) REPO_CONFIG.nivelServicio=parseInt(repoCfg.nivelServicio)||REPO_CONFIG.nivelServicio;
-        if(repoCfg.topeExtraPct!==undefined) REPO_CONFIG.topeExtraPct=parseFloat(repoCfg.topeExtraPct);
-        if(repoCfg.espacioAireCm!==undefined) REPO_CONFIG.espacioAireCm=parseFloat(repoCfg.espacioAireCm);
-      }
-    }catch(e){}
-    // Historial de ordenes de reposicion ya guardadas
-    try{
-      if(docs[12] && docs[12].exists){
-        var repoHist=JSON.parse(docs[12].data().data||'[]');
-        REPO_HISTORIAL.length=0;
-        for(var i=0;i<repoHist.length;i++) REPO_HISTORIAL.push(repoHist[i]);
-      }
     }catch(e){}
     // Llamar callback cuando todo está listo
     if(callback) callback();
@@ -8711,17 +7611,19 @@ function reconciliarCxC(nuevosDocs, callback){
   for(var i=0;i<CUENTAS_COBRAR.length;i++){ actualMap[CUENTAS_COBRAR[i].numero]=CUENTAS_COBRAR[i]; }
   var resultado=[];
   var mantenidos=0;
+  var mantenidosList=[];
   for(var i=0;i<nuevosDocs.length;i++){
     var nuevo=nuevosDocs[i];
     var actual=actualMap[nuevo.numero];
     if(actual && actual.abonadoEnApp && actual.saldoAntesUltimoPago!==undefined && Math.abs(nuevo.saldo-actual.saldoAntesUltimoPago)<0.01){
       resultado.push(actual);
       mantenidos++;
+      mantenidosList.push({numero:actual.numero, clienteId:actual.clienteId, clienteNombre:actual.clienteNombre, saldo:actual.saldo});
       continue;
     }
     resultado.push(nuevo);
   }
-  callback(resultado, mantenidos);
+  callback(resultado, mantenidos, mantenidosList);
 }
 
 // El monto coincide si es igual, o si el fiscal es 35% menor al real
@@ -8760,6 +7662,8 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
   var usados={};
   var resultado=[];
   var coincidencias=0;
+  var coincidenciasList=[];
+  var docsDiferenciaList=[];
 
   for(var i=0;i<realDocs.length;i++){
     var r=realDocs[i];
@@ -8782,6 +7686,7 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
       fusionado.tieneCruce=true;
       resultado.push(fusionado);
       coincidencias++;
+      coincidenciasList.push({numero:f.numero, clienteId:f.clienteId, clienteNombre:f.clienteNombre, tipo:tipoMatch});
       if(tipoMatch==='diferencia35'){
         var diferencia=Math.round((r.saldo-f.saldo)*100)/100;
         if(diferencia>0.009){
@@ -8800,6 +7705,7 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
             tieneCruce: true,
             documentoRelacionado: f.numero
           });
+          docsDiferenciaList.push({numero:f.numero+'.', clienteId:f.clienteId, clienteNombre:f.clienteNombre, saldo:diferencia, documentoRelacionado:f.numero});
         }
       }
     } else {
@@ -8813,15 +7719,20 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
   // Los documentos FISCAL que no tuvieron ninguna coincidencia con Real se
   // descartan (no quedan reflejados en la app).
   var descartadosFiscal=0;
+  var descartadosFiscalList=[];
   for(var key in fiscalPorGrupo){
     var candidatos=fiscalPorGrupo[key];
     for(var j=0;j<candidatos.length;j++){
-      if(!usados[key+'#'+j]) descartadosFiscal++;
+      if(!usados[key+'#'+j]){
+        descartadosFiscal++;
+        descartadosFiscalList.push({numero:candidatos[j].numero, clienteId:candidatos[j].clienteId, clienteNombre:candidatos[j].clienteNombre, saldo:candidatos[j].saldo, emision:candidatos[j].emision});
+      }
     }
   }
   var docsDiferencia=0;
   for(var i=0;i<resultado.length;i++){ if(resultado[i].origenBase==='diferencia') docsDiferencia++; }
-  return {resultado:resultado, coincidencias:coincidencias, docsDiferencia:docsDiferencia, descartadosFiscal:descartadosFiscal};
+  return {resultado:resultado, coincidencias:coincidencias, docsDiferencia:docsDiferencia, descartadosFiscal:descartadosFiscal,
+    coincidenciasList:coincidenciasList, docsDiferenciaList:docsDiferenciaList, descartadosFiscalList:descartadosFiscalList};
 }
 
 // Combina una base existente con los documentos recien leidos de un Excel,
@@ -8831,15 +7742,75 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
 // documentos nuevos, no el reporte completo de "Sin Cancelar".
 function fusionarDocsExcelConBase(baseExistente, docsNuevos){
   var resultado=baseExistente.slice();
+  var nuevosList=[];
+  var actualizadosList=[];
   for(var i=0;i<docsNuevos.length;i++){
     var nuevo=docsNuevos[i];
     var idx=-1;
     for(var j=0;j<resultado.length;j++){ if(resultado[j].numero===nuevo.numero){ idx=j; break; } }
-    if(idx>=0) resultado[idx]=nuevo;
-    else resultado.push(nuevo);
+    if(idx>=0){
+      resultado[idx]=nuevo;
+      actualizadosList.push({numero:nuevo.numero, clienteId:nuevo.clienteId, clienteNombre:nuevo.clienteNombre, saldo:nuevo.saldo});
+    } else {
+      resultado.push(nuevo);
+      nuevosList.push({numero:nuevo.numero, clienteId:nuevo.clienteId, clienteNombre:nuevo.clienteNombre, saldo:nuevo.saldo});
+    }
   }
-  return resultado;
+  return {resultado:resultado, nuevosList:nuevosList, actualizadosList:actualizadosList};
 }
+
+var ULTIMA_CARGA_CXC_DETALLE=null;
+
+// Guarda cada carga de Cuentas por Cobrar en un historial persistente en
+// Firebase, para poder consultarla en sesiones posteriores. Se guarda como
+// una lista (mas reciente primero) limitada a las ultimas 20 cargas, para
+// no dejar crecer el documento indefinidamente.
+function guardarHistorialCargaCxC(detalle){
+  var entrada={};
+  for(var k in detalle) entrada[k]=detalle[k];
+  entrada.fecha=new Date().toISOString();
+  entrada.realizadoPor=VEND.nombre+' (VEND '+VEND.codigo+')';
+  db.collection('config').doc('historial_cargas_cxc').get().then(function(doc){
+    var historial=[];
+    try{ historial = doc.exists ? JSON.parse(doc.data().data||'[]') : []; }catch(e){}
+    historial.unshift(entrada);
+    if(historial.length>20) historial=historial.slice(0,20);
+    db.collection('config').doc('historial_cargas_cxc').set({
+      data: JSON.stringify(historial),
+      actualizado: new Date().toISOString()
+    }).catch(function(){ console.log('No se pudo guardar el historial de cargas'); });
+  }).catch(function(){ console.log('No se pudo leer el historial de cargas'); });
+}
+
+// Carga y muestra el historial de cargas guardado en Firebase
+function verHistorialCargasCxC(){
+  var cont=document.getElementById('historialCargasCxCContenido');
+  cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando...</div>';
+  document.getElementById('mHistorialCargasCxC').classList.add('open');
+  db.collection('config').doc('historial_cargas_cxc').get().then(function(doc){
+    var historial=[];
+    try{ historial = doc.exists ? JSON.parse(doc.data().data||'[]') : []; }catch(e){}
+    HISTORIAL_CARGAS_CXC_CACHE=historial;
+    if(historial.length===0){
+      cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Todavia no hay cargas guardadas en el historial</div>';
+      return;
+    }
+    var html='';
+    for(var i=0;i<historial.length;i++){
+      var h=historial[i];
+      var totalCambios=(h.nuevosEstaBase||[]).length+(h.actualizadosEstaBase||[]).length+(h.coincidenciasList||[]).length+(h.descartadosFiscalList||[]).length;
+      html+='<div onclick="verDetalleCargaCxC(HISTORIAL_CARGAS_CXC_CACHE['+i+'])" style="border-bottom:1px solid var(--borde);padding:10px 4px;cursor:pointer">'+
+        '<div style="font-weight:600;font-size:13px">Base '+h.nombreBase+' — '+(h.modoCarga==='agregar'?'Agregar/actualizar':'Reemplazar todo')+'</div>'+
+        '<div style="font-size:11px;color:#888">'+new Date(h.fecha).toLocaleString('es-VE')+' — '+(h.realizadoPor||'')+'</div>'+
+        '<div style="font-size:11px;color:var(--azul);margin-top:2px">'+totalCambios+' cambio'+(totalCambios!==1?'s':'')+' registrado'+(totalCambios!==1?'s':'')+'</div>'+
+      '</div>';
+    }
+    cont.innerHTML=html;
+  }).catch(function(){
+    cont.innerHTML='<div style="color:var(--rojo);font-size:13px;text-align:center;padding:12px">Error cargando el historial</div>';
+  });
+}
+var HISTORIAL_CARGAS_CXC_CACHE=[];
 
 function cargarExcelCxC(input, tipo){
   var file=input.files[0]; if(!file) return;
@@ -8851,10 +7822,14 @@ function cargarExcelCxC(input, tipo){
     if(error){ estadoEl.innerHTML='<span style="color:var(--rojo)">'+error+'</span>'; return; }
     if(!docs||docs.length===0){ estadoEl.innerHTML='<span style="color:var(--rojo)">No se encontraron documentos con saldo pendiente</span>'; return; }
     var diagTxt=diag?(' <span style="color:'+(diag.encabezadoAprox?'var(--ambar)':'#888')+'">(hoja "'+diag.hoja+'", columna NUMERO en la posicion '+(diag.numeroCol+1)+(diag.encabezadoAprox?' — detectada por EMISION/VENCIMIENTO, la celda NUMERO venia dañada en este archivo':'')+' | '+diag.filasSaldoCero+' filas con saldo 0 descartadas, '+diag.filasVacias+' filas vacias, '+diag.filasTotal+' filas de total)</span>'):'';
-    if(tipo==='real'){
-      CUENTAS_COBRAR_REAL = modoCarga==='agregar' ? fusionarDocsExcelConBase(CUENTAS_COBRAR_REAL, docs) : docs;
+    var nuevosEstaBase=[], actualizadosEstaBase=[];
+    if(modoCarga==='agregar'){
+      var fusionDocs=fusionarDocsExcelConBase(tipo==='real'?CUENTAS_COBRAR_REAL:CUENTAS_COBRAR_FISCAL, docs);
+      if(tipo==='real'){ CUENTAS_COBRAR_REAL = fusionDocs.resultado; } else { CUENTAS_COBRAR_FISCAL = fusionDocs.resultado; }
+      nuevosEstaBase=fusionDocs.nuevosList;
+      actualizadosEstaBase=fusionDocs.actualizadosList;
     } else {
-      CUENTAS_COBRAR_FISCAL = modoCarga==='agregar' ? fusionarDocsExcelConBase(CUENTAS_COBRAR_FISCAL, docs) : docs;
+      if(tipo==='real'){ CUENTAS_COBRAR_REAL = docs; } else { CUENTAS_COBRAR_FISCAL = docs; }
     }
     var docConfig=(tipo==='real'?'cuentas_cobrar_real':'cuentas_cobrar_fiscal');
     var baseActualizada=(tipo==='real'?CUENTAS_COBRAR_REAL:CUENTAS_COBRAR_FISCAL);
@@ -8865,7 +7840,7 @@ function cargarExcelCxC(input, tipo){
     }).then(function(){
       estadoEl.innerHTML='<span style="color:#aaa">Cruzando bases real y fiscal...</span>';
       var fusion=fusionarBasesRealFiscal(CUENTAS_COBRAR_REAL, CUENTAS_COBRAR_FISCAL);
-      reconciliarCxC(fusion.resultado,function(docsFinal,mantenidos){
+      reconciliarCxC(fusion.resultado,function(docsFinal,mantenidos,mantenidosList){
         CUENTAS_COBRAR=docsFinal;
         db.collection('config').doc('cuentas_cobrar').set({
           data:JSON.stringify(CUENTAS_COBRAR),
@@ -8873,7 +7848,15 @@ function cargarExcelCxC(input, tipo){
         }).then(function(){
           var faltaOtra=(tipo==='real' && CUENTAS_COBRAR_FISCAL.length===0) || (tipo==='fiscal' && CUENTAS_COBRAR_REAL.length===0);
           var modoTxt=modoCarga==='agregar'?'Modo: agregado/actualizado sin borrar lo demas. ':'Modo: base reemplazada por completo. ';
-          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+modoTxt+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.descartadosFiscal>0?' | '+fusion.descartadosFiscal+' fiscales descartados (sin match en Real)':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+'</span>'+diagTxt+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'');
+          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+modoTxt+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.descartadosFiscal>0?' | '+fusion.descartadosFiscal+' fiscales descartados (sin match en Real)':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+'</span>'+diagTxt+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'')+
+            '<div style="margin-top:8px"><button class="btn btn-s btn-sm" onclick="verDetalleCargaCxC()">Ver detalle de esta carga</button></div>';
+          ULTIMA_CARGA_CXC_DETALLE={
+            tipo:tipo, nombreBase:nombreBase, modoCarga:modoCarga,
+            nuevosEstaBase:nuevosEstaBase, actualizadosEstaBase:actualizadosEstaBase,
+            coincidenciasList:fusion.coincidenciasList, docsDiferenciaList:fusion.docsDiferenciaList,
+            descartadosFiscalList:fusion.descartadosFiscalList, mantenidosList:mantenidosList
+          };
+          guardarHistorialCargaCxC(ULTIMA_CARGA_CXC_DETALLE);
           toast('Base de Cuentas por Cobrar actualizada');
           renderResumenCxC();
           input.value='';
@@ -8887,6 +7870,55 @@ function cargarExcelCxC(input, tipo){
   });
 }
 
+// Arma y muestra el detalle de la ultima carga de Cuentas por Cobrar:
+// documentos nuevos agregados, actualizados, cruzados, de diferencia,
+// fiscales descartados, y los mantenidos por tener un pago ya confirmado.
+function verDetalleCargaCxC(detalleOverride){
+  var d=detalleOverride||ULTIMA_CARGA_CXC_DETALLE;
+  if(!d){ toast('No hay detalle disponible'); return; }
+  function seccion(titulo, lista, colorNum, renderItem){
+    if(!lista || lista.length===0) return '';
+    var html='<div style="margin-bottom:16px">'+
+      '<div style="font-weight:700;font-size:13px;color:'+colorNum+';margin-bottom:6px">'+titulo+' ('+lista.length+')</div>';
+    for(var i=0;i<lista.length;i++){ html+=renderItem(lista[i]); }
+    html+='</div>';
+    return html;
+  }
+  function filaDoc(item, extra){
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+      '<strong>Doc. '+item.numero+'</strong> — '+(item.clienteNombre||'')+' <span style="color:#888">(Cod: '+(item.clienteId||'')+')</span>'+
+      (extra?('<div style="color:#888">'+extra+'</div>'):'')+
+    '</div>';
+  }
+  var encabezadoFecha=d.fecha?('<div style="font-size:12px;color:#888">'+new Date(d.fecha).toLocaleString('es-VE')+(d.realizadoPor?' — '+d.realizadoPor:'')+'</div>'):'';
+  var html=encabezadoFecha+'<div style="font-size:12px;color:#888;margin-bottom:14px">Carga de la base '+d.nombreBase+' ('+(d.modoCarga==='agregar'?'Agregar/actualizar':'Reemplazar todo')+')</div>';
+
+  html+=seccion('Documentos nuevos agregados', d.nuevosEstaBase, 'var(--verde)', function(item){
+    return filaDoc(item, 'Saldo: $'+formatearNumeroConMiles(item.saldo,2));
+  });
+  html+=seccion('Documentos actualizados (ya existian)', d.actualizadosEstaBase, 'var(--azul)', function(item){
+    return filaDoc(item, 'Saldo actualizado a: $'+formatearNumeroConMiles(item.saldo,2));
+  });
+  html+=seccion('Cruzados entre Real y Fiscal', d.coincidenciasList, 'var(--verde)', function(item){
+    return filaDoc(item, item.tipo==='diferencia35'?'Coincidencia con diferencia del 35% (IVA)':'Coincidencia exacta');
+  });
+  html+=seccion('Documentos de diferencia (35%) creados', d.docsDiferenciaList, '#5b3fa0', function(item){
+    return filaDoc(item, 'Saldo: $'+formatearNumeroConMiles(item.saldo,2)+' — relacionado al documento '+item.documentoRelacionado);
+  });
+  html+=seccion('Fiscales descartados (sin match en Real)', d.descartadosFiscalList, 'var(--rojo)', function(item){
+    return filaDoc(item, 'Emision: '+(item.emision||'')+' | Saldo: $'+formatearNumeroConMiles(item.saldo,2));
+  });
+  html+=seccion('Mantenidos por pago ya confirmado en la app', d.mantenidosList, 'var(--ambar)', function(item){
+    return filaDoc(item, 'Saldo protegido: $'+formatearNumeroConMiles(item.saldo,2));
+  });
+
+  if(html.indexOf('margin-bottom:16px')<0){
+    html+='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin cambios que mostrar en esta carga</div>';
+  }
+  document.getElementById('detalleCargaCxCContenido').innerHTML=html;
+  document.getElementById('mDetalleCargaCxC').classList.add('open');
+}
+
 function renderResumenCxC(){
   var totalDocs=CUENTAS_COBRAR.length;
   var totalSaldo=0;
@@ -8894,200 +7926,6 @@ function renderResumenCxC(){
   var elD=document.getElementById('cxcResumDocs'); if(elD){ elD.textContent=totalDocs; ajustarFontMetrica('cxcResumDocs',18); }
   var elS=document.getElementById('cxcResumSaldo'); if(elS){ elS.textContent=totalSaldo<0?('($'+formatearNumeroConMiles(Math.abs(totalSaldo),2)+')'):('$'+formatearNumeroConMiles(totalSaldo,2)); ajustarFontMetrica('cxcResumSaldo',18); }
   renderListaCxCAdmin();
-}
-
-// Eliminar un documento puntual de Cuentas por Cobrar (por si quedo cargado
-// duplicado). Restringido a 01/20 - el boton que la llama ya solo se
-// renderiza para esos codigos, y se vuelve a validar aqui por seguridad.
-var docCxCEliminandoNumero=null;
-function confirmarEliminarDocCxC(numero){
-  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
-  docCxCEliminandoNumero=numero;
-  var elNum=document.getElementById('mEliminarDocCxCNumero');
-  if(elNum) elNum.textContent=numero;
-  document.getElementById('mEliminarDocCxC').classList.add('open');
-}
-function ejecutarEliminarDocCxC(){
-  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))){ cerrarModal('mEliminarDocCxC'); return; }
-  var numero=docCxCEliminandoNumero;
-  var idx=-1;
-  for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(CUENTAS_COBRAR[i].numero===numero){ idx=i; break; } }
-  if(idx<0){ cerrarModal('mEliminarDocCxC'); toast('No se encontro el documento (puede que ya se haya eliminado)'); return; }
-  CUENTAS_COBRAR.splice(idx,1);
-  db.collection('config').doc('cuentas_cobrar').set({
-    data:JSON.stringify(CUENTAS_COBRAR),
-    actualizado:new Date().toISOString()
-  }).then(function(){
-    cerrarModal('mEliminarDocCxC');
-    toast('Documento '+numero+' eliminado');
-    renderResumenCxC();
-  }).catch(function(){
-    toast('Error eliminando en Firebase, intenta de nuevo');
-  });
-}
-
-// ═══ VERIFICADOR DE INTEGRIDAD DE COBROS ═══
-// Detecta dos tipos de problema:
-// 1) Documentos duplicados: mismo "numero" repetido en la base actual
-//    (senal de que un Excel se cargo dos veces o el cruce genero copias).
-// 2) Cobros "huerfanos": un pago CONFIRMADO en el historial hace referencia
-//    a un documento que, en la base actualmente cargada, no tiene marcado
-//    el abono (por ejemplo porque una recarga de Excel lo sobreescribio sin
-//    que el saldo coincidiera con el guardado antes del pago).
-var VERIF_ULTIMO_DUPLICADOS=[];
-var VERIF_ULTIMO_HUERFANOS=[];
-var VERIF_FILTRO_ACTUAL='todos';
-
-function verificarIntegridadCobros(){
-  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
-  var el=document.getElementById('cxcVerificadorResultado');
-  el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Verificando...</div>';
-  cargarTodosPagosCobranzaFirebase(function(pagos){
-    PAGOS_COBRANZA_TODOS=pagos;
-
-    // 1) Duplicados por numero en la base actual
-    var porNumero={};
-    for(var i=0;i<CUENTAS_COBRAR.length;i++){
-      var num=CUENTAS_COBRAR[i].numero;
-      if(!porNumero[num]) porNumero[num]=[];
-      porNumero[num].push(CUENTAS_COBRAR[i]);
-    }
-    var duplicados=[];
-    for(var num in porNumero){
-      if(porNumero[num].length>1) duplicados.push({numero:num, copias:porNumero[num]});
-    }
-
-    // 2) Cobros confirmados cuyo documento actual no refleja el abono
-    var huerfanos=[];
-    for(var i=0;i<pagos.length;i++){
-      var pago=pagos[i];
-      if(pago.estado!=='confirmado') continue;
-      for(var j=0;j<(pago.documentos||[]).length;j++){
-        var num2=pago.documentos[j].numero;
-        var montoAplicado=pago.documentos[j].montoAplicado||0;
-        if(montoAplicado<=0.009) continue;
-        var docActual=null;
-        for(var k=0;k<CUENTAS_COBRAR.length;k++){ if(CUENTAS_COBRAR[k].numero===num2){ docActual=CUENTAS_COBRAR[k]; break; } }
-        if(!docActual){
-          huerfanos.push({numero:num2, cliente:pago.clienteNombre, monto:montoAplicado, fecha:pago.fecha, existe:false, motivo:'El documento ya no existe en la base actual'});
-        } else if(!docActual.abonadoEnApp){
-          huerfanos.push({numero:num2, cliente:pago.clienteNombre, monto:montoAplicado, fecha:pago.fecha, existe:true, motivo:'El documento cargado no tiene marcado el abono (posible sobre-escritura en una recarga de Excel)'});
-        }
-      }
-    }
-
-    VERIF_ULTIMO_DUPLICADOS=duplicados;
-    VERIF_ULTIMO_HUERFANOS=huerfanos;
-    VERIF_FILTRO_ACTUAL='todos';
-    renderVerificadorResultado();
-  });
-}
-
-function filtrarVerificador(tipo){
-  VERIF_FILTRO_ACTUAL=tipo;
-  renderVerificadorResultado();
-}
-
-function renderVerificadorResultado(){
-  var el=document.getElementById('cxcVerificadorResultado');
-  if(!el) return;
-  var duplicados=VERIF_ULTIMO_DUPLICADOS||[];
-  var huerfanos=VERIF_ULTIMO_HUERFANOS||[];
-  var totalProblemas=duplicados.length+huerfanos.length;
-
-  if(totalProblemas===0){
-    el.innerHTML='<div style="color:var(--verde);font-weight:600;font-size:13px;text-align:center;padding:12px">✓ Sin inconsistencias: no hay documentos duplicados ni cobros confirmados sin reflejar</div>';
-    return;
-  }
-
-  function btnFiltro(tipo, label, cant){
-    var activo=(VERIF_FILTRO_ACTUAL===tipo);
-    return '<button class="btn btn-sm '+(activo?'btn-p':'btn-s')+'" onclick="filtrarVerificador(\''+tipo+'\')">'+label+' ('+cant+')</button>';
-  }
-  var html='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+
-    btnFiltro('todos','Todos',totalProblemas)+
-    btnFiltro('duplicados','Duplicados',duplicados.length)+
-    btnFiltro('huerfanos','Sin abono marcado',huerfanos.length)+
-  '</div>';
-
-  if((VERIF_FILTRO_ACTUAL==='todos'||VERIF_FILTRO_ACTUAL==='duplicados') && duplicados.length>0){
-    html+='<div style="font-weight:600;font-size:13px;margin-bottom:6px;color:var(--rojo)">Documentos duplicados ('+duplicados.length+')</div>';
-    for(var d=0;d<duplicados.length;d++){
-      var dup=duplicados[d];
-      html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
-        '<div style="font-weight:600">Doc.'+dup.numero+' aparece '+dup.copias.length+' veces</div>';
-      for(var c=0;c<dup.copias.length;c++){
-        var cp=dup.copias[c];
-        html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'+
-          '<span style="color:#888">Cliente '+cp.clienteId+' ('+cp.clienteNombre+') - saldo $'+formatearNumeroConMiles(cp.saldo,2)+'</span>'+
-          '<button class="btn btn-s btn-sm" style="color:var(--rojo)" onclick="confirmarEliminarDocCxC(\''+cp.numero+'\')">Eliminar</button>'+
-        '</div>';
-      }
-      html+='</div>';
-    }
-  }
-  if((VERIF_FILTRO_ACTUAL==='todos'||VERIF_FILTRO_ACTUAL==='huerfanos') && huerfanos.length>0){
-    html+='<div style="font-weight:600;font-size:13px;margin:10px 0 6px;color:var(--ambar)">Cobros confirmados sin reflejar ('+huerfanos.length+')</div>';
-    for(var h=0;h<huerfanos.length;h++){
-      var hf=huerfanos[h];
-      html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
-        '<div style="flex:1">'+
-        '<div style="font-weight:600">Doc.'+hf.numero+' - '+hf.cliente+'</div>'+
-        '<div style="color:#888">Pago confirmado el '+hf.fecha+' por $'+formatearNumeroConMiles(hf.monto,2)+'</div>'+
-        '<div style="color:var(--ambar)">'+hf.motivo+'</div>'+
-        '</div>'+
-        (hf.existe?'<button class="btn btn-s btn-sm" style="color:var(--ambar);flex-shrink:0" onclick="abrirReaplicarAbono(\''+hf.numero+'\','+hf.monto+',\''+(hf.cliente||'').replace(/'/g,"\\'")+'\')">Reaplicar abono</button>':'')+
-        '</div>'+
-      '</div>';
-    }
-  }
-  el.innerHTML=html;
-}
-
-// --- Reaplicar abono a un documento que quedo sin marcar (con confirmacion editable) ---
-var reaplicarAbonoData=null;
-function abrirReaplicarAbono(numero, monto, clienteNombre){
-  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
-  var doc=null;
-  for(var k=0;k<CUENTAS_COBRAR.length;k++){ if(CUENTAS_COBRAR[k].numero===numero){ doc=CUENTAS_COBRAR[k]; break; } }
-  if(!doc){ toast('El documento ya no existe en la base actual'); return; }
-  reaplicarAbonoData={numero:numero, saldoActual:doc.saldo};
-  document.getElementById('reaplicarNumero').textContent=numero;
-  document.getElementById('reaplicarCliente').textContent=clienteNombre||'';
-  document.getElementById('reaplicarSaldoActual').textContent='$'+formatearNumeroConMiles(doc.saldo,2);
-  document.getElementById('reaplicarMonto').value=monto.toFixed(2);
-  actualizarReaplicarPreview();
-  document.getElementById('mReaplicarAbono').classList.add('open');
-}
-function actualizarReaplicarPreview(){
-  if(!reaplicarAbonoData) return;
-  var monto=parseFloat(document.getElementById('reaplicarMonto').value)||0;
-  var resultante=Math.round((reaplicarAbonoData.saldoActual-monto)*100)/100;
-  document.getElementById('reaplicarSaldoResultante').textContent='$'+formatearNumeroConMiles(resultante,2);
-}
-function ejecutarReaplicarAbono(){
-  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))){ cerrarModal('mReaplicarAbono'); return; }
-  if(!reaplicarAbonoData) return;
-  var monto=parseFloat(document.getElementById('reaplicarMonto').value)||0;
-  if(monto<=0){ toast('Indica un monto valido'); return; }
-  var doc=null;
-  for(var k=0;k<CUENTAS_COBRAR.length;k++){ if(CUENTAS_COBRAR[k].numero===reaplicarAbonoData.numero){ doc=CUENTAS_COBRAR[k]; break; } }
-  if(!doc){ cerrarModal('mReaplicarAbono'); toast('El documento ya no existe'); return; }
-  doc.saldoAntesUltimoPago=doc.saldo;
-  doc.saldo=Math.round((doc.saldo-monto)*100)/100;
-  doc.abonadoEnApp=true;
-  db.collection('config').doc('cuentas_cobrar').set({
-    data:JSON.stringify(CUENTAS_COBRAR),
-    actualizado:new Date().toISOString()
-  }).then(function(){
-    cerrarModal('mReaplicarAbono');
-    toast('Abono reaplicado al documento '+reaplicarAbonoData.numero);
-    renderResumenCxC();
-    verificarIntegridadCobros();
-  }).catch(function(){
-    toast('Error guardando en Firebase, intenta de nuevo');
-  });
 }
 
 // Listado completo y buscable de TODAS las cuentas por cobrar, para que el
@@ -9127,16 +7965,10 @@ function renderListaCxCAdmin(){
         :(d.origenBase==='diferencia'
           ?' <span class="tag" style="background:#e3d9fc;color:#5b3fa0;font-size:9px">Dif DCTO.</span>'
           :(d.tieneCruce?' <span class="tag tag-v" style="font-size:9px">Cruzado</span>':''));
-      var puedeBorrarDoc=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'));
       html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:13px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
-        '<div style="flex:1">'+
         '<div style="font-weight:600">'+nombre+' <span style="font-weight:400;color:#888">(Cod: '+d.clienteId+')</span>'+origenTxt+'</div>'+
         '<div style="font-size:11px;color:#888">Doc.'+d.numero+' | VEND '+d.vendedor+' | Vence: '+d.vencimiento+diasTxt+'</div>'+
         '<div style="font-size:13px;font-weight:700;color:'+(esCredito?'var(--verde)':'var(--azul)')+'">'+(esCredito?'($'+formatearNumeroConMiles(Math.abs(d.saldo),2)+')':'$'+formatearNumeroConMiles(d.saldo,2))+'</div>'+
-        '</div>'+
-        (puedeBorrarDoc?'<button class="btn btn-s btn-sm" style="color:var(--rojo);flex-shrink:0" onclick="confirmarEliminarDocCxC(\''+d.numero+'\')">Eliminar</button>':'')+
-        '</div>'+
       '</div>';
     }
   }
@@ -10603,7 +9435,7 @@ function parsearDBFRenglones(buffer){
 function convertirPedidosProfit(peds, rengs){
   var ART = {'GU9000':'Menta Bolsa','GU9001':'Menta Display','GU9010':'Tutti Frutti Bolsa','GU9011':'Tutti Frutti Display'};
   var ART_UNI_VENTA = {'GU9000':36,'GU9001':24,'GU9010':36,'GU9011':24};
-  var FP = {'01':'Contado','05':'Prepagado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'};
+  var FP = {'01':'Contado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'};
   
   // Indexar renglones por FACT_NUM
   var rIdx = {};
