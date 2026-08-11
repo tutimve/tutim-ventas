@@ -358,6 +358,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="field"><label>Forma de pago</label>
         <select id="fPago">
           <option value="01">Contado</option>
+          <option value="05">Prepagado</option>
           <option value="02" selected>Credito 7 dias</option>
           <option value="03">Credito 15 dias</option>
           <option value="04">Credito 30 dias</option>
@@ -372,6 +373,10 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <input type="text" id="fPromo" placeholder="Se calcula automaticamente segun bultos de bolsa"></div>
       <div class="field"><label>Observaciones</label>
         <textarea id="fObs" rows="2" placeholder="Notas adicionales..."></textarea></div>
+      <div class="field" id="wrapDescGeneral" style="display:none">
+        <label>Descuento general del pedido (%)</label>
+        <input type="number" min="0" max="100" step="1" id="fDescGeneral" placeholder="0" oninput="actualizarTotales()">
+      </div>
       <button class="btn btn-p" onclick="abrirConfirmar()">Ver resumen</button>
       <button class="btn btn-s" style="margin-top:8px" onclick="volverPaso2()">Volver</button>
     </div>
@@ -908,7 +913,18 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <div class="field" style="flex:1;min-width:130px"><label>Desde</label><input type="date" id="repoFechaDesde"></div>
           <div class="field" style="flex:1;min-width:130px"><label>Hasta</label><input type="date" id="repoFechaHasta"></div>
         </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="repoIncluirBonif" checked style="width:16px;height:16px">
+          Incluir unidades gratis de promociones (ej. Promo Bultos Bolsa) en el consumo real
+        </label>
         <div id="repoResultados"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Toca "Calcular sugerencia" para ver el analisis</div></div>
+      </div>
+
+      <div class="card" id="repoBackfillCard" style="display:none">
+        <div class="card-title">Recuperar bonificaciones de pedidos antiguos</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Los pedidos creados antes de este cambio solo guardaron la bonificacion como texto (ej. "+144 unid gratis"), no de forma estructurada. Esto revisa ese texto en pedidos viejos e intenta reconstruir cuantas unidades gratis se dieron de cada producto, para que Reposicion tambien las cuente. Es un proceso de una sola vez - los pedidos que ya tengan la bonificacion estructurada no se tocan.</p>
+        <button class="btn btn-p btn-sm" onclick="analizarBonificacionesHistoricas()">Analizar historico</button>
+        <div id="repoBackfillResultado" style="margin-top:10px"></div>
       </div>
 
       <div class="card">
@@ -969,11 +985,11 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
             <option value="todos">Todos los vendedores</option>
           </select>
         </div>
-        <div class="field" style="margin-bottom:8px">
+        <div class="field" style="margin-bottom:8px;position:relative">
           <label>Cliente</label>
-          <select id="rptCliente" onchange="renderReportes()">
-            <option value="todos">Todos los clientes</option>
-          </select>
+          <input type="text" id="rptClienteBusq" placeholder="Todos los clientes (escribe para buscar)" autocomplete="off" oninput="filtrarRptClienteOpciones()" onfocus="filtrarRptClienteOpciones()" onblur="setTimeout(function(){var d=document.getElementById('rptClienteOpciones'); if(d) d.style.display='none';},150)">
+          <input type="hidden" id="rptCliente" value="todos">
+          <div id="rptClienteOpciones" style="display:none;position:absolute;z-index:20;background:#fff;border:1px solid var(--borde);border-radius:8px;max-height:220px;overflow-y:auto;width:100%;box-shadow:0 4px 12px rgba(0,0,0,.12);font-size:13px"></div>
         </div>
         <div id="rptPorVendedor"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
       </div>
@@ -1180,7 +1196,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     </div>
     <div class="field">
       <label>Facturas recientes (minimo 2 fotos) <span id="ncChkFact" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
-      <input type="file" accept="image/*" id="ncDocFact" multiple onchange="previewFacturas('ncDocFact','ncDocFactPrev');actualizarChecksDocsNC();">
+      <input type="file" accept="image/*,application/pdf" id="ncDocFact" multiple onchange="previewFacturas('ncDocFact','ncDocFactPrev');actualizarChecksDocsNC();">
       <div id="ncDocFactPrev" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
     </div>
     <div class="field">
@@ -1356,7 +1372,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div class="field">
       <label>Facturas recientes (minimo 2 fotos) <span id="dcChkFact" class="tag tag-v" style="display:none;font-size:10px;margin-left:4px">✓ Listo</span></label>
       <div id="dcArchFactExistente" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-      <input type="file" accept="image/*" id="dcArchFact" multiple onchange="previewFacturas('dcArchFact','dcArchFactPrev');actualizarChecksDocsDC();">
+      <input type="file" accept="image/*,application/pdf" id="dcArchFact" multiple onchange="previewFacturas('dcArchFact','dcArchFactPrev');actualizarChecksDocsDC();">
       <div id="dcArchFactPrev" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
       <label id="dcAprobFacturasWrap" class="hidden" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:12px;color:#856404;font-weight:600">
         <input type="checkbox" id="dcAprobFacturas" onchange="actualizarChecksDocsDC()" style="width:15px;height:15px">
@@ -1750,7 +1766,7 @@ var CLIENTES_PROFIT = [{"id": "0001", "nombre": "LA BODEGUITA DEL PORTU 13225, C
 var PRODUCTOS_PROFIT = [{"id": "GU9000", "nombre": "GOMA DE MASCAR SABOR A MENTA (BOLSA) - TUTIM", "ean": "7750170001439", "uni_venta": 36, "precio": 111.6, "precio2": 106.2, "precio3": 100.8, "precio4": 95.4, "precio5": 90.0, "stock_und": 41, "stock": 1}, {"id": "GU9001", "nombre": "GOMA DE MASCAR SABOR A MENTA (DISPLAY) - TUTIM", "ean": "7750170001446", "uni_venta": 24, "precio": 74.4, "precio2": 70.8, "precio3": 67.2, "precio4": 63.6, "precio5": 60.0, "stock_und": 5084, "stock": 211}, {"id": "GU9010", "nombre": "GOMA DE MASCAR GRAGEADO TUTTI FRUTTI (BOLSA) - TUTIM", "ean": "7750170001460", "uni_venta": 36, "precio": 111.6, "precio2": 106.2, "precio3": 100.8, "precio4": 95.4, "precio5": 90.0, "stock_und": 44, "stock": 1}, {"id": "GU9011", "nombre": "GOMA DE MASCAR GRAGEADO TUTTI FRUTTI (DISPLAY) - TUTIM", "ean": "7750170001477", "uni_venta": 24, "precio": 74.4, "precio2": 70.8, "precio3": 67.2, "precio4": 63.6, "precio5": 60.0, "stock_und": 45, "stock": 1}];
 var WA_RESUMEN='584149157233';var WA_DETALLE='584149164433';
 var STOCK_REAL = {"GU9000":41,"GU9001":5084,"GU9010":44,"GU9011":45};
-var FP_LABELS = {"01":"Contado","02":"Credito 7 dias","03":"Credito 15 dias","04":"Credito 30 dias"};
+var FP_LABELS = {"01":"Contado","05":"Prepagado","02":"Credito 7 dias","03":"Credito 15 dias","04":"Credito 30 dias"};
 var FF_LABELS = {"tipo1":"Tipo 1","tipo2":"Tipo 2","tipo3":"Tipo 3"};
 var PROD_COLORES = {"GU9000":"#1B2A6B","GU9001":"#2E44A8","GU9010":"#A32D2D","GU9011":"#C0392B"};
 
@@ -1810,6 +1826,15 @@ function repoZScore(nivel){
 function esAdminCompleto(){
   return VEND && (VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
 }
+
+// Solo 01 y 20 pueden aplicar descuentos manuales (por producto o generales)
+// al crear o editar un pedido - a diferencia de esAdminCompleto(), 00 NO
+// entra aqui a proposito.
+function puedeAplicarDescuentos(){
+  return VEND && (VEND.codigo==='01'||VEND.codigo==='20');
+}
+var DESCUENTOS_ITEM={}; // {productoId: pct} - descuentos por producto del pedido en curso (crear)
+var DESCUENTOS_ITEM_EDIT={}; // idem, pero para el modal de Editar pedido
 
 function datosVendedorActual(){
   if(!VEND) return null;
@@ -2590,6 +2615,7 @@ function goScreen(name){
 
 function resetPedido(){
   pedido={cliente:null,items:{},paso:1};
+  DESCUENTOS_ITEM={};
   document.getElementById('paso1').classList.remove('hidden');
   document.getElementById('paso2').classList.add('hidden');
   document.getElementById('paso3').classList.add('hidden');
@@ -2604,9 +2630,9 @@ function resetPedido(){
   var selPago=document.getElementById('fPago');
   if(selPago){
     if(esAdmin){
-      selPago.innerHTML='<option value="01">Contado</option><option value="02" selected>Credito 7 dias</option><option value="03">Credito 15 dias</option><option value="04">Credito 30 dias</option>';
+      selPago.innerHTML='<option value="01">Contado</option><option value="05">Prepagado</option><option value="02" selected>Credito 7 dias</option><option value="03">Credito 15 dias</option><option value="04">Credito 30 dias</option>';
     } else {
-      selPago.innerHTML='<option value="01">Contado</option><option value="02" selected>Credito 7 dias</option>';
+      selPago.innerHTML='<option value="01">Contado</option><option value="05">Prepagado</option><option value="02" selected>Credito 7 dias</option>';
     }
   }
   // Limpiar aviso promo display
@@ -2732,6 +2758,7 @@ function renderProds(){
   actualizarPromoCustomOverrides();
   var lp=1;
   try{lp=parseInt(document.getElementById('listaPrecio').value)||1;}catch(e){}
+  var puedeDesc=puedeAplicarDescuentos();
   var html='';
   for(var i=0;i<PRODUCTOS.length;i++){
     var p=PRODUCTOS[i];
@@ -2748,10 +2775,20 @@ function renderProds(){
     var iconoHtml=p.fotoUrl
       ? '<div class="prod-icon" style="background:'+p.color+';padding:0;overflow:hidden;cursor:pointer" onclick="event.stopPropagation();ampliarImagenProducto(&quot;'+p.fotoUrl+'&quot;,&quot;'+p.nombre.replace(/"/g,'&quot;')+'&quot;)"><img src="'+p.fotoUrl+'" style="width:100%;height:100%;object-fit:cover"></div>'
       : '<div class="prod-icon" style="background:'+p.color+'">'+inicialesProducto(p)+'</div>';
+    var descItemHtml=puedeDesc?(
+      '<div style="display:flex;align-items:center;gap:4px;margin-top:4px">'+
+        '<input type="number" min="0" max="100" step="1" value="'+(DESCUENTOS_ITEM[p.id]||'')+'" placeholder="0" '+
+          'id="descItem-'+p.id+'" oninput="cambDescuentoItem(&quot;'+p.id+'&quot;,this.value)" '+
+          'style="width:44px;height:24px;text-align:center;font-size:11px;border:1px solid var(--borde);border-radius:5px;padding:0">'+
+        '<span style="font-size:10px;color:#888">% dcto item</span>'+
+      '</div>'
+    ):'';
     html+='<div class="prod-card"'+op+'>'+iconoHtml+
       '<div class="prod-info"><div class="prod-name">'+p.nombre+'</div>'+
       '<div style="font-size:11px;color:#aaa;margin-top:1px">Ref: '+p.co_art+'</div>'+
-      '<div class="prod-sub" id="precioTxt-'+p.id+'">$'+precio.toFixed(2)+'/bulto - '+(agotado?'Agotado':p.stock+' btos')+promoTxt+'</div></div>'+
+      '<div class="prod-sub" id="precioTxt-'+p.id+'">$'+precio.toFixed(2)+'/bulto - '+(agotado?'Agotado':p.stock+' btos')+promoTxt+'</div>'+
+      descItemHtml+
+      '</div>'+
       '<div class="qty-ctrl">'+
         '<button class="qty-btn" onclick="cambQty(&quot;'+p.id+'&quot;,-1)"'+dis+'>-</button>'+
         '<input type="number" min="0" value="'+qty+'" '+
@@ -2765,6 +2802,26 @@ function renderProds(){
   }
   document.getElementById('listaProd').innerHTML=html;
   actualizarTotales();
+}
+
+// Precio final de un producto para crear/editar un pedido, aplicando el
+// descuento manual por producto (solo 01/20) encima del precio de lista
+// (que ya incluye promociones). mapaDescuentos es DESCUENTOS_ITEM (crear)
+// o DESCUENTOS_ITEM_EDIT (editar).
+function precioConDescuentoItem(precioBase, productId, mapaDescuentos){
+  if(!puedeAplicarDescuentos()) return precioBase;
+  var pct=(mapaDescuentos && mapaDescuentos[productId])||0;
+  if(!pct) return precioBase;
+  return Math.round(precioBase*(1-pct/100)*100)/100;
+}
+
+function cambDescuentoItem(id, val){
+  var pct=parseFloat(val);
+  if(isNaN(pct)||pct<0) pct=0;
+  if(pct>100) pct=100;
+  if(pct===0) delete DESCUENTOS_ITEM[id]; else DESCUENTOS_ITEM[id]=pct;
+  actualizarTotales();
+  actualizarPreciosProductos();
 }
 
 function actualizarBonif(){
@@ -2815,11 +2872,13 @@ function actualizarPreciosProductos(){
     var p=PRODUCTOS[i];
     var el=document.getElementById('precioTxt-'+p.id);
     if(!el) continue;
-    var precio=getPrecio(p,lp,fpAt,totalDisplaysAt);
+    var precioBase=getPrecio(p,lp,fpAt,totalDisplaysAt);
+    var precio=precioConDescuentoItem(precioBase,p.id,DESCUENTOS_ITEM);
     var overridePromo=PROMO_CUSTOM_OVERRIDES[p.id];
     var promoTxt=overridePromo?(' <span style="color:var(--verde);font-weight:600">('+overridePromo.nombrePromo+')</span>'):'';
+    var descTxt=(precio<precioBase)?(' <s style="color:#bbb">$'+precioBase.toFixed(2)+'</s>'):'';
     var agotado=p.stock===0;
-    el.innerHTML='$'+precio.toFixed(2)+'/bulto - '+(agotado?'Agotado':p.stock+' btos')+promoTxt;
+    el.innerHTML='$'+precio.toFixed(2)+'/bulto'+descTxt+' - '+(agotado?'Agotado':p.stock+' btos')+promoTxt;
   }
 }
 
@@ -2835,7 +2894,8 @@ function actualizarTotales(){
       if(PRODUCTOS[j].id===ids[i]){
         var tdAt=(pedido.items['GU9001']||0)+(pedido.items['GU9011']||0);
         var fpAt=''; try{fpAt=document.getElementById('fPago')?document.getElementById('fPago').value:'02';}catch(e){}
-        bultos+=qty;monto+=qty*getPrecio(PRODUCTOS[j],lp,fpAt,tdAt);break;
+        var precioAt=precioConDescuentoItem(getPrecio(PRODUCTOS[j],lp,fpAt,tdAt),ids[i],DESCUENTOS_ITEM);
+        bultos+=qty;monto+=qty*precioAt;break;
       }
     }
   }
@@ -2850,6 +2910,8 @@ function irPaso3(){
   if(total===0){toast('Agrega al menos un producto');return;}
   document.getElementById('paso2').classList.add('hidden');
   document.getElementById('paso3').classList.remove('hidden');
+  var wrapDesc=document.getElementById('wrapDescGeneral');
+  if(wrapDesc) wrapDesc.style.display=puedeAplicarDescuentos()?'block':'none';
   // Calcular bonificación de bolsas / promociones personalizadas
   var bonif = calcularBonificacion(pedido.items);
   var campoBonif = document.getElementById('fPromo');
@@ -2873,7 +2935,15 @@ function abrirConfirmar(){
   var ff=document.getElementById('fFact').value;
   var promo=document.getElementById('fPromo').value;
   var obs=document.getElementById('fObs').value;
-  var bultos=0,monto=0,itemsHtml='';
+  var descGeneralPct=0;
+  if(puedeAplicarDescuentos()){
+    var elDG=document.getElementById('fDescGeneral');
+    descGeneralPct=elDG?(parseFloat(elDG.value)||0):0;
+    if(descGeneralPct<0) descGeneralPct=0;
+    if(descGeneralPct>100) descGeneralPct=100;
+  }
+  var bultos=0,montoBruto=0,itemsHtml='';
+  var preciosUnitariosConf={};
   itemsHtml+='<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px">';
   itemsHtml+='<tr style="background:var(--azul-c);color:var(--azul)">';
   itemsHtml+='<th style="padding:6px 4px;text-align:left;font-weight:600">Ref.</th>';
@@ -2889,20 +2959,29 @@ function abrirConfirmar(){
       if(PRODUCTOS[j].id===ids[i]){
         var p=PRODUCTOS[j];
         var tdConf=(pedido.items['GU9001']||0)+(pedido.items['GU9011']||0);
-        var precio=getPrecio(p,lp,fp,tdConf);
+        var precioBase=getPrecio(p,lp,fp,tdConf);
+        var precio=precioConDescuentoItem(precioBase,p.id,DESCUENTOS_ITEM);
+        preciosUnitariosConf[p.id]=precio;
         var sub=qty*precio;
-        bultos+=qty;monto+=sub;
+        bultos+=qty;montoBruto+=sub;
         var rowBg=i%2===0?'#fff':'var(--azul-c)';
+        var precioTxt=(precio<precioBase)?('<s style="color:#bbb;font-size:11px">$'+precioBase.toFixed(2)+'</s> $'+precio.toFixed(2)):('$'+precio.toFixed(2));
         itemsHtml+='<tr style="background:'+rowBg+'">';
         itemsHtml+='<td style="padding:6px 4px;color:#666;font-size:12px">'+p.co_art+'</td>';
         itemsHtml+='<td style="padding:6px 4px;font-weight:500">'+p.nombre+'</td>';
         itemsHtml+='<td style="padding:6px 4px;text-align:center;font-weight:700">'+qty+'</td>';
-        itemsHtml+='<td style="padding:6px 4px;text-align:right">$'+precio.toFixed(2)+'</td>';
+        itemsHtml+='<td style="padding:6px 4px;text-align:right">'+precioTxt+'</td>';
         itemsHtml+='<td style="padding:6px 4px;text-align:right;font-weight:700;color:var(--azul)">$'+sub.toFixed(2)+'</td>';
         itemsHtml+='</tr>';
         break;
       }
     }
+  }
+  var montoDescGeneral=Math.round(montoBruto*descGeneralPct/100*100)/100;
+  var monto=Math.round((montoBruto-montoDescGeneral)*100)/100;
+  if(descGeneralPct>0){
+    itemsHtml+='<tr><td colspan="4" style="padding:6px 4px;text-align:right;color:var(--rojo)">Descuento general ('+descGeneralPct+'%)</td>'+
+      '<td style="padding:6px 4px;text-align:right;color:var(--rojo)">-$'+montoDescGeneral.toFixed(2)+'</td></tr>';
   }
   itemsHtml+='<tr style="border-top:2px solid var(--azul)">';
   itemsHtml+='<td colspan="2" style="padding:8px 4px;font-weight:700;color:var(--azul)">TOTAL</td>';
@@ -2920,7 +2999,11 @@ function abrirConfirmar(){
     if(obsFinal.indexOf(obsProm)<0) obsFinal=obsFinal?obsFinal+' | '+obsProm:obsProm;
   }
   if(obsFinal!==obs) document.getElementById('fObs').value=obsFinal;
-  pedido.temp={fp:fp,fpL:FP_LABELS[fp]||fp,ff:ff,ffL:FF_LABELS[ff]||ff,promo:promo,obs:obsFinal,bultos:bultos,monto:monto,lp:lp};
+  pedido.temp={fp:fp,fpL:FP_LABELS[fp]||fp,ff:ff,ffL:FF_LABELS[ff]||ff,promo:promo,obs:obsFinal,bultos:bultos,
+    monto:monto,montoBruto:montoBruto,lp:lp,
+    descuentosItem:JSON.parse(JSON.stringify(DESCUENTOS_ITEM)),descuentoGeneralPct:descGeneralPct,
+    montoDescuentoGeneral:montoDescGeneral,preciosUnitarios:preciosUnitariosConf,
+    bonificacionesUnidades:promosInfoConf.bonificacionesUnidades};
   var alertaHtml=esNuevo(pedido.cliente)?'<div class="alerta-nvo">CLIENTE NUEVO - crear en Profit antes de facturar</div>':'';
   var cli=pedido.cliente;
   document.getElementById('resumenPed').innerHTML=
@@ -2945,34 +3028,51 @@ function abrirConfirmar(){
 var _pedidoYaGuardado=false;
 function crearObj(){
   var t=pedido.temp;
-  var montoFinal=0,bultosFinal=0;
+  var bultosFinal=0;
   var ids=Object.keys(pedido.items);
   var tdFinal=(pedido.items['GU9001']||0)+(pedido.items['GU9011']||0);
   var preciosUnitarios={};
+  var montoBrutoFinal=0;
   for(var i=0;i<ids.length;i++){
     var qty=pedido.items[ids[i]];
     bultosFinal+=qty;
     for(var j=0;j<PRODUCTOS.length;j++){
       if(PRODUCTOS[j].id===ids[i]){
-        var precioReal=getPrecio(PRODUCTOS[j],t.lp,t.fp,tdFinal);
+        // Si abrirConfirmar() ya calculo el precio (con cualquier descuento
+        // manual por producto aplicado), se reutiliza tal cual para que el
+        // pedido guardado sea exactamente lo que se vio en el resumen.
+        var precioReal=(t.preciosUnitarios && t.preciosUnitarios[ids[i]]!==undefined)
+          ? t.preciosUnitarios[ids[i]]
+          : getPrecio(PRODUCTOS[j],t.lp,t.fp,tdFinal);
         preciosUnitarios[ids[i]]=precioReal;
-        montoFinal+=qty*precioReal;
+        montoBrutoFinal+=qty*precioReal;
         break;
       }
     }
   }
+  var descGeneralPctFinal=t.descuentoGeneralPct||0;
+  var montoDescGeneralFinal=Math.round(montoBrutoFinal*descGeneralPctFinal/100*100)/100;
+  var montoFinal=Math.round((montoBrutoFinal-montoDescGeneralFinal)*100)/100;
   var obj={id:Date.now(),fecha:new Date().toLocaleDateString('es-VE'),
     hora:new Date().toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit'}),
     cliente:JSON.parse(JSON.stringify(pedido.cliente)),
     items:JSON.parse(JSON.stringify(pedido.items)),
     // Precio EXACTO que se cobro por cada producto (ya con cualquier
-    // promocion aplicada). Se guarda aparte del "listaPrecio" para que
-    // el WhatsApp, correo y Excel de este pedido sigan mostrando lo que
-    // realmente se cobro, incluso si mas adelante cambian los precios o
-    // las promociones dejan de estar activas.
+    // promocion o descuento manual aplicado). Se guarda aparte del
+    // "listaPrecio" para que el WhatsApp, correo y Excel de este pedido
+    // sigan mostrando lo que realmente se cobro, incluso si mas adelante
+    // cambian los precios o las promociones dejan de estar activas.
     preciosUnitarios:preciosUnitarios,
     formaPago:t.fp,formaPagoL:t.fpL,tipoFact:t.ff,tipoFactL:t.ffL,
-    promo:t.promo,obs:t.obs,bultos:bultosFinal,monto:montoFinal,
+    promo:t.promo,obs:t.obs,bultos:bultosFinal,
+    montoBruto:montoBrutoFinal,descuentoGeneralPct:descGeneralPctFinal,
+    montoDescuentoGeneral:montoDescGeneralFinal,monto:montoFinal,
+    descuentosItem:t.descuentosItem||{},
+    // Unidades gratis por producto que otorgo una promocion tipo "unidades
+    // gratis" (ej. Promo Bultos Bolsa). No se suman a "items" (que refleja
+    // lo facturado/vendido), pero SI consumen inventario real - se usan en
+    // Reposicion para calcular el verdadero consumo, no solo lo vendido.
+    bonificacionesUnidades:t.bonificacionesUnidades||{},
     listaPrecio:t.lp,vendedor:VEND.codigo,vendedorNombre:VEND.nombre,
     zona:VEND.zona,status:'pendiente'};
   if(pedido.bloqueoDeudaOmitido){
@@ -3052,14 +3152,20 @@ function genCSV(){
   var hoy=new Date().toLocaleDateString('es-VE');
   var fechaDbf=new Date().toISOString().slice(0,10).replace(/-/g,'');
   var nvo=esNuevo(cli)?'SI':'NO';
-  var csv='CO_CLI,NOMBRE,RIF,TEL,CO_VEN,FEC_EMIS,CO_ART,DESCRIPCION,CANTIDAD,PRECIO,SUBTOTAL,TOTAL,FORMA_PAG,TIPO_FACT,LISTA_PRECIO,PROMO,OBS,CLIENTE_NUEVO'+nl();
+  var descGeneralCsv=t.descuentoGeneralPct||0;
+  var csv='CO_CLI,NOMBRE,RIF,TEL,CO_VEN,FEC_EMIS,CO_ART,DESCRIPCION,CANTIDAD,PRECIO,DCTO_ITEM_%,SUBTOTAL,DCTO_GENERAL_%,TOTAL,FORMA_PAG,TIPO_FACT,LISTA_PRECIO,PROMO,OBS,CLIENTE_NUEVO'+nl();
   var ids=Object.keys(pedido.items);
   for(var i=0;i<ids.length;i++){
     var qty=pedido.items[ids[i]];
     for(var j=0;j<PRODUCTOS.length;j++){
       if(PRODUCTOS[j].id===ids[i]){
-        var p=PRODUCTOS[j],precio=getPrecio(p,lp);
-        csv+='"'+cli.id+'","'+cli.nombre+'","'+cli.rif+'","'+(cli.tel||'')+'","'+VEND.codigo+'","'+fechaDbf+'","'+p.co_art+'","'+p.nombre+'",'+qty+','+precio.toFixed(2)+','+(qty*precio).toFixed(2)+','+t.monto.toFixed(2)+',"'+t.fp+'","'+t.ff+'",'+lp+',"'+(t.promo||'')+'","'+(t.obs||'')+'","'+nvo+'"'+nl();
+        var p=PRODUCTOS[j];
+        // Se usa el precio YA calculado en abrirConfirmar() (con cualquier
+        // descuento manual por producto aplicado), no el precio de lista
+        // sin descontar - antes el Excel/CSV siempre traia el precio lleno.
+        var precio=(t.preciosUnitarios && t.preciosUnitarios[ids[i]]!==undefined)?t.preciosUnitarios[ids[i]]:getPrecio(p,lp);
+        var descItemCsv=(t.descuentosItem && t.descuentosItem[ids[i]])||0;
+        csv+='"'+cli.id+'","'+cli.nombre+'","'+cli.rif+'","'+(cli.tel||'')+'","'+VEND.codigo+'","'+fechaDbf+'","'+p.co_art+'","'+p.nombre+'",'+qty+','+precio.toFixed(2)+','+descItemCsv+','+(qty*precio).toFixed(2)+','+descGeneralCsv+','+t.monto.toFixed(2)+',"'+t.fp+'","'+t.ff+'",'+lp+',"'+(t.promo||'')+'","'+(t.obs||'')+'","'+nvo+'"'+nl();
         break;
       }
     }
@@ -3077,12 +3183,19 @@ function genExcel(){
     var qty=pedido.items[ids[i]];
     for(var j=0;j<PRODUCTOS.length;j++){
       if(PRODUCTOS[j].id===ids[i]){
-        var p=PRODUCTOS[j],precio=getPrecio(p,lp);
-        filas+='<tr><td>'+p.co_art+'</td><td>'+p.nombre+'</td><td>'+qty+'</td><td>$'+precio.toFixed(2)+'</td><td>$'+(qty*precio).toFixed(2)+'</td></tr>';
+        var p=PRODUCTOS[j];
+        // Igual que en genCSV(): usar el precio YA con el descuento por
+        // producto aplicado (calculado en abrirConfirmar), no el precio
+        // de lista sin descontar.
+        var precio=(t.preciosUnitarios && t.preciosUnitarios[ids[i]]!==undefined)?t.preciosUnitarios[ids[i]]:getPrecio(p,lp);
+        var descItemXls=(t.descuentosItem && t.descuentosItem[ids[i]])||0;
+        filas+='<tr><td>'+p.co_art+'</td><td>'+p.nombre+'</td><td>'+qty+'</td><td>$'+precio.toFixed(2)+'</td><td>'+(descItemXls?descItemXls+'%':'-')+'</td><td>$'+(qty*precio).toFixed(2)+'</td></tr>';
         break;
       }
     }
   }
+  var descGeneralXls=t.descuentoGeneralPct||0;
+  var filaDescGeneral=descGeneralXls?('<tr><td colspan="5" style="text-align:right;color:#C0392B">Descuento general ('+descGeneralXls+'%)</td><td style="text-align:right;color:#C0392B">-$'+(t.montoDescuentoGeneral||0).toFixed(2)+'</td></tr>'):'';
   var xls='<html><head><meta charset="UTF-8"><style>th{background:#1B2A6B;color:#fff;padding:6px}td{padding:5px;border-bottom:1px solid #eee}</style></head><body>'+
     '<h2>PEDIDO TUTIM - '+hoy+'</h2>'+
     (esNuevo(cli)?'<p style="color:#E8509A;font-weight:bold">CLIENTE NUEVO - Crear en Profit antes de facturar</p>':'')+
@@ -3090,8 +3203,8 @@ function genExcel(){
     '<p><b>Cod. Cliente:</b> '+cli.id+' &nbsp;|&nbsp; <b>Cliente:</b> '+cli.nombre+' &nbsp;|&nbsp; <b>RIF:</b> '+cli.rif+(cli.tel?' &nbsp;|&nbsp; <b>Tel:</b> '+cli.tel:'')+'</p>'+
     '<p><b>Pago:</b> '+t.fpL+' - <b>Fact:</b> '+t.ffL+' - <b>Precio:</b> Lista '+lp+'</p>'+
     (t.promo?'<p><b>Promo:</b> '+t.promo+'</p>':'')+
-    '<table><tr><th>Codigo</th><th>Producto</th><th>Bultos</th><th>Precio</th><th>Subtotal</th></tr>'+filas+
-    '<tr><td colspan="4" style="text-align:right;font-weight:bold">TOTAL</td><td style="font-weight:bold;color:#1B2A6B">$'+t.monto.toFixed(2)+'</td></tr></table>'+
+    '<table><tr><th>Codigo</th><th>Producto</th><th>Bultos</th><th>Precio</th><th>% Dcto</th><th>Subtotal</th></tr>'+filas+filaDescGeneral+
+    '<tr><td colspan="5" style="text-align:right;font-weight:bold">TOTAL</td><td style="font-weight:bold;color:#1B2A6B">$'+t.monto.toFixed(2)+'</td></tr></table>'+
     (t.obs?'<p><b>Obs:</b> '+t.obs+'</p>':'')+
     '</body></html>';
   descargar(xls,'application/vnd.ms-excel','pedido_'+hoy.replace(/\//g,'-')+'.xls');
@@ -3262,9 +3375,10 @@ function renderPedidoCard(p){
   var anulado=p.anulado;
   var cardBorder=anulado?'var(--rojo)':(p.recibidoOficina?'var(--azul)':(p.enviado?'var(--verde)':'var(--borde)'));
   var cardOpacity=anulado?'opacity:.55':'';
-  var btnEditar=p.recibidoOficina
+  var puedeEditarSiempre=(VEND && (VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20'));
+  var btnEditar=(p.recibidoOficina && !puedeEditarSiempre)
     ?'<button disabled style="background:#eee;color:#aaa;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:not-allowed">Editar</button>'
-    :'<button onclick="event.stopPropagation();editarPedido(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Editar</button>';
+    :'<button onclick="event.stopPropagation();editarPedido(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Editar'+(p.recibidoOficina?' ⚠':'')+'</button>';
   var btnAnular='<button onclick="event.stopPropagation();confirmarAnular(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Anular</button>';
   var btnReactivar=puedeReactivar(p)?'<button onclick="event.stopPropagation();confirmarReactivar(&quot;'+p.id+'&quot;)" style="background:var(--verde-c);color:var(--verde);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Reactivar</button>':'';
   var esAdminElim=(VEND.codigo==='01'||VEND.codigo==='20');
@@ -3330,6 +3444,10 @@ function verDetallePedidoLista(id){
     itemsHtml+='<td style="padding:6px 4px;text-align:right">$'+precio.toFixed(2)+'</td>';
     itemsHtml+='<td style="padding:6px 4px;text-align:right;font-weight:700;color:var(--azul)">$'+sub.toFixed(2)+'</td>';
     itemsHtml+='</tr>';
+  }
+  if(ped.descuentoGeneralPct){
+    itemsHtml+='<tr><td colspan="4" style="padding:6px 4px;text-align:right;color:var(--rojo)">Descuento general ('+ped.descuentoGeneralPct+'%)</td>'+
+      '<td style="padding:6px 4px;text-align:right;color:var(--rojo)">-$'+(ped.montoDescuentoGeneral||0).toFixed(2)+'</td></tr>';
   }
   itemsHtml+='<tr style="border-top:2px solid var(--azul)">';
   itemsHtml+='<td colspan="2" style="padding:8px 4px;font-weight:700;color:var(--azul)">TOTAL</td>';
@@ -3482,13 +3600,20 @@ function enviarDetalleWA(){
           var p=PRODUCTOS[k];
           var precio=precioUnitarioPedido(ped, ids[j], p);
           var sub=qty*precio;
+          var descItemWA=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
           lineas.push('  Ref: '+p.co_art+' - '+p.nombre);
-          lineas.push('  '+qty+' btos x $'+precio.toFixed(2)+' = $'+sub.toFixed(2));
+          lineas.push('  '+qty+' btos x $'+precio.toFixed(2)+(descItemWA?' (-'+descItemWA+'%)':'')+' = $'+sub.toFixed(2));
           break;
         }
       }
     }
-    lineas.push('Subtotal: $'+ped.monto.toFixed(2)+' ('+ped.bultos+' btos)');
+    if(ped.descuentoGeneralPct){
+      lineas.push('Subtotal: $'+(ped.montoBruto||ped.monto).toFixed(2)+' ('+ped.bultos+' btos)');
+      lineas.push('Descuento general ('+ped.descuentoGeneralPct+'%): -$'+(ped.montoDescuentoGeneral||0).toFixed(2));
+      lineas.push('Total: $'+ped.monto.toFixed(2));
+    } else {
+      lineas.push('Subtotal: $'+ped.monto.toFixed(2)+' ('+ped.bultos+' btos)');
+    }
     lineas.push('Pago: '+(ped.formaPagoL||ped.formaPago)+' | Fact: '+(ped.tipoFactL||ped.tipoFact));
     lineas.push('Lista precio: Precio '+lp);
     if(ped.promo) lineas.push('Promo: '+ped.promo);
@@ -3610,8 +3735,8 @@ function enviarCorreo(){
       lineas.push('DIRECCION DE DESPACHO DIFERENTE A LA FISCAL: '+ped.cliente.dirEntrega);
     }
     lineas.push('');
-    lineas.push('Ref.       Articulo              Btos   P.Unit    Total');
-    lineas.push('---------- -------------------- ------ --------- ---------');
+    lineas.push('Ref.       Articulo              Btos   P.Unit   %Dcto    Total');
+    lineas.push('---------- -------------------- ------ --------- ----- ---------');
     var ids=Object.keys(ped.items);
     for(var j=0;j<ids.length;j++){
       var qty=ped.items[ids[j]];
@@ -3620,18 +3745,26 @@ function enviarCorreo(){
           var p=PRODUCTOS[k];
           var pr=precioUnitarioPedido(ped, ids[j], p);
           var sub=qty*pr;
+          var descItemCo=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
           var col1=(p.co_art+'          ').slice(0,10);
           var col2=(p.nombre+'                    ').slice(0,20);
           var col3=('      '+qty).slice(-6);
           var col4=('    $'+pr.toFixed(2)).slice(-9);
+          var col4b=(descItemCo?('   '+descItemCo+'%'):'     -').slice(-5);
           var col5=('    $'+sub.toFixed(2)).slice(-9);
-          lineas.push(col1+' '+col2+' '+col3+' '+col4+' '+col5);
+          lineas.push(col1+' '+col2+' '+col3+' '+col4+' '+col4b+' '+col5);
           break;
         }
       }
     }
-    lineas.push('---------- -------------------- ------ --------- ---------');
-    lineas.push('                        SUBTOTAL'+('      '+ped.bultos).slice(-6)+'          '+'    $'+ped.monto.toFixed(2));
+    lineas.push('---------- -------------------- ------ --------- ----- ---------');
+    if(ped.descuentoGeneralPct){
+      lineas.push('                        SUBTOTAL'+('      '+ped.bultos).slice(-6)+'                '+'    $'+(ped.montoBruto||ped.monto).toFixed(2));
+      lineas.push('                        DESCUENTO GENERAL ('+ped.descuentoGeneralPct+'%)                  -$'+(ped.montoDescuentoGeneral||0).toFixed(2));
+      lineas.push('                        TOTAL'+('      '+ped.bultos).slice(-6)+'                '+'    $'+ped.monto.toFixed(2));
+    } else {
+      lineas.push('                        SUBTOTAL'+('      '+ped.bultos).slice(-6)+'                '+'    $'+ped.monto.toFixed(2));
+    }
     lineas.push('');
     lineas.push('Pago     : '+(ped.formaPagoL||ped.formaPago));
     lineas.push('Tipo     : '+(ped.tipoFactL||ped.tipoFact));
@@ -3658,16 +3791,18 @@ function exportarCSVDia(){
   var pedHoy=getPedidosSeleccionados();
   if(pedHoy.length===0){toast('No hay pedidos para exportar');return;}
   var fechaDbf=new Date().toISOString().slice(0,10).replace(/-/g,'');
-  var csv='CO_CLI,NOMBRE,RIF,CO_VEN,NOMBRE_VENDEDOR,FEC_EMIS,CO_ART,DESCRIPCION,CANTIDAD,PRECIO,SUBTOTAL,TOTAL,FORMA_PAG,TIPO_FACT,LISTA_PRECIO,PROMO,CLIENTE_NUEVO'+nl();
+  var csv='CO_CLI,NOMBRE,RIF,CO_VEN,NOMBRE_VENDEDOR,FEC_EMIS,CO_ART,DESCRIPCION,CANTIDAD,PRECIO,DCTO_ITEM_%,SUBTOTAL,DCTO_GENERAL_%,TOTAL,FORMA_PAG,TIPO_FACT,LISTA_PRECIO,PROMO,CLIENTE_NUEVO'+nl();
   for(var i=0;i<pedHoy.length;i++){
     var ped=pedHoy[i],lp=ped.listaPrecio||1,nvo=esNuevo(ped.cliente)?'SI':'NO';
     var ids=Object.keys(ped.items);
+    var descGeneralDia=ped.descuentoGeneralPct||0;
     for(var j=0;j<ids.length;j++){
       var qty=ped.items[ids[j]];
       for(var k=0;k<PRODUCTOS.length;k++){
         if(PRODUCTOS[k].id===ids[j]){
           var p=PRODUCTOS[k],precio=precioUnitarioPedido(ped, ids[j], p);
-          csv+='"'+ped.cliente.id+'","'+ped.cliente.nombre+'","'+ped.cliente.rif+'","'+(ped.vendedor||VEND.codigo)+'","'+(ped.vendedorNombre||VEND.nombre)+'","'+fechaDbf+'","'+p.co_art+'","'+p.nombre+'",'+qty+','+precio.toFixed(2)+','+(qty*precio).toFixed(2)+','+ped.monto.toFixed(2)+',"'+ped.formaPago+'","'+ped.tipoFact+'",'+lp+',"'+(ped.promo||'')+'","'+nvo+'"'+nl();
+          var descItemDia=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
+          csv+='"'+ped.cliente.id+'","'+ped.cliente.nombre+'","'+ped.cliente.rif+'","'+(ped.vendedor||VEND.codigo)+'","'+(ped.vendedorNombre||VEND.nombre)+'","'+fechaDbf+'","'+p.co_art+'","'+p.nombre+'",'+qty+','+precio.toFixed(2)+','+descItemDia+','+(qty*precio).toFixed(2)+','+descGeneralDia+','+ped.monto.toFixed(2)+',"'+ped.formaPago+'","'+ped.tipoFact+'",'+lp+',"'+(ped.promo||'')+'","'+nvo+'"'+nl();
           break;
         }
       }
@@ -3717,7 +3852,7 @@ function exportarExcelDia(){
       contenido+='<table style="width:100%;margin-bottom:4px"><tr><td class="hdr-vend">VEND '+vid2+' — '+vd.nombre+'</td></tr></table>';
       // Tabla de pedidos de este vendedor
       contenido+='<table style="width:100%;border-collapse:collapse;margin-bottom:16px">';
-      contenido+='<tr><th>Cod.Cli</th><th>Cliente</th><th>RIF</th><th>Fecha</th><th>Ref.</th><th>Producto</th><th>Btos</th><th>P.Unit</th><th>Subtotal</th><th>Pago</th><th>Tipo Pedido</th><th>Promo</th><th>Obs</th></tr>';
+      contenido+='<tr><th>Cod.Cli</th><th>Cliente</th><th>RIF</th><th>Fecha</th><th>Ref.</th><th>Producto</th><th>Btos</th><th>P.Unit</th><th>% Dcto</th><th>Subtotal</th><th>Dcto Gral</th><th>Pago</th><th>Tipo Pedido</th><th>Promo</th><th>Obs</th></tr>';
       var vTotB=0,vTotM=0;
       for(var c=0;c<vd.ordenCli.length;c++){
         var cid2=vd.ordenCli[c];
@@ -3738,6 +3873,8 @@ function exportarExcelDia(){
             for(var k=0;k<PRODUCTOS.length;k++){
               if(PRODUCTOS[k].id===ids[j]){
                 var p=PRODUCTOS[k],precio=precioUnitarioPedido(ped, ids[j], p),sub=qty*precio;
+                var descItemOf=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
+                var descGeneralOf=ped.descuentoGeneralPct||0;
                 totB+=qty;totM+=sub;vTotB+=qty;vTotM+=sub;
                 var bgRow=c%2===0?'#fff':'#F8F9FF';
                 contenido+='<tr style="background:'+bgRow+'">';
@@ -3749,7 +3886,9 @@ function exportarExcelDia(){
                 contenido+='<td>'+p.nombre+'</td>';
                 contenido+='<td style="text-align:center">'+qty+'</td>';
                 contenido+='<td style="text-align:right">$'+precio.toFixed(2)+'</td>';
+                contenido+='<td style="text-align:center">'+(descItemOf?descItemOf+'%':'-')+'</td>';
                 contenido+='<td style="text-align:right">$'+sub.toFixed(2)+'</td>';
+                contenido+='<td style="text-align:center">'+(firstProd&&descGeneralOf?descGeneralOf+'%':'')+'</td>';
                 contenido+='<td>'+(firstProd?(ped.formaPagoL||ped.formaPago):'')+'</td>';
                 contenido+='<td>'+(firstProd?(ped.tipoFactL||ped.tipoFact):'')+'</td>';
                 contenido+='<td>'+(firstProd&&ped.promo?ped.promo:'')+'</td>';
@@ -3763,8 +3902,8 @@ function exportarExcelDia(){
         }
       }
       contenido+='<tr class="tot-row"><td colspan="6" style="text-align:right">TOTAL VEND '+vid2+'</td>';
-      contenido+='<td style="text-align:center">'+vTotB+'</td><td></td>';
-      contenido+='<td style="text-align:right;color:#1B2A6B">$'+vTotM.toFixed(2)+'</td><td colspan="4"></td></tr>';
+      contenido+='<td style="text-align:center">'+vTotB+'</td><td></td><td></td>';
+      contenido+='<td style="text-align:right;color:#1B2A6B">$'+vTotM.toFixed(2)+'</td><td></td><td colspan="4"></td></tr>';
       contenido+='</table>';
     }
   } else {
@@ -3779,7 +3918,7 @@ function exportarExcelDia(){
     }
     contenido+='<p><b>Vendedor:</b> '+VEND.nombre+' (VEND '+VEND.codigo+')</p>';
     contenido+='<table style="width:100%;border-collapse:collapse">';
-    contenido+='<tr><th>Cod.Cli</th><th>Cliente</th><th>RIF</th><th>Fecha</th><th>Ref.</th><th>Producto</th><th>Btos</th><th>P.Unit</th><th>Subtotal</th><th>Pago</th><th>Tipo Pedido</th><th>Promo</th><th>Obs</th></tr>';
+    contenido+='<tr><th>Cod.Cli</th><th>Cliente</th><th>RIF</th><th>Fecha</th><th>Ref.</th><th>Producto</th><th>Btos</th><th>P.Unit</th><th>% Dcto</th><th>Subtotal</th><th>Dcto Gral</th><th>Pago</th><th>Tipo Pedido</th><th>Promo</th><th>Obs</th></tr>';
     for(var c=0;c<ordenCliXls.length;c++){
       var cid2=ordenCliXls[c];
       var cdat=porCliXls[cid2];
@@ -3799,6 +3938,8 @@ function exportarExcelDia(){
           for(var k=0;k<PRODUCTOS.length;k++){
             if(PRODUCTOS[k].id===ids[j]){
               var p=PRODUCTOS[k],precio=precioUnitarioPedido(ped, ids[j], p),sub=qty*precio;
+              var descItemNo=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
+              var descGeneralNo=ped.descuentoGeneralPct||0;
               totB+=qty;totM+=sub;
               var bgRow=c%2===0?'#fff':'#F8F9FF';
               contenido+='<tr style="background:'+bgRow+'">';
@@ -3810,7 +3951,9 @@ function exportarExcelDia(){
               contenido+='<td>'+p.nombre+'</td>';
               contenido+='<td style="text-align:center">'+qty+'</td>';
               contenido+='<td style="text-align:right">$'+precio.toFixed(2)+'</td>';
+              contenido+='<td style="text-align:center">'+(descItemNo?descItemNo+'%':'-')+'</td>';
               contenido+='<td style="text-align:right">$'+sub.toFixed(2)+'</td>';
+              contenido+='<td style="text-align:center">'+(firstProd&&descGeneralNo?descGeneralNo+'%':'')+'</td>';
               contenido+='<td>'+(firstProd?(ped.formaPagoL||ped.formaPago):'')+'</td>';
               contenido+='<td>'+(firstProd?(ped.tipoFactL||ped.tipoFact):'')+'</td>';
               contenido+='<td>'+(firstProd&&ped.promo?ped.promo:'')+'</td>';
@@ -3824,8 +3967,8 @@ function exportarExcelDia(){
       }
     }
     contenido+='<tr class="tot-row"><td colspan="6" style="text-align:right">TOTAL</td>';
-    contenido+='<td style="text-align:center">'+totB+'</td><td></td>';
-    contenido+='<td style="text-align:right;color:#1B2A6B">$'+totM.toFixed(2)+'</td><td colspan="4"></td></tr>';
+    contenido+='<td style="text-align:center">'+totB+'</td><td></td><td></td>';
+    contenido+='<td style="text-align:right;color:#1B2A6B">$'+totM.toFixed(2)+'</td><td></td><td colspan="4"></td></tr>';
     contenido+='</table>';
   }
 
@@ -4332,6 +4475,13 @@ function previewFacturas(inputId, previewId){
   var previewEl=document.getElementById(previewId);
   previewEl.innerHTML='';
   files.forEach(function(file){
+    if(file.type==='application/pdf'){
+      var divPdf=document.createElement('div');
+      divPdf.style.cssText='width:60px;height:60px;border-radius:8px;border:1.5px solid var(--borde);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;color:var(--azul);text-align:center;padding:2px;overflow:hidden';
+      divPdf.innerHTML='📄<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:56px">'+file.name+'</div>';
+      previewEl.appendChild(divPdf);
+      return;
+    }
     var reader=new FileReader();
     reader.onload=function(e){
       var div=document.createElement('div');
@@ -4966,6 +5116,10 @@ function editarPedido(pid){
 
   // Cargar datos en el modal
   var lp = ped.listaPrecio || 1;
+  var puedeDescEdit=puedeAplicarDescuentos();
+  // Precargar los descuentos por producto que ya tuviera el pedido (si se
+  // creo o edito antes con descuento), para poder seguir ajustandolos
+  DESCUENTOS_ITEM_EDIT=JSON.parse(JSON.stringify(ped.descuentosItem||{}));
   // Recalcular que promociones aplican segun los productos de ESTE pedido
   // (editar es una edicion en vivo: al guardar se recalculan montos con el
   // estado actual de precios/promociones, asi que los precios mostrados
@@ -4978,9 +5132,19 @@ function editarPedido(pid){
     var p = PRODUCTOS[i];
     var qty = ped.items[p.id] || 0;
     var precio = getPrecio(p, lp);
+    var descItemHtmlEdit=puedeDescEdit?(
+      '<div style="display:flex;align-items:center;gap:4px;margin-top:4px">'+
+        '<input type="number" min="0" max="100" step="1" value="'+(DESCUENTOS_ITEM_EDIT[p.id]||'')+'" placeholder="0" '+
+          'id="edescItem-'+p.id+'" oninput="cambDescuentoItemEdit(&quot;'+p.id+'&quot;,this.value)" '+
+          'style="width:44px;height:24px;text-align:center;font-size:11px;border:1px solid var(--borde);border-radius:5px;padding:0">'+
+        '<span style="font-size:10px;color:#888">% dcto item</span>'+
+      '</div>'
+    ):'';
     prodRows += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--borde)">' +
       '<div style="flex:1"><div style="font-size:13px;font-weight:600">'+p.nombre+'</div>' +
-      '<div style="font-size:11px;color:#aaa">'+p.co_art+' · $'+precio.toFixed(2)+'/bto</div></div>' +
+      '<div style="font-size:11px;color:#aaa" id="eprecio-'+p.id+'">'+p.co_art+' · $'+precio.toFixed(2)+'/bto</div>'+
+      descItemHtmlEdit+
+      '</div>' +
       '<div style="display:flex;align-items:center;gap:6px">' +
         '<button onclick="cambQtyEdit(&quot;'+p.id+'&quot;,this,-1)" style="width:30px;height:30px;border:1.5px solid var(--borde);border-radius:6px;background:#fff;font-size:18px;cursor:pointer;color:var(--azul)">-</button>' +
         '<span id="eqty-'+p.id+'" style="font-size:16px;font-weight:700;min-width:24px;text-align:center;color:var(--azul)">'+qty+'</span>' +
@@ -4992,6 +5156,11 @@ function editarPedido(pid){
   var cliNombre = ped.cliente.nombre;
   var cliRif = ped.cliente.rif;
 
+  var descGeneralHtml=puedeDescEdit?(
+    '<div class="field"><label>Descuento general del pedido (%)</label>' +
+    '<input type="number" min="0" max="100" step="1" id="eDescGeneral" value="'+(ped.descuentoGeneralPct||'')+'" placeholder="0" oninput="recalcularEdicionPrecios()"></div>'
+  ):'';
+
   var html =
     '<div class="field"><label>Cliente</label>' +
     '<input type="text" id="eCliNom" value="'+cliNombre+'" placeholder="Nombre cliente"></div>' +
@@ -5001,9 +5170,14 @@ function editarPedido(pid){
     '<input type="text" id="eCliTel" value="'+(ped.cliente.tel||'')+'"></div>' +
     '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Productos</div>'+prodRows+'</div>' +
     '<div class="field"><label>Lista de precio</label>' +
-    '<select id="eListaPrecio"><option value="1" '+(lp===1?'selected':'')+'>Precio 1</option><option value="2" '+(lp===2?'selected':'')+'>Precio 2</option><option value="3" '+(lp===3?'selected':'')+'>Precio 3</option><option value="4" '+(lp===4?'selected':'')+'>Precio 4</option><option value="5" '+(lp===5?'selected':'')+'>Precio 5</option></select></div>' +
+    '<select id="eListaPrecio" onchange="recalcularEdicionPrecios()"><option value="1" '+(lp===1?'selected':'')+'>Precio 1</option><option value="2" '+(lp===2?'selected':'')+'>Precio 2</option><option value="3" '+(lp===3?'selected':'')+'>Precio 3</option><option value="4" '+(lp===4?'selected':'')+'>Precio 4</option><option value="5" '+(lp===5?'selected':'')+'>Precio 5</option></select></div>' +
+    descGeneralHtml +
+    '<div style="background:var(--azul-c);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">' +
+      '<span style="font-size:13px;font-weight:600;color:var(--azul)">Total del pedido</span>' +
+      '<span id="eTotalPreview" style="font-size:18px;font-weight:700;color:var(--azul)">$0.00</span>' +
+    '</div>' +
     '<div class="field"><label>Forma de pago</label>' +
-    '<select id="ePago"><option value="01" '+(ped.formaPago==='01'?'selected':'')+'>Contado</option><option value="02" '+(ped.formaPago==='02'?'selected':'')+'>Credito 7 dias</option><option value="03" '+(ped.formaPago==='03'?'selected':'')+'>Credito 15 dias</option><option value="04" '+(ped.formaPago==='04'?'selected':'')+'>Credito 30 dias</option></select></div>' +
+    '<select id="ePago"><option value="01" '+(ped.formaPago==='01'?'selected':'')+'>Contado</option><option value="05" '+(ped.formaPago==='05'?'selected':'')+'>Prepagado</option><option value="02" '+(ped.formaPago==='02'?'selected':'')+'>Credito 7 dias</option><option value="03" '+(ped.formaPago==='03'?'selected':'')+'>Credito 15 dias</option><option value="04" '+(ped.formaPago==='04'?'selected':'')+'>Credito 30 dias</option></select></div>' +
     '<div class="field"><label>Facturacion</label>' +
     '<select id="eFact"><option value="fiscal" '+(ped.tipoFact==='fiscal'?'selected':'')+'>100% Fiscal</option><option value="nota" '+(ped.tipoFact==='nota'?'selected':'')+'>Solo N.Entrega</option><option value="mixto" '+(ped.tipoFact==='mixto'?'selected':'')+'>50% Fiscal / 50% N.Entrega</option></select></div>' +
     '<div class="field"><label>Promo</label><input type="text" id="ePromo" value="'+(ped.promo||'')+'"></div>' +
@@ -5011,6 +5185,15 @@ function editarPedido(pid){
 
   document.getElementById('editarContenido').innerHTML = html;
   document.getElementById('mEditarPedido').classList.add('open');
+  recalcularEdicionPrecios();
+}
+
+function cambDescuentoItemEdit(id, val){
+  var pct=parseFloat(val);
+  if(isNaN(pct)||pct<0) pct=0;
+  if(pct>100) pct=100;
+  if(pct===0) delete DESCUENTOS_ITEM_EDIT[id]; else DESCUENTOS_ITEM_EDIT[id]=pct;
+  recalcularEdicionPrecios();
 }
 
 function cambQtyEdit(id, btn, delta){
@@ -5018,6 +5201,59 @@ function cambQtyEdit(id, btn, delta){
   var actual = parseInt(span.textContent) || 0;
   var nuevo = Math.max(0, actual + delta);
   span.textContent = nuevo;
+  recalcularEdicionPrecios();
+}
+
+// Recalcula precios por producto, promociones aplicables y el total, en
+// vivo, cada vez que cambia la lista de precio o alguna cantidad dentro
+// del modal de edicion. Antes esto solo se calculaba UNA vez al abrir el
+// modal, asi que cambiar la lista de precio no se reflejaba en pantalla
+// (aunque el monto SI se guardaba bien al final) - se veia como si la
+// edicion no hubiera hecho nada.
+function recalcularEdicionPrecios(){
+  if(!pedidoEditandoId) return;
+  var lpEl=document.getElementById('eListaPrecio');
+  if(!lpEl) return;
+  var lp=parseInt(lpEl.value)||1;
+
+  // Leer las cantidades actuales del formulario para recalcular que
+  // promociones aplican con el estado actual (no el que tenia el pedido
+  // al momento de abrir la edicion)
+  var itemsActuales={};
+  for(var i=0;i<PRODUCTOS.length;i++){
+    var pid=PRODUCTOS[i].id;
+    var qtyEl=document.getElementById('eqty-'+pid);
+    if(!qtyEl) continue;
+    var qty=parseInt(qtyEl.textContent)||0;
+    if(qty>0) itemsActuales[pid]=qty;
+  }
+  PROMO_CUSTOM_OVERRIDES = calcularPromosCustomAplicables(itemsActuales).overrides;
+
+  var total=0;
+  for(var i=0;i<PRODUCTOS.length;i++){
+    var p=PRODUCTOS[i];
+    var precioBase=getPrecio(p, lp);
+    var precio=precioConDescuentoItem(precioBase,p.id,DESCUENTOS_ITEM_EDIT);
+    var precioEl=document.getElementById('eprecio-'+p.id);
+    if(precioEl){
+      var overridePromo=PROMO_CUSTOM_OVERRIDES[p.id];
+      var promoTxt=overridePromo?(' <span style="color:var(--verde);font-weight:600">('+overridePromo.nombrePromo+')</span>'):'';
+      var descTxt=(precio<precioBase)?(' <s style="color:#bbb">$'+precioBase.toFixed(2)+'</s>'):'';
+      precioEl.innerHTML=p.co_art+' · $'+precio.toFixed(2)+'/bto'+descTxt+promoTxt;
+    }
+    var qty=itemsActuales[p.id]||0;
+    total+=qty*precio;
+  }
+  var descGeneralPctEdit=0;
+  if(puedeAplicarDescuentos()){
+    var elDGEdit=document.getElementById('eDescGeneral');
+    descGeneralPctEdit=elDGEdit?(parseFloat(elDGEdit.value)||0):0;
+    if(descGeneralPctEdit<0) descGeneralPctEdit=0;
+    if(descGeneralPctEdit>100) descGeneralPctEdit=100;
+  }
+  var totalConDescGeneral=Math.round(total*(1-descGeneralPctEdit/100)*100)/100;
+  var totalEl=document.getElementById('eTotalPreview');
+  if(totalEl) totalEl.textContent='$'+totalConDescGeneral.toFixed(2)+(descGeneralPctEdit>0?' (bruto $'+total.toFixed(2)+')':'');
 }
 
 function guardarEdicion(){
@@ -5034,21 +5270,48 @@ function guardarEdicion(){
       ped.cliente.rif = document.getElementById('eCliRif').value.trim() || ped.cliente.rif;
       ped.cliente.tel = document.getElementById('eCliTel').value.trim();
 
-      // Actualizar items y recalcular totales
+      // Actualizar items y recalcular totales, y el precio EXACTO
+      // congelado por producto ("preciosUnitarios") - es lo que usa el
+      // detalle del pedido, WhatsApp, Excel y reportes. Antes esto no se
+      // actualizaba al editar: el total de arriba quedaba correcto pero
+      // cada linea del detalle seguia mostrando el precio de cuando se
+      // creo el pedido, quedando inconsistente con el total.
       var nuevosItems = {};
-      var bultos = 0, monto = 0;
+      var nuevosPreciosUnitarios = {};
+      var bultos = 0, montoBruto = 0;
       for(var j=0;j<PRODUCTOS.length;j++){
         var p = PRODUCTOS[j];
         var qty = parseInt(document.getElementById('eqty-'+p.id).textContent) || 0;
         if(qty > 0){
+          var precioActual = precioConDescuentoItem(getPrecio(p, lp),p.id,DESCUENTOS_ITEM_EDIT);
           nuevosItems[p.id] = qty;
+          nuevosPreciosUnitarios[p.id] = precioActual;
           bultos += qty;
-          monto += qty * getPrecio(p, lp);
+          montoBruto += qty * precioActual;
         }
       }
       if(bultos === 0){ toast('Agrega al menos un producto'); return; }
 
+      var descGeneralPctGuardar=0;
+      if(puedeAplicarDescuentos()){
+        var elDGGuardar=document.getElementById('eDescGeneral');
+        descGeneralPctGuardar=elDGGuardar?(parseFloat(elDGGuardar.value)||0):0;
+        if(descGeneralPctGuardar<0) descGeneralPctGuardar=0;
+        if(descGeneralPctGuardar>100) descGeneralPctGuardar=100;
+      }
+      var montoDescGeneralGuardar=Math.round(montoBruto*descGeneralPctGuardar/100*100)/100;
+      var monto=Math.round((montoBruto-montoDescGeneralGuardar)*100)/100;
+
       ped.items = nuevosItems;
+      ped.preciosUnitarios = nuevosPreciosUnitarios;
+      ped.descuentosItem = JSON.parse(JSON.stringify(DESCUENTOS_ITEM_EDIT));
+      ped.descuentoGeneralPct = descGeneralPctGuardar;
+      ped.montoDescuentoGeneral = montoDescGeneralGuardar;
+      ped.montoBruto = montoBruto;
+      // Recalcular la bonificacion de unidades gratis con los items ya
+      // editados (si cambiaron cantidades, la promo puede haber cambiado
+      // de tramo o dejar de aplicar)
+      ped.bonificacionesUnidades = calcularPromosCustomAplicables(nuevosItems).bonificacionesUnidades;
       ped.bultos = bultos;
       ped.monto = monto;
       ped.listaPrecio = lp;
@@ -5466,6 +5729,40 @@ function onCambioRptDiasInactivo(){
   renderReportes();
 }
 
+// Buscador de cliente para Reportes: reemplaza el <select> nativo por un
+// campo de texto + lista de sugerencias, para poder filtrar escribiendo
+// solo una parte del nombre en vez de tener que buscar en un combo largo.
+var RPT_CLIENTES_DISPONIBLES=[]; // {id,nombre} - se llena en cada renderReportes()
+
+function filtrarRptClienteOpciones(){
+  var q=(document.getElementById('rptClienteBusq').value||'').trim().toLowerCase();
+  var cont=document.getElementById('rptClienteOpciones');
+  if(!cont) return;
+  var filtrados = q ? RPT_CLIENTES_DISPONIBLES.filter(function(c){
+    return c.nombre.toLowerCase().indexOf(q)>=0 || c.id.toLowerCase().indexOf(q)>=0;
+  }) : RPT_CLIENTES_DISPONIBLES;
+  var html='<div style="padding:8px 10px;cursor:pointer;font-weight:600;color:var(--azul);border-bottom:1px solid var(--borde)" onmousedown="seleccionarRptCliente(\'todos\',\'\')">Todos los clientes</div>';
+  if(filtrados.length===0){
+    html+='<div style="padding:8px 10px;color:#aaa">Sin coincidencias</div>';
+  } else {
+    filtrados.slice(0,50).forEach(function(c){
+      var nombreEsc=c.nombre.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      html+='<div style="padding:8px 10px;cursor:pointer" onmousedown="seleccionarRptCliente(\''+c.id+'\',\''+nombreEsc+'\')">'+c.nombre+' <span style="color:#aaa;font-size:11px">(Cod: '+c.id+')</span></div>';
+    });
+    if(filtrados.length>50) html+='<div style="padding:6px 10px;color:#aaa;font-size:11px">Y '+(filtrados.length-50)+' mas... sigue escribiendo para acotar</div>';
+  }
+  cont.innerHTML=html;
+  cont.style.display='block';
+}
+
+function seleccionarRptCliente(id, nombre){
+  document.getElementById('rptCliente').value=id;
+  document.getElementById('rptClienteBusq').value = (id==='todos') ? '' : nombre;
+  var cont=document.getElementById('rptClienteOpciones');
+  if(cont) cont.style.display='none';
+  renderReportes();
+}
+
 function renderReportes(){
   var lista=rptGetPedidosFiltrados();
   var vendSel=document.getElementById('rptVendedor').value;
@@ -5585,13 +5882,11 @@ function renderReportes(){
     if(!clisPeriodo[p.cliente.id]) clisPeriodo[p.cliente.id]=p.cliente.nombre;
   }
   var cidsTodos=Object.keys(clisPeriodo).sort(function(a,b){return clisPeriodo[a].localeCompare(clisPeriodo[b]);});
-  var selCliEl=document.getElementById('rptCliente');
-  var selCliVal=selCliEl.value;
-  var optsCliHtml='<option value="todos">Todos los clientes</option>';
-  for(var c=0;c<cidsTodos.length;c++){
-    optsCliHtml+='<option value="'+cidsTodos[c]+'"'+(cidsTodos[c]===selCliVal?' selected':'')+'>'+clisPeriodo[cidsTodos[c]]+' (Cod: '+cidsTodos[c]+')</option>';
-  }
-  selCliEl.innerHTML=optsCliHtml;
+  RPT_CLIENTES_DISPONIBLES=cidsTodos.map(function(cid){ return {id:cid, nombre:clisPeriodo[cid]}; });
+  // Si el cliente actualmente elegido ya no aparece en este periodo/vendedor
+  // filtrado, se mantiene igual el valor (para no perder la seleccion al
+  // cambiar de filtro) - el buscador de texto solo se re-llena con nuevas
+  // opciones cuando el usuario vuelve a escribir/enfocar el campo.
 
   // Reporte: Ticket promedio (monto y bultos) y forma de pago
   var ticketProm=totPedidos>0?(totMonto/totPedidos):0;
@@ -5934,7 +6229,7 @@ function verDetallePedidoRpt(pedId){
       '<span>'+nombre+' x'+qty+'</span><span style="font-weight:600">$'+(precio*qty).toFixed(2)+'</span>'+
     '</div>';
   }
-  var formaPagoTxt={'01':'Contado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'}[p.formaPago]||p.formaPago||'';
+  var formaPagoTxt={'01':'Contado','05':'Prepagado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'}[p.formaPago]||p.formaPago||'';
   var factTxt={'fiscal':'100% Fiscal','nota':'Solo N.Entrega','mixto':'50% Fiscal / 50% N.Entrega'}[p.tipoFact]||p.tipoFact||'';
   var estadoTxt=p.anulado?'<span class="tag tag-r">Anulado</span>':(p.recibidoOficina?'<span class="tag tag-v">Recibido x Oficina</span>':(p.enviado?'<span class="tag tag-a">Enviado</span>':'<span class="tag" style="background:#FFF3CD;color:#856404">Pendiente</span>'));
   var html=
@@ -6095,12 +6390,19 @@ function confirmarWAPersonalizado(){
           var p=PRODUCTOS[k];
           var precio=precioUnitarioPedido(ped, ids[j], p);
           var sub=qty*precio;
-          lineas.push('  '+p.co_art+' - '+p.nombre+': '+qty+' btos x $'+precio.toFixed(2)+' = $'+sub.toFixed(2));
+          var descItemWAP=(ped.descuentosItem && ped.descuentosItem[ids[j]])||0;
+          lineas.push('  '+p.co_art+' - '+p.nombre+': '+qty+' btos x $'+precio.toFixed(2)+(descItemWAP?' (-'+descItemWAP+'%)':'')+' = $'+sub.toFixed(2));
           break;
         }
       }
     }
-    lineas.push('Subtotal: $'+ped.monto.toFixed(2)+' ('+ped.bultos+' btos)');
+    if(ped.descuentoGeneralPct){
+      lineas.push('Subtotal: $'+(ped.montoBruto||ped.monto).toFixed(2)+' ('+ped.bultos+' btos)');
+      lineas.push('Descuento general ('+ped.descuentoGeneralPct+'%): -$'+(ped.montoDescuentoGeneral||0).toFixed(2));
+      lineas.push('Total: $'+ped.monto.toFixed(2));
+    } else {
+      lineas.push('Subtotal: $'+ped.monto.toFixed(2)+' ('+ped.bultos+' btos)');
+    }
     lineas.push('Pago: '+(ped.formaPagoL||ped.formaPago));
     if(ped.promo) lineas.push('Promo: '+ped.promo);
     if(ped.obs) lineas.push('Obs: '+ped.obs);
@@ -6217,6 +6519,8 @@ function adminTab(tab){
     document.getElementById('repoNivelServicio').value=REPO_CONFIG.nivelServicio;
     document.getElementById('repoTopeExtra').value=REPO_CONFIG.topeExtraPct;
     document.getElementById('repoEspacioAire').value=REPO_CONFIG.espacioAireCm;
+    var backfillCard=document.getElementById('repoBackfillCard');
+    if(backfillCard) backfillCard.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'block':'none';
     renderHistorialRepo();
   }
 }
@@ -6302,6 +6606,7 @@ function calcularReposicion(){
     var ventana=Math.max(1, Math.round((hasta-desde)/86400000)+1);
 
     // Acumular ventas por producto y por dia (bultos), solo dentro del rango elegido
+    var incluirBonifRepo=document.getElementById('repoIncluirBonif')?document.getElementById('repoIncluirBonif').checked:true;
     var porProductoDia={};
     for(var i=0;i<PRODUCTOS.length;i++) porProductoDia[PRODUCTOS[i].id]={};
     for(var i=0;i<todos.length;i++){
@@ -6316,6 +6621,24 @@ function calcularReposicion(){
         if(!qty) continue;
         if(!porProductoDia[pid]) porProductoDia[pid]={};
         porProductoDia[pid][fISO]=(porProductoDia[pid][fISO]||0)+qty;
+      }
+      // Las unidades gratis de promociones (ej. Promo Bultos Bolsa) tambien
+      // salen del inventario real, aunque no se hayan facturado - se suman
+      // aqui como bultos-equivalente para que la rotacion calculada
+      // refleje el consumo verdadero, no solo lo vendido.
+      if(incluirBonifRepo && p.bonificacionesUnidades){
+        var bonifIds=Object.keys(p.bonificacionesUnidades);
+        for(var bk=0;bk<bonifIds.length;bk++){
+          var bpid=bonifIds[bk];
+          var bonifUnid=p.bonificacionesUnidades[bpid]||0;
+          if(!bonifUnid) continue;
+          var prodBonif=null;
+          for(var pb=0;pb<PRODUCTOS.length;pb++){ if(PRODUCTOS[pb].id===bpid){ prodBonif=PRODUCTOS[pb]; break; } }
+          var uniVentaBonif=prodBonif?(parseInt(prodBonif.uni_venta)||1):1;
+          var bultosBonif=bonifUnid/uniVentaBonif;
+          if(!porProductoDia[bpid]) porProductoDia[bpid]={};
+          porProductoDia[bpid][fISO]=(porProductoDia[bpid][fISO]||0)+bultosBonif;
+        }
       }
     }
     var z=repoZScore(REPO_CONFIG.nivelServicio);
@@ -6505,7 +6828,7 @@ function calcularReposicion(){
     var colorEstado={rojo:'#C0392B',amarillo:'#D68910',verde:'#1E8449'};
     var labelEstado={rojo:'Urgente',amarillo:'Vigilar',verde:'OK'};
     var fmtFechaCorta=function(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); };
-    var html='<div style="font-size:11px;color:#888;margin-bottom:8px">Analizando ventas del '+fmtFechaCorta(desde)+' al '+fmtFechaCorta(hasta)+' ('+ventana+' dias)</div>';
+    var html='<div style="font-size:11px;color:#888;margin-bottom:8px">Analizando ventas del '+fmtFechaCorta(desde)+' al '+fmtFechaCorta(hasta)+' ('+ventana+' dias)'+(incluirBonifRepo?' - incluye unidades gratis de promociones':' - NO incluye unidades gratis de promociones')+'</div>';
     var anchos=['22%','8%','10%','8%','9%','19%','9%','15%']; // graduales: mas espacio donde hay mas texto/valor
     html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">';
     html+='<colgroup>'+anchos.map(function(w){return '<col style="width:'+w+'">';}).join('')+'</colgroup>';
@@ -7095,6 +7418,10 @@ function calcularPromosCustomAplicables(items){
   var overrides={};
   var notas=[];
   var observaciones=[];
+  // Unidades gratis por producto, en UNIDADES (no bultos), para poder sumar
+  // el verdadero consumo de inventario en Reposicion (bultos vendidos +
+  // bonificacion), no solo lo facturado.
+  var bonificacionesUnidades={};
   for(var i=0;i<PROMOCIONES_CUSTOM.length;i++){
     var promo=PROMOCIONES_CUSTOM[i];
     if(!promo.activa) continue;
@@ -7111,12 +7438,40 @@ function calcularPromosCustomAplicables(items){
     if(!rangoAplicable) continue;
     if(promo.tipoBeneficio==='unidades_gratis'){
       var unidadTxt=promo.unidadBeneficio==='bultos'?'bulto':'unid';
+      var cantidad=0;
       if(rangoAplicable.cada){
         var veces=Math.floor(totalBultos/rangoAplicable.cada);
-        var cantidad=veces*rangoAplicable.valor;
+        cantidad=veces*rangoAplicable.valor;
         if(cantidad>0) notas.push(promo.nombre+': +'+cantidad+' '+unidadTxt+(cantidad!==1?(unidadTxt==='bulto'?'s':''):'')+' gratis ('+totalBultos+' btos, '+rangoAplicable.valor+' '+unidadTxt+' cada '+rangoAplicable.cada+' btos)');
       } else {
+        cantidad=rangoAplicable.valor;
         notas.push(promo.nombre+': +'+rangoAplicable.valor+' '+unidadTxt+(rangoAplicable.valor!==1?(unidadTxt==='bulto'?'s':''):'')+' gratis ('+totalBultos+' btos)');
+      }
+      if(cantidad>0){
+        // Convertir a unidades si el beneficio esta definido en bultos
+        var cantidadUnidades=cantidad;
+        if(promo.unidadBeneficio==='bultos'){
+          // Usa el uni_venta del primer producto que califico como referencia
+          var uniVentaRef=1;
+          for(var pj=0;pj<promo.productos.length;pj++){
+            if((items[promo.productos[pj]]||0)>0){
+              var prodRef=null;
+              for(var pk=0;pk<PRODUCTOS.length;pk++){ if(PRODUCTOS[pk].id===promo.productos[pj]){ prodRef=PRODUCTOS[pk]; break; } }
+              if(prodRef){ uniVentaRef=parseInt(prodRef.uni_venta)||1; break; }
+            }
+          }
+          cantidadUnidades=cantidad*uniVentaRef;
+        }
+        // Repartir proporcionalmente entre los productos que calificaron,
+        // segun cuantos bultos aporto cada uno al total (asume que el
+        // regalo es del mismo tipo de producto que se esta comprando)
+        for(var j=0;j<promo.productos.length;j++){
+          var pid=promo.productos[j];
+          var bultosProd=items[pid]||0;
+          if(bultosProd<=0) continue;
+          var parte=Math.round(cantidadUnidades*(bultosProd/totalBultos));
+          if(parte>0) bonificacionesUnidades[pid]=(bonificacionesUnidades[pid]||0)+parte;
+        }
       }
     } else {
       for(var j=0;j<promo.productos.length;j++){
@@ -7125,7 +7480,193 @@ function calcularPromosCustomAplicables(items){
     }
     if(promo.observacion) observaciones.push(promo.observacion);
   }
-  return {overrides:overrides, notas:notas, observaciones:observaciones};
+  return {overrides:overrides, notas:notas, observaciones:observaciones, bonificacionesUnidades:bonificacionesUnidades};
+}
+
+// ═══ RECUPERACION DE BONIFICACIONES HISTORICAS ═══
+// Pedidos creados antes de que "bonificacionesUnidades" existiera solo
+// guardaron la bonificacion como texto en el campo "promo" (ej. "Promo
+// Bultos Bolsa: +144 unid gratis (20 btos, 36 unid cada 5 btos)"). Esto
+// intenta reconstruir la estructura {productoId: unidades} leyendo ese
+// texto, para pedidos que no tengan ya el dato estructurado.
+function parsearSegmentosBonificacion(promoTexto){
+  if(!promoTexto) return [];
+  var segmentos=promoTexto.split('|');
+  var resultado=[];
+  for(var i=0;i<segmentos.length;i++){
+    var seg=segmentos[i].trim();
+    // Formato generado por el sistema: "Nombre promo: +N unid/bulto(s) gratis (..."
+    var m=seg.match(/^(.+?):\s*\+(\d+)\s*(unid|bultos?)\s*gratis/i);
+    if(!m) continue;
+    var nombrePromo=m[1].trim();
+    var cantidad=parseInt(m[2],10);
+    var unidad=/bulto/i.test(m[3])?'bultos':'unidades';
+    if(cantidad>0) resultado.push({nombrePromo:nombrePromo, cantidad:cantidad, unidad:unidad});
+  }
+  return resultado;
+}
+
+// Intenta reconstruir bonificacionesUnidades para UN pedido ya guardado,
+// usando su texto de "promo" + los productos que efectivamente llevaba
+// (items). Devuelve null si no hay nada que recuperar (o si el pedido ya
+// tiene el dato estructurado, para no pisarlo).
+function estimarBonificacionHistorica(ped){
+  if(ped.bonificacionesUnidades && Object.keys(ped.bonificacionesUnidades).length>0) return null;
+  var segmentos=parsearSegmentosBonificacion(ped.promo);
+  if(segmentos.length===0) return null;
+  var bonifAcc={};
+  for(var s=0;s<segmentos.length;s++){
+    var seg=segmentos[s];
+    // Buscar la promo por nombre en la configuracion actual para saber que
+    // productos calificaban. Si no existe (se borro o cambio de nombre),
+    // se usa un respaldo conocido para "Promo Bultos Bolsa".
+    var promoDef=null;
+    for(var i=0;i<PROMOCIONES_CUSTOM.length;i++){
+      if(PROMOCIONES_CUSTOM[i].nombre.trim().toLowerCase()===seg.nombrePromo.toLowerCase()){ promoDef=PROMOCIONES_CUSTOM[i]; break; }
+    }
+    var productos=promoDef?promoDef.productos:(/bolsa/i.test(seg.nombrePromo)?['GU9000','GU9010']:null);
+    if(!productos) continue; // no se puede saber a que producto(s) corresponde
+    var totalBultos=0;
+    for(var j=0;j<productos.length;j++){ totalBultos+=(ped.items&&ped.items[productos[j]])||0; }
+    if(totalBultos<=0) continue;
+    var cantidadUnidades=seg.cantidad;
+    if(seg.unidad==='bultos'){
+      var uniVentaRef=1;
+      for(var pj=0;pj<productos.length;pj++){
+        if((ped.items[productos[pj]]||0)>0){
+          for(var pk=0;pk<PRODUCTOS.length;pk++){ if(PRODUCTOS[pk].id===productos[pj]){ uniVentaRef=parseInt(PRODUCTOS[pk].uni_venta)||1; break; } }
+          break;
+        }
+      }
+      cantidadUnidades=seg.cantidad*uniVentaRef;
+    }
+    for(var j=0;j<productos.length;j++){
+      var pid=productos[j];
+      var bultosProd=ped.items[pid]||0;
+      if(bultosProd<=0) continue;
+      var parte=Math.round(cantidadUnidades*(bultosProd/totalBultos));
+      if(parte>0) bonifAcc[pid]=(bonifAcc[pid]||0)+parte;
+    }
+  }
+  return Object.keys(bonifAcc).length>0?bonifAcc:null;
+}
+
+var REPO_BACKFILL_CANDIDATOS=[];
+
+function analizarBonificacionesHistoricas(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  var el=document.getElementById('repoBackfillResultado');
+  el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Analizando pedidos historicos...</div>';
+  cargarTodosFirebase(function(todos){
+    var candidatos=[];
+    for(var i=0;i<todos.length;i++){
+      var ped=todos[i];
+      var bonif=estimarBonificacionHistorica(ped);
+      if(bonif) candidatos.push({ped:ped, bonif:bonif});
+    }
+    REPO_BACKFILL_CANDIDATOS=candidatos;
+    if(candidatos.length===0){
+      el.innerHTML='<div style="color:var(--verde);font-weight:600;font-size:13px;text-align:center;padding:12px">✓ No hay bonificaciones pendientes por recuperar (o ya estan todas estructuradas)</div>';
+      return;
+    }
+    var totalBultosEquiv=0;
+    var detalleHtml='';
+    for(var c=0;c<Math.min(candidatos.length,8);c++){
+      var cand=candidatos[c];
+      var partesTxt=[];
+      var pids=Object.keys(cand.bonif);
+      for(var pj=0;pj<pids.length;pj++){
+        var pid=pids[pj];
+        var prod=null;
+        for(var pk=0;pk<PRODUCTOS.length;pk++){ if(PRODUCTOS[pk].id===pid){ prod=PRODUCTOS[pk]; break; } }
+        var uniVenta=prod?(parseInt(prod.uni_venta)||1):1;
+        var bultosEquiv=cand.bonif[pid]/uniVenta;
+        totalBultosEquiv+=bultosEquiv;
+        partesTxt.push((prod?prod.nombre:pid)+': +'+cand.bonif[pid]+' unid (~'+bultosEquiv.toFixed(1)+' bto)');
+      }
+      detalleHtml+='<div style="padding:6px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+        '<div style="font-weight:600">'+cand.ped.fecha+' - '+cand.ped.cliente.nombre+'</div>'+
+        '<div style="color:#888">'+partesTxt.join(', ')+'</div>'+
+      '</div>';
+    }
+    // Sumar el total real (no solo la muestra) para el resumen
+    var totalBultosEquivReal=0;
+    for(var c=0;c<candidatos.length;c++){
+      var pids2=Object.keys(candidatos[c].bonif);
+      for(var pj=0;pj<pids2.length;pj++){
+        var pid2=pids2[pj];
+        var prod2=null;
+        for(var pk=0;pk<PRODUCTOS.length;pk++){ if(PRODUCTOS[pk].id===pid2){ prod2=PRODUCTOS[pk]; break; } }
+        var uniVenta2=prod2?(parseInt(prod2.uni_venta)||1):1;
+        totalBultosEquivReal+=candidatos[c].bonif[pid2]/uniVenta2;
+      }
+    }
+    var html='<div style="font-weight:600;font-size:13px;margin-bottom:6px">Se encontraron '+candidatos.length+' pedido(s) con bonificacion recuperable (~'+totalBultosEquivReal.toFixed(1)+' bultos-equivalente en total)</div>';
+    html+=detalleHtml;
+    if(candidatos.length>8) html+='<div style="font-size:11px;color:#888;padding:6px 0">Y '+(candidatos.length-8)+' mas...</div>';
+    html+='<button class="btn btn-p btn-sm" style="margin-top:10px" onclick="aplicarBonificacionesHistoricas()">Aplicar y guardar en Firebase</button>';
+    el.innerHTML=html;
+  });
+}
+
+function aplicarBonificacionesHistoricas(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  if(REPO_BACKFILL_CANDIDATOS.length===0){ toast('No hay nada que aplicar'); return; }
+  var el=document.getElementById('repoBackfillResultado');
+  el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Guardando en Firebase...</div>';
+
+  // Agrupar candidatos por vendedor dueno del pedido, para escribir un solo
+  // documento por vendedor con todos sus pedidos actualizados
+  var vendedoresAfectados={};
+  for(var c=0;c<REPO_BACKFILL_CANDIDATOS.length;c++){
+    var cand=REPO_BACKFILL_CANDIDATOS[c];
+    var vid=cand.ped.vendedor||'??';
+    if(!vendedoresAfectados[vid]) vendedoresAfectados[vid]=[];
+    vendedoresAfectados[vid].push(cand);
+  }
+  var vids=Object.keys(vendedoresAfectados);
+  var promesas=vids.map(function(vid){
+    return db.collection('vendedores').doc(vid).get().then(function(doc){ return {vid:vid, doc:doc}; });
+  });
+  Promise.all(promesas).then(function(resultados){
+    var escrituras=[];
+    var totalAplicados=0;
+    for(var r=0;r<resultados.length;r++){
+      var vid=resultados[r].vid, doc=resultados[r].doc;
+      if(!doc.exists) continue;
+      var data=doc.data();
+      var peds=[];
+      try{ peds=data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
+      var candidatosVend=vendedoresAfectados[vid];
+      for(var cv=0;cv<candidatosVend.length;cv++){
+        var cand=candidatosVend[cv];
+        for(var k=0;k<peds.length;k++){
+          if(String(peds[k].id)===String(cand.ped.id)){
+            peds[k].bonificacionesUnidades=cand.bonif;
+            totalAplicados++;
+            break;
+          }
+        }
+      }
+      escrituras.push(db.collection('vendedores').doc(vid).set({
+        pedidos: JSON.stringify(peds),
+        visitas: data.visitas||'[]',
+        clientesNuevos: data.clientesNuevos||'[]',
+        ultimaActualizacion: new Date().toISOString()
+      }, {merge:true}));
+    }
+    Promise.all(escrituras).then(function(){
+      REPO_BACKFILL_CANDIDATOS=[];
+      el.innerHTML='<div style="color:var(--verde);font-weight:600;font-size:13px;text-align:center;padding:12px">✓ '+totalAplicados+' pedido(s) actualizados. Ya se pueden usar en el calculo de Reposicion.</div>';
+      toast('Bonificaciones historicas guardadas');
+      cargarTodosFirebase(function(todos){ PEDIDOS=todos; });
+    }).catch(function(){
+      toast('Error guardando en Firebase, intenta de nuevo');
+      el.innerHTML='<div style="color:var(--rojo);font-size:13px;text-align:center;padding:12px">Error al guardar. Intenta de nuevo.</div>';
+    });
+  }).catch(function(){
+    toast('Error al conectar con Firebase');
+  });
 }
 
 function cargarCSVPrecios(input){
@@ -10062,7 +10603,7 @@ function parsearDBFRenglones(buffer){
 function convertirPedidosProfit(peds, rengs){
   var ART = {'GU9000':'Menta Bolsa','GU9001':'Menta Display','GU9010':'Tutti Frutti Bolsa','GU9011':'Tutti Frutti Display'};
   var ART_UNI_VENTA = {'GU9000':36,'GU9001':24,'GU9010':36,'GU9011':24};
-  var FP = {'01':'Contado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'};
+  var FP = {'01':'Contado','05':'Prepagado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'};
   
   // Indexar renglones por FACT_NUM
   var rIdx = {};
