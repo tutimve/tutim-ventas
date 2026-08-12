@@ -645,6 +645,10 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           </select>
         </div>
       </div>
+      <div class="field" style="margin-top:8px">
+        <label>Buscar cliente</label>
+        <input type="text" id="filtroCobroCliente" placeholder="Nombre o codigo del cliente..." oninput="renderHistorialCobros()">
+      </div>
     </div>
     <div class="metrics" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
       <div class="metric" style="padding:8px"><div class="num" style="font-size:18px" id="cobroResumTotal">0</div><div class="lbl">Pagos</div></div>
@@ -2641,6 +2645,7 @@ function goScreen(name){
 function resetPedido(){
   pedido={cliente:null,items:{},paso:1};
   DESCUENTOS_ITEM={};
+  PRECIOS_MANUALES_PEDIDO={};
   document.getElementById('paso1').classList.remove('hidden');
   document.getElementById('paso2').classList.add('hidden');
   document.getElementById('paso3').classList.add('hidden');
@@ -2756,7 +2761,14 @@ function selCli(id){
   renderProds();
 }
 
-function getPrecio(p,lp,formaPago,totalDisplays){
+function getPrecio(p,lp,formaPago,totalDisplays,mapaManual){
+  // Precio manual (solo VEND 01 y 20 pueden fijarlo): tiene prioridad sobre
+  // cualquier lista de precio o promocion. mapaManual permite indicar cual
+  // mapa de precios manuales usar - si no se pasa, se usa el del pedido
+  // que se esta creando (PRECIOS_MANUALES_PEDIDO); el modal de Editar
+  // pedido pasa PRECIOS_MANUALES_PEDIDO_EDIT en su lugar.
+  var mapaM=mapaManual||PRECIOS_MANUALES_PEDIDO;
+  if(mapaM[p.id]!==undefined) return mapaM[p.id];
   // Promociones personalizadas: pueden forzar otra lista de precio, o
   // aplicar un descuento % sobre el precio ya resuelto
   var override=PROMO_CUSTOM_OVERRIDES[p.id];
@@ -2774,6 +2786,16 @@ function getPrecio(p,lp,formaPago,totalDisplays){
   return base;
 }
 
+// Precios fijados manualmente (solo VEND 01 y 20) para el pedido que se
+// esta armando en este momento: {productoId: precioManual}
+var PRECIOS_MANUALES_PEDIDO={};
+// Idem, pero para el modal de Editar pedido
+var PRECIOS_MANUALES_PEDIDO_EDIT={};
+
+function puedeEditarPrecioManual(){
+  return VEND && (VEND.codigo==='01'||VEND.codigo==='20');
+}
+
 function actualizarPromoCustomOverrides(){
   var resultado=calcularPromosCustomAplicables(pedido.items);
   PROMO_CUSTOM_OVERRIDES=resultado.overrides;
@@ -2784,6 +2806,7 @@ function renderProds(){
   var lp=1;
   try{lp=parseInt(document.getElementById('listaPrecio').value)||1;}catch(e){}
   var puedeDesc=puedeAplicarDescuentos();
+  var puedeManual=puedeEditarPrecioManual();
   var html='';
   for(var i=0;i<PRODUCTOS.length;i++){
     var p=PRODUCTOS[i];
@@ -2808,11 +2831,21 @@ function renderProds(){
         '<span style="font-size:10px;color:#888">% dcto item</span>'+
       '</div>'
     ):'';
+    var esPrecioManual=PRECIOS_MANUALES_PEDIDO[p.id]!==undefined;
+    var precioManualHtml=puedeManual?(
+      '<div style="display:flex;align-items:center;gap:4px;margin-top:4px">'+
+        '<input type="number" min="0" step="0.01" value="'+(esPrecioManual?PRECIOS_MANUALES_PEDIDO[p.id]:'')+'" placeholder="$ manual" '+
+          'id="precioManual-'+p.id+'" oninput="cambPrecioManual(&quot;'+p.id+'&quot;,this.value)" '+
+          'style="width:70px;height:24px;text-align:center;font-size:11px;border:1px solid '+(esPrecioManual?'var(--ambar)':'var(--borde)')+';border-radius:5px;padding:0">'+
+        '<span style="font-size:10px;color:'+(esPrecioManual?'var(--ambar)':'#888')+'">precio manual</span>'+
+      '</div>'
+    ):'';
     html+='<div class="prod-card"'+op+'>'+iconoHtml+
       '<div class="prod-info"><div class="prod-name">'+p.nombre+'</div>'+
       '<div style="font-size:11px;color:#aaa;margin-top:1px">Ref: '+p.co_art+'</div>'+
       '<div class="prod-sub" id="precioTxt-'+p.id+'">$'+precio.toFixed(2)+'/bulto - '+(agotado?'Agotado':p.stock+' btos')+promoTxt+'</div>'+
       descItemHtml+
+      precioManualHtml+
       '</div>'+
       '<div class="qty-ctrl">'+
         '<button class="qty-btn" onclick="cambQty(&quot;'+p.id+'&quot;,-1)"'+dis+'>-</button>'+
@@ -2845,6 +2878,18 @@ function cambDescuentoItem(id, val){
   if(isNaN(pct)||pct<0) pct=0;
   if(pct>100) pct=100;
   if(pct===0) delete DESCUENTOS_ITEM[id]; else DESCUENTOS_ITEM[id]=pct;
+  actualizarTotales();
+  actualizarPreciosProductos();
+}
+
+// Precio fijado a mano para un producto (solo VEND 01 y 20). Tiene
+// prioridad maxima en getPrecio(), por encima de la lista de precio y de
+// cualquier promocion. El % de descuento por item, si tambien esta puesto,
+// se sigue aplicando por encima de este precio manual.
+function cambPrecioManual(id, val){
+  var precio=parseFloat(val);
+  if(isNaN(precio) || val==='' || precio<0){ delete PRECIOS_MANUALES_PEDIDO[id]; }
+  else { PRECIOS_MANUALES_PEDIDO[id]=Math.round(precio*100)/100; }
   actualizarTotales();
   actualizarPreciosProductos();
 }
@@ -5097,6 +5142,11 @@ function renderCxCHomeReminders(){
     for(var j=0;j<CLIENTES.length;j++){ if(CLIENTES[j].id===d.clienteId){ cliReal=CLIENTES[j]; break; } }
     return cliReal?cliReal.nombre:d.clienteNombre;
   }
+  function nombreVendedorR(d){
+    var vObj=null;
+    for(var j=0;j<VENDEDORES.length;j++){ if(VENDEDORES[j].id===d.vendedor){ vObj=VENDEDORES[j]; break; } }
+    return 'VEND '+(d.vendedor||'??')+(vObj?' - '+vObj.nombre:'');
+  }
   // Los mas vencidos primero
   cobrarHoy.sort(function(a,b){ return diasVencidoDesdeEmision(b.emision)-diasVencidoDesdeEmision(a.emision); });
   porVencerManana.sort(function(a,b){ return diasVencidoDesdeEmision(b.emision)-diasVencidoDesdeEmision(a.emision); });
@@ -5111,6 +5161,7 @@ function renderCxCHomeReminders(){
       html+='<div onclick="irACobrarCliente(&quot;'+d.clienteId+'&quot;)" style="border-bottom:1px solid rgba(0,0,0,.08);padding:6px 0;cursor:pointer">'+
         '<div style="display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:600">'+nombreClienteR(d)+'</span><strong style="font-size:13px">$'+formatearNumeroConMiles(d.saldo,2)+'</strong></div>'+
         '<div style="font-size:11px;color:#666">Cod: '+d.clienteId+' | Doc.'+d.numero+' | Emision: '+d.emision+'</div>'+
+        '<div style="font-size:11px;color:var(--azul);font-weight:600">'+nombreVendedorR(d)+'</div>'+
         '<div style="font-size:11px;margin-top:2px">'+etiquetaDiasVencido(diasVencidoDesdeEmision(d.emision))+'</div>'+
       '</div>';
     }
@@ -5142,9 +5193,12 @@ function editarPedido(pid){
   // Cargar datos en el modal
   var lp = ped.listaPrecio || 1;
   var puedeDescEdit=puedeAplicarDescuentos();
+  var puedeManualEdit=puedeEditarPrecioManual();
   // Precargar los descuentos por producto que ya tuviera el pedido (si se
   // creo o edito antes con descuento), para poder seguir ajustandolos
   DESCUENTOS_ITEM_EDIT=JSON.parse(JSON.stringify(ped.descuentosItem||{}));
+  // Idem para los precios manuales (solo VEND 01/20)
+  PRECIOS_MANUALES_PEDIDO_EDIT=JSON.parse(JSON.stringify(ped.preciosManualesItem||{}));
   // Recalcular que promociones aplican segun los productos de ESTE pedido
   // (editar es una edicion en vivo: al guardar se recalculan montos con el
   // estado actual de precios/promociones, asi que los precios mostrados
@@ -5156,7 +5210,7 @@ function editarPedido(pid){
   for(var i=0;i<PRODUCTOS.length;i++){
     var p = PRODUCTOS[i];
     var qty = ped.items[p.id] || 0;
-    var precio = getPrecio(p, lp);
+    var precio = getPrecio(p, lp, undefined, undefined, PRECIOS_MANUALES_PEDIDO_EDIT);
     var descItemHtmlEdit=puedeDescEdit?(
       '<div style="display:flex;align-items:center;gap:4px;margin-top:4px">'+
         '<input type="number" min="0" max="100" step="1" value="'+(DESCUENTOS_ITEM_EDIT[p.id]||'')+'" placeholder="0" '+
@@ -5165,10 +5219,20 @@ function editarPedido(pid){
         '<span style="font-size:10px;color:#888">% dcto item</span>'+
       '</div>'
     ):'';
+    var esPrecioManualEdit=PRECIOS_MANUALES_PEDIDO_EDIT[p.id]!==undefined;
+    var precioManualHtmlEdit=puedeManualEdit?(
+      '<div style="display:flex;align-items:center;gap:4px;margin-top:4px">'+
+        '<input type="number" min="0" step="0.01" value="'+(esPrecioManualEdit?PRECIOS_MANUALES_PEDIDO_EDIT[p.id]:'')+'" placeholder="$ manual" '+
+          'id="eprecioManual-'+p.id+'" oninput="cambPrecioManualEdit(&quot;'+p.id+'&quot;,this.value)" '+
+          'style="width:70px;height:24px;text-align:center;font-size:11px;border:1px solid '+(esPrecioManualEdit?'var(--ambar)':'var(--borde)')+';border-radius:5px;padding:0">'+
+        '<span style="font-size:10px;color:'+(esPrecioManualEdit?'var(--ambar)':'#888')+'">precio manual</span>'+
+      '</div>'
+    ):'';
     prodRows += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--borde)">' +
       '<div style="flex:1"><div style="font-size:13px;font-weight:600">'+p.nombre+'</div>' +
       '<div style="font-size:11px;color:#aaa" id="eprecio-'+p.id+'">'+p.co_art+' · $'+precio.toFixed(2)+'/bto</div>'+
       descItemHtmlEdit+
+      precioManualHtmlEdit+
       '</div>' +
       '<div style="display:flex;align-items:center;gap:6px">' +
         '<button onclick="cambQtyEdit(&quot;'+p.id+'&quot;,this,-1)" style="width:30px;height:30px;border:1.5px solid var(--borde);border-radius:6px;background:#fff;font-size:18px;cursor:pointer;color:var(--azul)">-</button>' +
@@ -5221,6 +5285,13 @@ function cambDescuentoItemEdit(id, val){
   recalcularEdicionPrecios();
 }
 
+function cambPrecioManualEdit(id, val){
+  var precio=parseFloat(val);
+  if(isNaN(precio) || val==='' || precio<0){ delete PRECIOS_MANUALES_PEDIDO_EDIT[id]; }
+  else { PRECIOS_MANUALES_PEDIDO_EDIT[id]=Math.round(precio*100)/100; }
+  recalcularEdicionPrecios();
+}
+
 function cambQtyEdit(id, btn, delta){
   var span = document.getElementById('eqty-'+id);
   var actual = parseInt(span.textContent) || 0;
@@ -5257,7 +5328,7 @@ function recalcularEdicionPrecios(){
   var total=0;
   for(var i=0;i<PRODUCTOS.length;i++){
     var p=PRODUCTOS[i];
-    var precioBase=getPrecio(p, lp);
+    var precioBase=getPrecio(p, lp, undefined, undefined, PRECIOS_MANUALES_PEDIDO_EDIT);
     var precio=precioConDescuentoItem(precioBase,p.id,DESCUENTOS_ITEM_EDIT);
     var precioEl=document.getElementById('eprecio-'+p.id);
     if(precioEl){
@@ -5308,7 +5379,7 @@ function guardarEdicion(){
         var p = PRODUCTOS[j];
         var qty = parseInt(document.getElementById('eqty-'+p.id).textContent) || 0;
         if(qty > 0){
-          var precioActual = precioConDescuentoItem(getPrecio(p, lp),p.id,DESCUENTOS_ITEM_EDIT);
+          var precioActual = precioConDescuentoItem(getPrecio(p, lp, undefined, undefined, PRECIOS_MANUALES_PEDIDO_EDIT),p.id,DESCUENTOS_ITEM_EDIT);
           nuevosItems[p.id] = qty;
           nuevosPreciosUnitarios[p.id] = precioActual;
           bultos += qty;
@@ -5330,6 +5401,7 @@ function guardarEdicion(){
       ped.items = nuevosItems;
       ped.preciosUnitarios = nuevosPreciosUnitarios;
       ped.descuentosItem = JSON.parse(JSON.stringify(DESCUENTOS_ITEM_EDIT));
+      ped.preciosManualesItem = JSON.parse(JSON.stringify(PRECIOS_MANUALES_PEDIDO_EDIT));
       ped.descuentoGeneralPct = descGeneralPctGuardar;
       ped.montoDescuentoGeneral = montoDescGeneralGuardar;
       ped.montoBruto = montoBruto;
@@ -9387,6 +9459,11 @@ function renderCxCPorVencimiento(){
     for(var j=0;j<CLIENTES.length;j++){ if(CLIENTES[j].id===d.clienteId){ cliReal=CLIENTES[j]; break; } }
     return cliReal?cliReal.nombre:d.clienteNombre;
   }
+  function nombreVendedorCxC(d){
+    var vObj=null;
+    for(var j=0;j<VENDEDORES.length;j++){ if(VENDEDORES[j].id===d.vendedor){ vObj=VENDEDORES[j]; break; } }
+    return 'VEND '+(d.vendedor||'??')+(vObj?' - '+vObj.nombre:'');
+  }
   if(filtro){
     docs=docs.filter(function(d){
       return nombreCliente(d).toLowerCase().indexOf(filtro)>=0 || d.clienteId.indexOf(filtro)>=0;
@@ -9423,6 +9500,7 @@ function renderCxCPorVencimiento(){
           html+='<div onclick="event.stopPropagation();selCobroCli(&quot;'+d.clienteId+'&quot;)" style="padding:6px 4px 6px 12px;font-size:12px;cursor:pointer;border-top:1px solid #f2f2f2">'+
             '<div style="font-weight:600">'+nombreCliente(d)+' <span style="color:#888;font-weight:400">(Cod: '+d.clienteId+')</span></div>'+
             '<div style="color:#888">Doc.'+d.numero+' | Emision: '+d.emision+'</div>'+
+            '<div style="color:var(--azul);font-weight:600">'+nombreVendedorCxC(d)+'</div>'+
             '<div style="margin-top:2px">'+etiquetaDiasVencido(diasVencidoDesdeEmision(d.emision))+'</div>'+
             '<div style="color:var(--azul);font-weight:700">$'+formatearNumeroConMiles(d.saldo,2)+'</div>'+
           '</div>';
@@ -9928,11 +10006,18 @@ function getPagosCobranzaFiltrados(){
   var hasta=document.getElementById('filtroCobroHasta').value;
   var estadoF=document.getElementById('filtroCobroEstado').value;
   var filtVend=document.getElementById('filtroCobroVendedor');
+  var filtCliEl=document.getElementById('filtroCobroCliente');
+  var filtCli=filtCliEl?filtCliEl.value.trim().toLowerCase():'';
   return PAGOS_COBRANZA.filter(function(p){
     if(desde && p.fecha<desde) return false;
     if(hasta && p.fecha>hasta) return false;
     if(estadoF!=='todos' && p.estado!==estadoF) return false;
     if(filtVend && filtVend.value && filtVend.value!=='todos' && p.vendedor!==filtVend.value) return false;
+    if(filtCli){
+      var nombreM=(p.clienteNombre||'').toLowerCase();
+      var codigoM=(p.clienteId||'').toLowerCase();
+      if(nombreM.indexOf(filtCli)<0 && codigoM.indexOf(filtCli)<0) return false;
+    }
     return true;
   });
 }
