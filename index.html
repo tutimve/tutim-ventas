@@ -1002,6 +1002,53 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
     </div>
 
+    <!-- Grafica de ventas por vendedor -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div onclick="toggleRptCard('rptCardGrafica')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        <span class="card-title" style="margin:0">Grafica de Ventas por Vendedor</span>
+        <span id="rptCardGrafica-arrow" style="color:#aaa;font-size:11px">▼</span>
+      </div>
+      <div id="rptCardGrafica-body" class="hidden" style="padding:0 16px 16px">
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn btn-s btn-sm" id="rptGraficaBtnMonto" onclick="cambiarMetricaGraficaVend('monto')">Por Monto</button>
+          <button class="btn btn-s btn-sm" id="rptGraficaBtnBultos" onclick="cambiarMetricaGraficaVend('bultos')">Por Bultos</button>
+        </div>
+        <div id="rptGraficaVendedor"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
+      </div>
+    </div>
+
+    <!-- Clientes sin compra en el periodo, por vendedor -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div onclick="toggleRptCard('rptCardSinCompraVend')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        <span class="card-title" style="margin:0">Clientes Sin Compra en el Periodo (por Vendedor)</span>
+        <span id="rptCardSinCompraVend-arrow" style="color:#aaa;font-size:11px">▼</span>
+      </div>
+      <div id="rptCardSinCompraVend-body" class="hidden" style="padding:0 16px 16px">
+        <p style="font-size:11px;color:#888;margin:0 0 8px">Compara la cartera completa de cada vendedor (todos sus clientes asignados) contra quienes SI compraron dentro del rango de fechas de arriba.</p>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;margin-bottom:10px">
+          <input type="checkbox" id="rptSoloConMovimiento" checked onchange="renderReportes()" style="width:16px;height:16px">
+          Solo clientes que han tenido movimiento alguna vez en la app (oculta los que son solo data historica importada, nunca activos)
+        </label>
+        <div id="rptSinCompraVendedor"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-g btn-sm" onclick="descargarExcelSinCompra()">Excel</button>
+          <button class="btn btn-s btn-sm" onclick="descargarPDFSinCompra()">PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Clientes en riesgo (caida de compra mes actual vs mes anterior) -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div onclick="toggleRptCard('rptCardRiesgo')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        <span class="card-title" style="margin:0">Clientes en Riesgo (caida de compra)</span>
+        <span id="rptCardRiesgo-arrow" style="color:#aaa;font-size:11px">▼</span>
+      </div>
+      <div id="rptCardRiesgo-body" class="hidden" style="padding:0 16px 16px">
+        <p style="font-size:11px;color:#888;margin:0 0 8px">Clientes que compraron el mes anterior pero cayeron 40% o mas este mes (calendario, no el rango de arriba). Util para llamarlos antes de perderlos del todo.</p>
+        <div id="rptClientesRiesgo"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
+      </div>
+    </div>
+
     <!-- Ticket promedio (bultos y monto) y forma de pago -->
     <div class="card" style="padding:0;overflow:hidden">
       <div onclick="toggleRptCard('rptCardTicket')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
@@ -5911,6 +5958,56 @@ function rptGetPedidosFiltrados(){
 }
 
 // Acordeon de las tarjetas de Reportes: despliega/colapsa al tocar el titulo
+// Grafica de barras de ventas por vendedor. Se reutiliza el mismo porVend
+// que ya calcula la seccion "Por Vendedor" para no recalcular dos veces.
+var ULTIMO_PORVEND_RPT={};
+var RPT_METRICA_GRAFICA='monto';
+
+function cambiarMetricaGraficaVend(metrica){
+  RPT_METRICA_GRAFICA=metrica;
+  renderGraficaVendedoresRpt(ULTIMO_PORVEND_RPT);
+}
+
+function renderGraficaVendedoresRpt(porVend){
+  var cont=document.getElementById('rptGraficaVendedor');
+  if(!cont) return;
+  var btnMonto=document.getElementById('rptGraficaBtnMonto');
+  var btnBultos=document.getElementById('rptGraficaBtnBultos');
+  if(btnMonto&&btnBultos){
+    btnMonto.style.background=RPT_METRICA_GRAFICA==='monto'?'var(--azul)':'';
+    btnMonto.style.color=RPT_METRICA_GRAFICA==='monto'?'#fff':'';
+    btnBultos.style.background=RPT_METRICA_GRAFICA==='bultos'?'var(--azul)':'';
+    btnBultos.style.color=RPT_METRICA_GRAFICA==='bultos'?'#fff':'';
+  }
+  var vids=Object.keys(porVend).sort(function(a,b){ return porVend[b][RPT_METRICA_GRAFICA]-porVend[a][RPT_METRICA_GRAFICA]; });
+  if(vids.length===0){
+    cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin datos en este periodo</div>';
+    return;
+  }
+  var maxVal=0;
+  var totalVal=0;
+  for(var i=0;i<vids.length;i++){ var vv=porVend[vids[i]][RPT_METRICA_GRAFICA]; if(vv>maxVal) maxVal=vv; totalVal+=vv; }
+  var html='<div style="display:flex;align-items:flex-end;gap:8px;height:190px;overflow-x:auto;padding:8px 4px 0;border-bottom:2px solid var(--borde)">';
+  for(var i=0;i<vids.length;i++){
+    var d=porVend[vids[i]];
+    var valor=d[RPT_METRICA_GRAFICA];
+    var alturaPx=maxVal>0?Math.max(4,Math.round(valor/maxVal*150)):4;
+    var etiqueta=RPT_METRICA_GRAFICA==='monto'?('$'+Math.round(valor)):valor;
+    var pctBarra=totalVal>0?Math.round(valor/totalVal*1000)/10:0;
+    html+='<div style="display:flex;flex-direction:column;align-items:center;min-width:42px;flex:1">'+
+      '<div style="font-size:10px;color:var(--azul);font-weight:700;white-space:nowrap">'+etiqueta+'</div>'+
+      '<div style="font-size:9px;color:#888;margin-bottom:3px;white-space:nowrap">'+pctBarra+'%</div>'+
+      '<div style="width:28px;height:'+alturaPx+'px;background:linear-gradient(180deg,#2E44A8,var(--azul));border-radius:5px 5px 0 0"></div>'+
+    '</div>';
+  }
+  html+='</div><div style="display:flex;gap:8px;padding-top:4px">';
+  for(var i=0;i<vids.length;i++){
+    html+='<div style="min-width:42px;flex:1;text-align:center;font-size:10px;color:#888">VEND '+vids[i]+'</div>';
+  }
+  html+='</div>';
+  cont.innerHTML=html;
+}
+
 function toggleRptCard(id){
   var body=document.getElementById(id+'-body');
   var arrow=document.getElementById(id+'-arrow');
@@ -5965,6 +6062,8 @@ function renderReportes(){
   var lista=rptGetPedidosFiltrados();
   var vendSel=document.getElementById('rptVendedor').value;
   var cliSel=document.getElementById('rptCliente').value;
+  var desde=document.getElementById('rptDesde').value;
+  var hasta=document.getElementById('rptHasta').value;
 
   // Filtrar por vendedor (si aplica) y cliente ANTES de calcular los resumenes,
   // para que ambos filtros afecten todo el reporte de forma consistente
@@ -6046,6 +6145,8 @@ function renderReportes(){
     }
   }
   document.getElementById('rptPorVendedor').innerHTML=htmlVend;
+  ULTIMO_PORVEND_RPT=porVend; // se reutiliza para la grafica sin recalcular
+  renderGraficaVendedoresRpt(porVend);
 
   // Actualizar el selector de vendedores (a partir de TODOS los pedidos del
   // periodo, sin aplicar todavia el filtro de vendedor, para no hacer
@@ -6230,6 +6331,99 @@ function renderReportes(){
     '<tr><td style="padding:6px">Monto</td><td style="padding:6px;text-align:right">$'+formatearNumeroConMiles(statsAnt.monto,0)+'</td><td style="padding:6px;text-align:right;font-weight:700;color:var(--azul)">$'+formatearNumeroConMiles(statsActual.monto,0)+'</td><td style="padding:6px;text-align:right">'+flechaCambio(cambioMonto)+'</td></tr>'+
     '</table>';
   document.getElementById('rptComparativo').innerHTML=htmlComp;
+
+  // Reporte: Clientes en riesgo - compraron el mes anterior pero cayeron
+  // 40% o mas este mes (incluye los que llegaron a compra cero). Reutiliza
+  // baseComp/mesActualStr/mesAntStr del comparativo de arriba.
+  var porClienteMesActualR={}, porClienteMesAnteriorR={};
+  for(var i=0;i<baseComp.length;i++){
+    var p=baseComp[i];
+    var mesP=fechaToISO(p.fecha).substring(0,7);
+    var cidR=p.cliente.id;
+    if(mesP===mesActualStr){
+      if(!porClienteMesActualR[cidR]) porClienteMesActualR[cidR]={nombre:p.cliente.nombre, monto:0};
+      porClienteMesActualR[cidR].monto+=p.monto;
+    } else if(mesP===mesAntStr){
+      if(!porClienteMesAnteriorR[cidR]) porClienteMesAnteriorR[cidR]={nombre:p.cliente.nombre, monto:0};
+      porClienteMesAnteriorR[cidR].monto+=p.monto;
+    }
+  }
+  var clientesRiesgo=[];
+  for(var cidR in porClienteMesAnteriorR){
+    var anteriorM=porClienteMesAnteriorR[cidR].monto;
+    var actualM=(porClienteMesActualR[cidR]?porClienteMesActualR[cidR].monto:0);
+    if(anteriorM<=0) continue;
+    var caidaPct=Math.round((anteriorM-actualM)/anteriorM*1000)/10;
+    if(caidaPct>=40){
+      clientesRiesgo.push({id:cidR, nombre:porClienteMesAnteriorR[cidR].nombre, anterior:anteriorM, actual:actualM, caidaPct:caidaPct});
+    }
+  }
+  clientesRiesgo.sort(function(a,b){return b.caidaPct-a.caidaPct;});
+  var htmlRiesgo='';
+  if(clientesRiesgo.length===0){
+    htmlRiesgo='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Ningun cliente con caida de compra de 40% o mas este mes</div>';
+  } else {
+    for(var i=0;i<clientesRiesgo.length;i++){
+      var cr=clientesRiesgo[i];
+      htmlRiesgo+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--borde)">'+
+        '<div><strong style="font-size:13px">'+cr.nombre+'</strong><div style="font-size:11px;color:#888">Cod: '+cr.id+' — '+labelMesAnt+': $'+formatearNumeroConMiles(cr.anterior,2)+' → '+labelMesActual+': $'+formatearNumeroConMiles(cr.actual,2)+'</div></div>'+
+        '<strong style="font-size:14px;color:var(--rojo)">-'+cr.caidaPct+'%</strong>'+
+      '</div>';
+    }
+  }
+  document.getElementById('rptClientesRiesgo').innerHTML=htmlRiesgo;
+
+  // Reporte: Clientes SIN compra en el periodo filtrado (Desde/Hasta),
+  // agrupado por vendedor. Compara la cartera COMPLETA de cada vendedor
+  // (CLIENTES_PROFIT) contra quienes SI aparecen en "lista" (el periodo
+  // filtrado). Respeta el alcance de vendedores visibles del usuario
+  // actual (admin ve todos, supervisor ve su equipo, vendedor ve solo el
+  // suyo).
+  var soloConMovimiento=document.getElementById('rptSoloConMovimiento')?document.getElementById('rptSoloConMovimiento').checked:true;
+  var clientesConMovimientoAlgunaVez={};
+  if(soloConMovimiento){
+    for(var i=0;i<RPT_PEDIDOS.length;i++){ clientesConMovimientoAlgunaVez[RPT_PEDIDOS[i].cliente.id]=true; }
+  }
+  var alcanceRptSC=alcanceVendedoresVisibles();
+  var vendedoresParaSC=vendSel!=='todos'?[vendSel]:Array.prototype.filter.call(
+    Array.from(new Set(CLIENTES_PROFIT.map(function(c){return c.vendedor;}))).sort(),
+    function(v){ return !alcanceRptSC || alcanceRptSC.indexOf(v)>=0; }
+  );
+  var clientesConCompraSC={};
+  for(var i=0;i<lista.length;i++){ clientesConCompraSC[lista[i].cliente.id]=true; }
+  var htmlSinCompraVend='';
+  var totalSCGlobal=0, totalClientesSCGlobal=0;
+  var datosSinCompraExport={}; // {vid: {nombre, clientes:[{id,nombre}]}} - para exportar
+  for(var v=0;v<vendedoresParaSC.length;v++){
+    var vidSC=vendedoresParaSC[v];
+    var clientesDeVendedorSC=CLIENTES_PROFIT.filter(function(c){
+      if(c.vendedor!==vidSC || c.inactivo) return false;
+      if(soloConMovimiento && !clientesConMovimientoAlgunaVez[c.id]) return false;
+      return true;
+    });
+    if(clientesDeVendedorSC.length===0) continue;
+    var sinCompraSC=clientesDeVendedorSC.filter(function(c){ return !clientesConCompraSC[c.id]; });
+    totalSCGlobal+=sinCompraSC.length;
+    totalClientesSCGlobal+=clientesDeVendedorSC.length;
+    if(sinCompraSC.length===0) continue;
+    var vObjSC=null;
+    for(var vi=0;vi<VENDEDORES.length;vi++){ if(VENDEDORES[vi].id===vidSC){ vObjSC=VENDEDORES[vi]; break; } }
+    var vNombreSC=vObjSC?vObjSC.nombre:('VEND '+vidSC);
+    datosSinCompraExport[vidSC]={nombre:vNombreSC, clientes:sinCompraSC.map(function(c){return {id:c.id,nombre:c.nombre};})};
+    htmlSinCompraVend+='<div style="margin-bottom:14px">'+
+      '<div style="font-weight:700;font-size:13px;color:var(--azul)">VEND '+vidSC+' - '+vNombreSC+' <span style="color:#888;font-weight:400">('+sinCompraSC.length+' de '+clientesDeVendedorSC.length+' sin compra)</span></div>';
+    for(var c=0;c<sinCompraSC.length;c++){
+      htmlSinCompraVend+='<div style="padding:5px 0 5px 8px;font-size:12px;color:#666;border-bottom:1px solid #f2f2f2">'+sinCompraSC[c].nombre+' <span style="color:#aaa">(Cod: '+sinCompraSC[c].id+')</span></div>';
+    }
+    htmlSinCompraVend+='</div>';
+  }
+  if(htmlSinCompraVend===''){
+    htmlSinCompraVend='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Todos los clientes tuvieron al menos una compra en este periodo</div>';
+  } else {
+    htmlSinCompraVend='<div style="font-size:12px;color:#888;margin-bottom:10px">'+totalSCGlobal+' de '+totalClientesSCGlobal+' clientes sin compra en el periodo</div>'+htmlSinCompraVend;
+  }
+  document.getElementById('rptSinCompraVendedor').innerHTML=htmlSinCompraVend;
+  ULTIMO_REPORTE_SIN_COMPRA={datos:datosSinCompraExport, periodo:(desde?(desde===hasta?desde:('Del '+desde+' al '+hasta)):'Todo el periodo')};
 
   // Reporte: Participacion de promociones dentro del periodo filtrado
   var conPromo={pedidos:0, monto:0};
@@ -6529,6 +6723,72 @@ function rptExcel(){
   a.href=url;a.download='reporte_tutim_'+periodo.replace(/\//g,'-')+'.xls';a.click();
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
   toast('Excel generado');
+}
+
+// Descarga en Excel (una hoja por vendedor) el reporte de Clientes Sin
+// Compra en el Periodo, tal como quedo calculado la ultima vez que se
+// renderizo Reportes (respeta los mismos filtros de fecha/vendedor/cliente
+// y el checkbox de "solo con movimiento").
+function descargarExcelSinCompra(){
+  var vids=Object.keys(ULTIMO_REPORTE_SIN_COMPRA.datos);
+  if(vids.length===0){ toast('No hay datos para exportar (todos los clientes compraron, o falta seleccionar un periodo)'); return; }
+  var wb=XLSX.utils.book_new();
+  for(var v=0;v<vids.length;v++){
+    var vid=vids[v];
+    var d=ULTIMO_REPORTE_SIN_COMPRA.datos[vid];
+    var filas=[
+      ['Clientes sin compra - VEND '+vid+' - '+d.nombre],
+      [ULTIMO_REPORTE_SIN_COMPRA.periodo],
+      [],
+      ['Codigo','Cliente']
+    ];
+    for(var c=0;c<d.clientes.length;c++){ filas.push([d.clientes[c].id, d.clientes[c].nombre]); }
+    var ws=XLSX.utils.aoa_to_sheet(filas);
+    ws['!cols']=[{wch:12},{wch:50}];
+    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:1}},{s:{r:1,c:0},e:{r:1,c:1}}];
+    var hojaNombre=('VEND '+vid).substring(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, hojaNombre);
+  }
+  XLSX.writeFile(wb, 'clientes_sin_compra_'+ULTIMO_REPORTE_SIN_COMPRA.periodo.replace(/[\/ ]/g,'_')+'.xlsx', {cellStyles:true});
+  toast('Excel generado');
+}
+
+// Genera una vista imprimible del mismo reporte y abre el dialogo de
+// impresion del navegador (el usuario elige "Guardar como PDF" ahi mismo -
+// funciona en cualquier dispositivo sin depender de una libreria extra).
+function descargarPDFSinCompra(){
+  var vids=Object.keys(ULTIMO_REPORTE_SIN_COMPRA.datos);
+  if(vids.length===0){ toast('No hay datos para exportar (todos los clientes compraron, o falta seleccionar un periodo)'); return; }
+  var html='<html><head><meta charset="UTF-8"><title>Clientes sin compra</title><style>'+
+    'body{font-family:Arial,sans-serif;color:#222;padding:20px}'+
+    'h1{font-size:18px;color:#1B2A6B;margin-bottom:2px}'+
+    '.periodo{font-size:12px;color:#666;margin-bottom:18px}'+
+    '.vend{page-break-inside:avoid;margin-bottom:22px}'+
+    '.vend h2{font-size:14px;color:#1B2A6B;background:#E8EBF8;padding:8px 10px;margin:0 0 8px;border-radius:6px}'+
+    'table{width:100%;border-collapse:collapse;font-size:12px}'+
+    'th{background:#f2f2f2;text-align:left;padding:6px 8px}'+
+    'td{padding:5px 8px;border-bottom:1px solid #eee}'+
+    '@media print{.vend{page-break-after:always}}'+
+    '</style></head><body>'+
+    '<h1>Clientes Sin Compra en el Periodo</h1>'+
+    '<div class="periodo">'+ULTIMO_REPORTE_SIN_COMPRA.periodo+'</div>';
+  for(var v=0;v<vids.length;v++){
+    var vid=vids[v];
+    var d=ULTIMO_REPORTE_SIN_COMPRA.datos[vid];
+    html+='<div class="vend"><h2>VEND '+vid+' - '+d.nombre+' ('+d.clientes.length+' clientes)</h2>'+
+      '<table><tr><th>Codigo</th><th>Cliente</th></tr>';
+    for(var c=0;c<d.clientes.length;c++){
+      html+='<tr><td>'+d.clientes[c].id+'</td><td>'+d.clientes[c].nombre+'</td></tr>';
+    }
+    html+='</table></div>';
+  }
+  html+='</body></html>';
+  var ventana=window.open('', '_blank');
+  if(!ventana){ toast('El navegador bloqueo la ventana emergente - habilitala e intenta de nuevo'); return; }
+  ventana.document.write(html);
+  ventana.document.close();
+  ventana.onload=function(){ ventana.print(); };
+  setTimeout(function(){ try{ ventana.print(); }catch(e){} }, 400);
 }
 
 function rptCorreo(){
@@ -9058,6 +9318,7 @@ function fusionarDocsExcelConBase(baseExistente, docsNuevos){
 }
 
 var ULTIMA_CARGA_CXC_DETALLE=null;
+var ULTIMO_REPORTE_SIN_COMPRA={datos:{}, periodo:''};
 
 // Guarda cada carga de Cuentas por Cobrar en un historial persistente en
 // Firebase, para poder consultarla en sesiones posteriores. Se guarda como
