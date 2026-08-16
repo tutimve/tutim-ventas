@@ -599,6 +599,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <select id="cobroDescuento" onchange="calcularValidacionCobro()">
           <option value="0">Sin descuento</option>
           <option value="5">5%</option>
+          <option value="7">7%</option>
           <option value="10">10%</option>
           <option value="12">12%</option>
           <option value="15">15%</option>
@@ -1166,7 +1167,8 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   <div class="modal">
     <h3>Nuevo cliente</h3>
     <div class="field"><label>Nombre / Razon social</label><input type="text" id="ncNom" placeholder="Ej: Viveres El Sol C.A."></div>
-    <div class="field"><label>RIF / Cedula</label><input type="text" id="ncRif" placeholder="J-xxxxxxxxx"></div>
+    <div class="field"><label>RIF / Cedula</label><input type="text" id="ncRif" placeholder="J-xxxxxxxxx" oninput="verificarRifDuplicado()"></div>
+    <div id="ncRifAviso"></div>
     <div class="field"><label>Persona de Contacto</label><input type="text" id="ncContacto" placeholder="Nombre del contacto"></div>
     <div class="field"><label>Telefono</label><input type="tel" id="ncTel" placeholder="04xx-xxxxxxx"></div>
     <div class="field"><label>Direccion Fiscal</label><input type="text" id="ncDir" placeholder="Direccion fiscal..."></div>
@@ -3365,6 +3367,7 @@ function marcarEnviados(pedidos){
           PEDIDOS[j].recibidoOficina = true;
           PEDIDOS[j].fechaRecibidoOficina = ahora;
           PEDIDOS[j].recibidoPor = VEND.nombre+' (VEND '+VEND.codigo+')';
+          delete PEDIDOS[j].fueModificadoDespuesRecibido;
         } else {
           // Marcado por el propio vendedor
           PEDIDOS[j].enviado = true;
@@ -3401,6 +3404,7 @@ function marcarEnviados(pedidos){
                 pedsVid[k].recibidoOficina=true;
                 pedsVid[k].fechaRecibidoOficina=ahora;
                 pedsVid[k].recibidoPor=VEND.nombre+' (VEND '+VEND.codigo+')';
+                delete pedsVid[k].fueModificadoDespuesRecibido;
               }
             }
             db.collection('vendedores').doc(vid).set({
@@ -3439,6 +3443,8 @@ function renderPedidoCard(p){
     enviadoBadge='<span class="tag tag-a" style="font-size:10px;background:#1B2A6B;color:#fff">Recibido x Oficina '+p.fechaRecibidoOficina+'</span>';
   } else if(p.enviado){
     enviadoBadge='<span class="tag tag-v" style="font-size:10px">Enviado '+p.fechaEnvio+'</span>';
+  } else if(p.fueModificadoDespuesRecibido){
+    enviadoBadge='<span class="tag" style="background:#FCE4D6;color:#9C4221;font-size:10px;font-weight:700">Pendiente (por modificacion)</span>';
   } else {
     enviadoBadge='<span class="tag" style="background:#FFF3CD;color:#856404;font-size:10px">Pendiente</span>';
   }
@@ -3533,7 +3539,7 @@ function verDetallePedidoLista(id){
     ?'<span class="tag tag-r">Anulado</span>'
     :(ped.recibidoOficina?'<span class="tag tag-a" style="background:#1B2A6B;color:#fff">Recibido x Oficina '+(ped.fechaRecibidoOficina||'')+'</span>'
       :(ped.enviado?'<span class="tag tag-v">Enviado '+(ped.fechaEnvio||'')+'</span>'
-        :'<span class="tag" style="background:#FFF3CD;color:#856404">Pendiente</span>'));
+        :'<span class="tag" style="background:#FFF3CD;color:#856404">Pendiente'+(ped.fueModificadoDespuesRecibido?' (por modificacion)':'')+'</span>'));
 
   document.getElementById('detallePedidoListaContenido').innerHTML=
     alertaHtml+
@@ -4496,6 +4502,9 @@ function abrirModalNuevoCli(){
   document.getElementById('ncDirEntrega').value='';
   document.getElementById('ncContacto').value='';
   document.getElementById('ncUbicacion').value='';
+  document.getElementById('ncRifAviso').innerHTML='';
+  var btnGNC=document.getElementById('btnGuardarNuevoCli');
+  if(btnGNC) btnGNC.disabled=false;
   ncDocsData={};
   ['ncDocRif','ncDocRegistro','ncDocCedula','ncDocFoto','ncDocFact'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
@@ -4802,10 +4811,44 @@ function subirArchivo(file, path){
   });
 }
 
+// Busca si el RIF ya esta registrado en la base completa de clientes
+// (CLIENTES_PROFIT trae todos, de todos los vendedores). Devuelve el
+// cliente encontrado, o null si no existe. normalizarRif() ya existe mas
+// abajo en el archivo (usada tambien para reconciliar clientes al importar).
+function buscarClientePorRif(rif){
+  var rifNorm=normalizarRif(rif);
+  if(!rifNorm) return null;
+  for(var i=0;i<CLIENTES_PROFIT.length;i++){
+    if(normalizarRif(CLIENTES_PROFIT[i].rif)===rifNorm) return CLIENTES_PROFIT[i];
+  }
+  return null;
+}
+
+// Se ejecuta mientras el vendedor escribe el RIF al crear un cliente nuevo:
+// si ya existe, avisa y bloquea el boton de Guardar (el cliente pertenece a
+// otro vendedor o ya esta cargado, no se debe duplicar).
+function verificarRifDuplicado(){
+  var rif=document.getElementById('ncRif').value;
+  var avisoEl=document.getElementById('ncRifAviso');
+  var btnG=document.getElementById('btnGuardarNuevoCli');
+  var existente=buscarClientePorRif(rif);
+  if(existente){
+    avisoEl.innerHTML='<div style="background:#FFF3CD;border:1px solid var(--ambar);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px;color:#856404">'+
+      '⚠ Este RIF ya esta registrado a nombre de <strong>'+existente.nombre+'</strong> (Cod: '+existente.id+', VEND '+existente.vendedor+'). '+
+      'Comunicate con Administracion para que te asignen este cliente — no lo crees de nuevo.'+
+    '</div>';
+    if(btnG) btnG.disabled=true;
+  } else {
+    avisoEl.innerHTML='';
+    if(btnG) btnG.disabled=false;
+  }
+}
+
 function guardarNuevoCli(){
   var nom=document.getElementById('ncNom').value.trim();
   var rif=document.getElementById('ncRif').value.trim();
   if(!nom||!rif){toast('Nombre y RIF son obligatorios');return;}
+  if(buscarClientePorRif(rif)){toast('Este RIF ya esta registrado - comunicate con Administracion');return;}
   var mismaDir=document.getElementById('ncMismaDir').value;
   var dirFiscal=document.getElementById('ncDir').value.trim();
   var dirEntrega=mismaDir==='si'?dirFiscal:document.getElementById('ncDirEntrega').value.trim();
@@ -5177,6 +5220,42 @@ function irACobrarCliente(clienteId){
 }
 
 var pedidoEditandoId = null;
+var pedidoEditandoClienteTemp = null;
+
+// Busca clientes (mismo criterio que en Nuevo Pedido) para poder cambiar el
+// cliente de un pedido ya existente, con autocompletado
+function filtrarCliEdit(){
+  var q=document.getElementById('eCliBusq').value.toLowerCase();
+  var cont=document.getElementById('eCliListaBusq');
+  if(!q){ cont.innerHTML=''; return; }
+  var lista=CLIENTES.filter(function(c){
+    return c.nombre.toLowerCase().indexOf(q)>=0 || (c.rif||'').toLowerCase().indexOf(q)>=0 || c.id.indexOf(q)>=0;
+  });
+  if(lista.length>30) lista=lista.slice(0,30);
+  var html='';
+  if(lista.length===0){
+    html='<div style="color:#aaa;font-size:13px;padding:8px;text-align:center">Sin resultados</div>';
+  } else {
+    for(var i=0;i<lista.length;i++){
+      var c=lista[i];
+      html+='<div class="cli-opt" onclick="selCliEdit(&quot;'+c.id+'&quot;)"><div class="cli-nom">'+c.nombre+'</div><div class="cli-det"><span style="font-weight:600;color:var(--azul)">Cod: '+c.id+'</span>'+(c.rif?' | '+c.rif:'')+'</div></div>';
+    }
+  }
+  cont.innerHTML=html;
+}
+
+function selCliEdit(id){
+  var c=CLIENTES.find(function(x){return x.id===id;});
+  if(!c) return;
+  pedidoEditandoClienteTemp={id:c.id, nombre:c.nombre, rif:c.rif, tel:c.tel||''};
+  document.getElementById('eCliBusq').value='';
+  document.getElementById('eCliListaBusq').innerHTML='';
+  document.getElementById('eCliSelNombre').textContent=c.nombre;
+  document.getElementById('eCliSelDetalle').textContent='Cod: '+c.id+(c.rif?' | '+c.rif:'');
+  var telEl=document.getElementById('eCliTel');
+  if(telEl) telEl.value=c.tel||'';
+  toast('Cliente cambiado a '+c.nombre);
+}
 var pedidoAnulandoId = null;
 var pedidoReactivandoId = null;
 var visCliSeleccionado = null;
@@ -5189,6 +5268,9 @@ function editarPedido(pid){
   for(var i=0;i<PEDIDOS.length;i++){if(String(PEDIDOS[i].id)===String(pid)){ped=PEDIDOS[i];break;}}
   if(!ped){toast('Pedido no encontrado');return;}
   pedidoEditandoId = pid;
+  // Cliente temporal para esta edicion: arranca con el cliente actual del
+  // pedido, y se reemplaza si el usuario busca y elige uno distinto
+  pedidoEditandoClienteTemp={id:ped.cliente.id, nombre:ped.cliente.nombre, rif:ped.cliente.rif, tel:ped.cliente.tel||''};
 
   // Cargar datos en el modal
   var lp = ped.listaPrecio || 1;
@@ -5252,9 +5334,12 @@ function editarPedido(pid){
 
   var html =
     '<div class="field"><label>Cliente</label>' +
-    '<input type="text" id="eCliNom" value="'+cliNombre+'" placeholder="Nombre cliente"></div>' +
-    '<div class="field"><label>RIF</label>' +
-    '<input type="text" id="eCliRif" value="'+cliRif+'" placeholder="RIF"></div>' +
+    '<input type="text" id="eCliBusq" placeholder="Buscar cliente por nombre, codigo o RIF..." oninput="filtrarCliEdit()"></div>' +
+    '<div id="eCliListaBusq"></div>' +
+    '<div id="eCliSelActual" style="padding:8px 10px;background:var(--azul-c);border-radius:8px;margin-bottom:12px">' +
+      '<strong id="eCliSelNombre" style="font-size:14px">'+cliNombre+'</strong>' +
+      '<div id="eCliSelDetalle" style="font-size:12px;color:#666;margin-top:2px">Cod: '+ped.cliente.id+(cliRif?' | '+cliRif:'')+'</div>' +
+    '</div>' +
     '<div class="field"><label>Telefono</label>' +
     '<input type="text" id="eCliTel" value="'+(ped.cliente.tel||'')+'"></div>' +
     '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Productos</div>'+prodRows+'</div>' +
@@ -5357,13 +5442,29 @@ function guardarEdicion(){
   for(var i=0;i<PEDIDOS.length;i++){
     if(String(PEDIDOS[i].id)===String(pedidoEditandoId)){
       var ped = PEDIDOS[i];
+      // Si el pedido ya habia sido marcado "Recibido x Oficina" y ahora se
+      // modifica, vuelve a quedar Pendiente (la oficina debe revisarlo de
+      // nuevo), pero se distingue de un pedido nuevo con la etiqueta
+      // "(por modificacion)" para que se note que ya se habia procesado.
+      if(ped.recibidoOficina){
+        ped.recibidoOficina = false;
+        delete ped.fechaRecibidoOficina;
+        delete ped.recibidoPor;
+        ped.fueModificadoDespuesRecibido = true;
+        ped.fechaModificacion = new Date().toLocaleString('es-VE');
+        ped.modificadoPor = VEND.nombre+' (VEND '+VEND.codigo+')';
+      }
       var lp = parseInt(document.getElementById('eListaPrecio').value) || 1;
       var fp = document.getElementById('ePago').value;
       var ff = document.getElementById('eFact').value;
 
-      // Actualizar cliente
-      ped.cliente.nombre = document.getElementById('eCliNom').value.trim() || ped.cliente.nombre;
-      ped.cliente.rif = document.getElementById('eCliRif').value.trim() || ped.cliente.rif;
+      // Actualizar cliente: se usa el que quedo seleccionado en el buscador
+      // (por defecto, el mismo que ya tenia el pedido si no se cambio nada)
+      if(pedidoEditandoClienteTemp){
+        ped.cliente.id = pedidoEditandoClienteTemp.id;
+        ped.cliente.nombre = pedidoEditandoClienteTemp.nombre;
+        ped.cliente.rif = pedidoEditandoClienteTemp.rif;
+      }
       ped.cliente.tel = document.getElementById('eCliTel').value.trim();
 
       // Actualizar items y recalcular totales, y el precio EXACTO
@@ -6328,7 +6429,7 @@ function verDetallePedidoRpt(pedId){
   }
   var formaPagoTxt={'01':'Contado','05':'Prepagado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'}[p.formaPago]||p.formaPago||'';
   var factTxt={'fiscal':'100% Fiscal','nota':'Solo N.Entrega','mixto':'50% Fiscal / 50% N.Entrega'}[p.tipoFact]||p.tipoFact||'';
-  var estadoTxt=p.anulado?'<span class="tag tag-r">Anulado</span>':(p.recibidoOficina?'<span class="tag tag-v">Recibido x Oficina</span>':(p.enviado?'<span class="tag tag-a">Enviado</span>':'<span class="tag" style="background:#FFF3CD;color:#856404">Pendiente</span>'));
+  var estadoTxt=p.anulado?'<span class="tag tag-r">Anulado</span>':(p.recibidoOficina?'<span class="tag tag-v">Recibido x Oficina</span>':(p.enviado?'<span class="tag tag-a">Enviado</span>':'<span class="tag" style="background:#FFF3CD;color:#856404">Pendiente'+(p.fueModificadoDespuesRecibido?' (por modificacion)':'')+'</span>'));
   var html=
     '<div style="margin-bottom:10px">'+
       '<strong style="font-size:15px">'+p.cliente.nombre+'</strong> '+estadoTxt+
