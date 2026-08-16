@@ -589,7 +589,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 
     <div class="card hidden" id="cobroFormCard">
       <div class="card-title">Datos del pago</div>
-      <div class="field"><label>Fecha del pago</label><input type="date" id="cobroFecha"></div>
+      <div class="field"><label>Fecha del pago (o del primer abono)</label><input type="date" id="cobroFecha" onchange="onCambioFechaPrincipalCobro()"></div>
 
       <div id="cobroDepositosList"></div>
       <button type="button" class="btn btn-s btn-sm" style="margin-bottom:10px" onclick="agregarDepositoCobro()">+ Agregar otro deposito</button>
@@ -9704,13 +9704,14 @@ function renderDocsPendientesCliente(clienteId, preservarSeleccion){
   document.getElementById('cobroFormCard').classList.remove('hidden');
   if(preservarSeleccion) return;
   var ahoraC=new Date();
-  document.getElementById('cobroFecha').value=ahoraC.getFullYear()+'-'+String(ahoraC.getMonth()+1).padStart(2,'0')+'-'+String(ahoraC.getDate()).padStart(2,'0');
+  var fechaHoyC=ahoraC.getFullYear()+'-'+String(ahoraC.getMonth()+1).padStart(2,'0')+'-'+String(ahoraC.getDate()).padStart(2,'0');
+  document.getElementById('cobroFecha').value=fechaHoyC;
   document.getElementById('cobroDescuento').value='0';
   cobroComprobantesData=[];
   document.getElementById('cobroComprobantes').value='';
   document.getElementById('cobroComprobantesPrev').innerHTML='';
   document.getElementById('cobroValidacion').innerHTML='';
-  cobroDepositos=[{formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:''}];
+  cobroDepositos=[{formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:'', fecha:fechaHoyC}];
   renderDepositosCobro();
 }
 
@@ -9731,8 +9732,8 @@ function editarPagoRechazado(pagoId){
   renderDocsPendientesCliente(pago.clienteId, true);
   document.getElementById('cobroFecha').value=pago.fecha;
   document.getElementById('cobroDescuento').value=pago.descuentoPct||0;
-  cobroDepositos=(pago.depositos||[]).map(function(d){ var c={}; for(var k in d) c[k]=d[k]; return c; });
-  if(cobroDepositos.length===0) cobroDepositos=[{formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:''}];
+  cobroDepositos=(pago.depositos||[]).map(function(d){ var c={}; for(var k in d) c[k]=d[k]; if(!c.fecha) c.fecha=pago.fecha; return c; });
+  if(cobroDepositos.length===0) cobroDepositos=[{formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:'', fecha:pago.fecha}];
   renderDepositosCobro();
   cobroComprobantesData=[];
   document.getElementById('cobroComprobantes').value='';
@@ -9768,9 +9769,20 @@ function toggleDocCobro(numero, checked){
 
 // ═══ COBROS: uno o varios depositos por pago ═══
 function agregarDepositoCobro(){
-  cobroDepositos.push({formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:''});
+  var fechaBase=document.getElementById('cobroFecha').value;
+  cobroDepositos.push({formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:'', fecha:fechaBase});
   renderDepositosCobro();
   calcularValidacionCobro();
+}
+
+// Si el usuario cambia la fecha principal ANTES de tener depositos con
+// fecha propia ya puesta a mano, se refleja tambien en el primer deposito
+// (comportamiento esperado la mayoria de las veces: un solo abono).
+function onCambioFechaPrincipalCobro(){
+  if(cobroDepositos.length===1 && !cobroDepositos[0]._fechaEditadaManual){
+    cobroDepositos[0].fecha=document.getElementById('cobroFecha').value;
+    renderDepositosCobro();
+  }
 }
 
 function eliminarDepositoCobro(idx){
@@ -9814,6 +9826,7 @@ function onInputCentavos(el, idx, campo, decimales){
 
 function actualizarCampoDeposito(idx, campo, valor){
   cobroDepositos[idx][campo]=valor;
+  if(campo==='fecha') cobroDepositos[idx]._fechaEditadaManual=true;
   if(campo==='formaPago') renderDepositosCobro();
   calcularValidacionCobro();
 }
@@ -9830,6 +9843,8 @@ function renderDepositosCobro(){
         '<strong style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.5px">Deposito '+(i+1)+'</strong>'+
         (cobroDepositos.length>1?'<button type="button" onclick="eliminarDepositoCobro('+i+')" style="background:none;border:none;color:var(--rojo);font-size:12px;font-weight:600;cursor:pointer">Quitar</button>':'')+
       '</div>'+
+      '<div class="field"><label>Fecha de este deposito</label>'+
+        '<input type="date" value="'+(d.fecha||'')+'" onchange="actualizarCampoDeposito('+i+',&quot;fecha&quot;,this.value)"></div>'+
       '<div class="field"><label>Forma de pago</label>'+
         '<select onchange="actualizarCampoDeposito('+i+',&quot;formaPago&quot;,this.value)">'+
           '<option value="transferencia"'+(d.formaPago==='transferencia'?' selected':'')+'>Transferencia</option>'+
@@ -9942,9 +9957,11 @@ function guardarPagoCobro(){
   var montoUSDTotal=0;
   for(var i=0;i<cobroDepositos.length;i++){
     var d=cobroDepositos[i];
+    var fechaDeposito=d.fecha||fecha;
+    if(!fechaDeposito){ toast('Indica la fecha del deposito '+(i+1)); return; }
     var monto=parseFloat(String(d.monto).replace(/,/g,''))||0;
     if(monto<=0){ toast('Indica el monto del deposito '+(i+1)); return; }
-    var dCopia={formaPago:d.formaPago, monto:monto};
+    var dCopia={formaPago:d.formaPago, monto:monto, fecha:fechaDeposito};
     if(d.formaPago==='transferencia'){
       var referencia=(d.referencia||'').trim();
       if(referencia.length!==6){ toast('La referencia del deposito '+(i+1)+' debe tener 6 digitos'); return; }
@@ -10137,7 +10154,7 @@ function renderPagoCobroCard(p){
     p.depositos.forEach(function(d,idx){
       var esT=d.formaPago==='transferencia';
       depsHtml+='<div style="font-size:11px;color:#888;margin-top:2px">'+
-        (p.depositos.length>1?('Deposito '+(idx+1)+': '):'')+
+        (p.depositos.length>1?('Deposito '+(idx+1)+(d.fecha&&d.fecha!==p.fecha?' ('+d.fecha+')':'')+': '):'')+
         (esT?('Transferencia - '+BANCOS_COBRO[d.banco]+' - Ref: '+d.referencia):(d.formaPago==='efectivo'?'Efectivo':'Divisas'))+
         ' - $'+formatearNumeroConMiles(d.montoUSD||0,2)+
       '</div>';
