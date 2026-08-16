@@ -3216,7 +3216,9 @@ function precioUnitarioPedido(p, productoId, prod){
 function soloGuardar(){
   if(_pedidoYaGuardado){ cerrarModal('mConfirmar'); goScreen('historial'); return; }
   _pedidoYaGuardado=true;
-  PEDIDOS.unshift(crearObj());guardarLS();
+  var pedNuevo=crearObj();
+  PEDIDOS.unshift(pedNuevo);guardarLS();
+  ajustarStockEstimado(calcularDeltaStockPedido(pedNuevo), -1);
   cerrarModal('mConfirmar');actualizarMetricas();
   toast('Pedido guardado');goScreen('historial');
 }
@@ -3252,7 +3254,9 @@ function construirMsgWA(){
 function enviarWA(){
   if(_pedidoYaGuardado){ cerrarModal('mConfirmar'); goScreen('historial'); return; }
   _pedidoYaGuardado=true;
-  PEDIDOS.unshift(crearObj());guardarLS();
+  var pedNuevoWA=crearObj();
+  PEDIDOS.unshift(pedNuevoWA);guardarLS();
+  ajustarStockEstimado(calcularDeltaStockPedido(pedNuevoWA), -1);
   cerrarModal('mConfirmar');actualizarMetricas();
   window.open('https://wa.me/'+WA_RESUMEN+'?text='+encodeURIComponent(construirMsgWA()),'_blank');
   goScreen('historial');
@@ -5489,6 +5493,10 @@ function guardarEdicion(){
   for(var i=0;i<PEDIDOS.length;i++){
     if(String(PEDIDOS[i].id)===String(pedidoEditandoId)){
       var ped = PEDIDOS[i];
+      // Se guarda una copia de lo que tenia ANTES de editar, para poder
+      // devolver ese stock estimado y consumir el nuevo despues del cambio
+      var itemsAntesEditar = JSON.parse(JSON.stringify(ped.items||{}));
+      var bonifAntesEditar = JSON.parse(JSON.stringify(ped.bonificacionesUnidades||{}));
       // Si el pedido ya habia sido marcado "Recibido x Oficina" y ahora se
       // modifica, vuelve a quedar Pendiente (la oficina debe revisarlo de
       // nuevo), pero se distingue de un pedido nuevo con la etiqueta
@@ -5564,6 +5572,10 @@ function guardarEdicion(){
       ped.formaPagoL = FP_LABELS[fp] || fp;
       ped.tipoFact = ff;
       ped.tipoFactL = FF_LABELS[ff] || ff;
+      if(!ped.anulado){
+        ajustarStockEstimado(calcularDeltaStockPedido({items:itemsAntesEditar, bonificacionesUnidades:bonifAntesEditar}), 1);
+        ajustarStockEstimado(calcularDeltaStockPedido(ped), -1);
+      }
       ped.promo = document.getElementById('ePromo').value;
       ped.obs = document.getElementById('eObs').value;
       ped.editado = true;
@@ -5659,6 +5671,7 @@ function ejecutarAnular(){
     }
   }
   if(!pedObj){ cerrarModal('mAnular'); return; }
+  ajustarStockEstimado(calcularDeltaStockPedido(pedObj), 1);
   var verTodosA=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
   if(!verTodosA){
     guardarLS();
@@ -5753,6 +5766,7 @@ function ejecutarReactivar(){
     toast('Solo el vendedor del pedido o un administrador pueden reactivarlo');
     return;
   }
+  ajustarStockEstimado(calcularDeltaStockPedido(pedObj), -1);
   var verTodosR=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
   if(!verTodosR){
     guardarLS();
@@ -7029,6 +7043,118 @@ function mejorOrientacionEstiba(prod, anchoContCm, alturaUtilCm){
   return mejor;
 }
 
+// ═══ STOCK ESTIMADO "EN VIVO" (solo para Reposicion, no lo ve el vendedor) ═══
+// Entre una importacion de inventario y la siguiente, se va descontando
+// aqui lo que se vende (incluyendo lo regalado por promociones), para
+// saber con precision en que dias cada producto se quedo realmente en
+// cero. PRODUCTOS[].stock (lo que ve el vendedor al armar un pedido) NO
+// se toca con esto - solo cambia con una importacion o edicion manual.
+var STOCK_ESTIMADO={};
+// Periodos en los que el estimado de cada producto llego a 0:
+// {productoId: [{desde:'YYYY-MM-DD', hasta:'YYYY-MM-DD'|null}, ...]}
+// hasta:null significa que el periodo sigue abierto (todavia agotado)
+var HISTORIAL_AGOTADO={};
+
+// Detecta si un valor "antes"/"despues" cruzo el cero, y abre o cierra el
+// periodo correspondiente en HISTORIAL_AGOTADO. Se usa tanto al consumir
+// stock por un pedido como al resetear con una importacion.
+function registrarPosibleCruceAgotado(pid, antes, despues, fechaISO){
+  if(!HISTORIAL_AGOTADO[pid]) HISTORIAL_AGOTADO[pid]=[];
+  var periodos=HISTORIAL_AGOTADO[pid];
+  var ultimoAbierto=(periodos.length>0 && periodos[periodos.length-1].hasta===null)?periodos[periodos.length-1]:null;
+  if(antes>0.001 && despues<=0.001 && !ultimoAbierto){
+    periodos.push({desde:fechaISO, hasta:null});
+  } else if(antes<=0.001 && despues>0.001 && ultimoAbierto){
+    ultimoAbierto.hasta=fechaISO;
+  }
+}
+
+// Bultos (equivalentes) que un pedido consume del stock real: lo
+// facturado (items) + lo regalado por promociones (bonificacionesUnidades,
+// convertido a bultos-equivalente con las unidades por bulto de cada
+// producto). Devuelve {productoId: bultosConsumidos}
+function calcularDeltaStockPedido(ped){
+  var delta={};
+  var ids=Object.keys(ped.items||{});
+  for(var i=0;i<ids.length;i++){
+    var pid=ids[i], qty=ped.items[pid]||0;
+    if(!qty) continue;
+    delta[pid]=(delta[pid]||0)+qty;
+  }
+  if(ped.bonificacionesUnidades){
+    var bonifIds=Object.keys(ped.bonificacionesUnidades);
+    for(var i=0;i<bonifIds.length;i++){
+      var bpid=bonifIds[i];
+      var bonifUnid=ped.bonificacionesUnidades[bpid]||0;
+      if(!bonifUnid) continue;
+      var prod=null;
+      for(var j=0;j<PRODUCTOS.length;j++){ if(PRODUCTOS[j].id===bpid){ prod=PRODUCTOS[j]; break; } }
+      var uniVenta=prod?(parseInt(prod.uni_venta)||1):1;
+      delta[bpid]=(delta[bpid]||0)+(bonifUnid/uniVenta);
+    }
+  }
+  return delta;
+}
+
+// Aplica un delta de consumo/devolucion al stock estimado. signo=-1 para
+// consumir (pedido creado o reactivado), signo=+1 para devolver (pedido
+// anulado, o revertir lo viejo al editar).
+function ajustarStockEstimado(delta, signo){
+  var hoyISO=fechaHoyISO();
+  var ids=Object.keys(delta);
+  var huboCambios=false;
+  for(var i=0;i<ids.length;i++){
+    var pid=ids[i];
+    var cantidad=delta[pid];
+    if(!cantidad) continue;
+    var antes=STOCK_ESTIMADO[pid];
+    if(antes===undefined){
+      var prod=null;
+      for(var j=0;j<PRODUCTOS.length;j++){ if(PRODUCTOS[j].id===pid){ prod=PRODUCTOS[j]; break; } }
+      antes=prod?(prod.stock||0):0;
+    }
+    var despues=antes+(signo*cantidad);
+    STOCK_ESTIMADO[pid]=despues;
+    registrarPosibleCruceAgotado(pid, antes, despues, hoyISO);
+    huboCambios=true;
+  }
+  if(huboCambios) guardarStockEstimadoFirebase();
+}
+
+// Cuando llega una importacion (manual o DBF/CSV), el stock oficial pisa
+// cualquier desviacion acumulada - se resetea el estimado a ese valor.
+function resetStockEstimadoPorImportacion(pid, nuevoStock){
+  var hoyISO=fechaHoyISO();
+  var antes=STOCK_ESTIMADO[pid];
+  if(antes===undefined) antes=nuevoStock;
+  STOCK_ESTIMADO[pid]=nuevoStock;
+  registrarPosibleCruceAgotado(pid, antes, nuevoStock, hoyISO);
+}
+
+// Consulta si, segun el historial de stock estimado, un producto estaba
+// agotado en una fecha dada (YYYY-MM-DD). Se usa en Reposicion para no
+// contar esos dias como demanda cero por falta de interes del mercado.
+function diaEstabaAgotado(pid, fISO){
+  var periodos=HISTORIAL_AGOTADO[pid];
+  if(!periodos) return false;
+  for(var i=0;i<periodos.length;i++){
+    var per=periodos[i];
+    if(fISO>=per.desde && (per.hasta===null || fISO<=per.hasta)) return true;
+  }
+  return false;
+}
+
+function guardarStockEstimadoFirebase(){
+  db.collection('config').doc('stock_estimado').set({
+    data: JSON.stringify(STOCK_ESTIMADO),
+    actualizado: new Date().toISOString()
+  }).catch(function(){});
+  db.collection('config').doc('historial_agotado').set({
+    data: JSON.stringify(HISTORIAL_AGOTADO),
+    actualizado: new Date().toISOString()
+  }).catch(function(){});
+}
+
 function calcularReposicion(){
   var resEl=document.getElementById('repoResultados');
   resEl.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando ventas historicas...</div>';
@@ -7115,15 +7241,26 @@ function calcularReposicion(){
       if(prod.activo===false) continue;
       var diasVenta=porProductoDia[prod.id]||{};
       var valoresDias=[];
+      var valoresDiasEfectivos=[];
+      var diasAgotadoEnVentana=0;
       for(var d=0;d<ventana;d++){
         var fecha=new Date(desde); fecha.setDate(desde.getDate()+d);
         var fISO2=fecha.getFullYear()+'-'+String(fecha.getMonth()+1).padStart(2,'0')+'-'+String(fecha.getDate()).padStart(2,'0');
-        valoresDias.push(diasVenta[fISO2]||0);
+        var valorDia=diasVenta[fISO2]||0;
+        valoresDias.push(valorDia);
+        // Si el producto estuvo agotado ese dia (segun el stock estimado
+        // calculado en vivo desde los pedidos), no cuenta como "el mercado
+        // no lo quiso" - se excluye del promedio para no subestimar la
+        // rotacion real.
+        if(diaEstabaAgotado(prod.id, fISO2)) diasAgotadoEnVentana++;
+        else valoresDiasEfectivos.push(valorDia);
       }
       var totalVentas=0; for(var vi=0;vi<valoresDias.length;vi++) totalVentas+=valoresDias[vi];
-      var promedioDiario=totalVentas/ventana;
-      var sumaCuad=0; for(var vi=0;vi<valoresDias.length;vi++) sumaCuad+=Math.pow(valoresDias[vi]-promedioDiario,2);
-      var stdDev=Math.sqrt(sumaCuad/ventana);
+      var diasEfectivos=valoresDiasEfectivos.length>0?valoresDiasEfectivos.length:ventana;
+      var totalVentasEfectivas=valoresDiasEfectivos.length>0?valoresDiasEfectivos.reduce(function(a,b){return a+b;},0):totalVentas;
+      var promedioDiario=totalVentasEfectivas/diasEfectivos;
+      var sumaCuad=0; for(var vi=0;vi<valoresDiasEfectivos.length;vi++) sumaCuad+=Math.pow(valoresDiasEfectivos[vi]-promedioDiario,2);
+      var stdDev=Math.sqrt(sumaCuad/diasEfectivos);
       var stockActual=prod.stock||0;
       var coberturaActualDias=promedioDiario>0?(stockActual/promedioDiario):999;
       var safetyStock=z*stdDev*Math.sqrt(leadTime);
@@ -7141,7 +7278,7 @@ function calcularReposicion(){
         promedioDiario:promedioDiario, coberturaActualDias:coberturaActualDias,
         cantidadSugerida:cantidadSugerida, estado:estado,
         filaLargo:orientacion?orientacion.largoDim:0, cajasPorFila:orientacion?orientacion.cajasPorFila:0,
-        sinMedidas:!orientacion
+        sinMedidas:!orientacion, diasAgotadoEnVentana:diasAgotadoEnVentana
       });
     }
 
@@ -7306,7 +7443,7 @@ function calcularReposicion(){
       var pctSugerido=totalBultosFinal>0?(f.cantidadSugeridaAjustada/totalBultosFinal*100):0;
       if(f.sinMedidas) hayProductosSinMedidas=true;
       html+='<tr style="border-bottom:1px solid #eee">'+
-        '<td style="padding:6px 6px 6px 0;font-weight:600;overflow:hidden;text-overflow:ellipsis">'+f.nombre+(f.sinMedidas?' <span title="Faltan medidas de la caja" style="color:#D68910">&#9888;</span>':'')+'</td>'+
+        '<td style="padding:6px 6px 6px 0;font-weight:600;overflow:hidden;text-overflow:ellipsis">'+f.nombre+(f.sinMedidas?' <span title="Faltan medidas de la caja" style="color:#D68910">&#9888;</span>':'')+(f.diasAgotadoEnVentana>0?' <span title="Estuvo agotado '+f.diasAgotadoEnVentana+' dia(s) dentro de este rango - esos dias no se contaron como demanda cero" style="color:#C0392B">&#128230;</span>':'')+'</td>'+
         '<td style="padding:6px">'+f.stockActual+' bto</td>'+
         '<td style="padding:6px">'+f.promedioDiario.toFixed(2)+'</td>'+
         '<td style="padding:6px">'+(f.coberturaActualDias>900?'999+':f.coberturaActualDias.toFixed(0))+' d</td>'+
@@ -7402,8 +7539,10 @@ function guardarInventario(){
       var bultos=parseInt(inp.value)||0;
       p.stock=bultos;
       p.stock_und=bultos*parseInt(p.uni_venta||1);
+      resetStockEstimadoPorImportacion(p.id, bultos);
     }
   }
+  guardarStockEstimadoFirebase();
   // Guardar en Firebase
   db.collection('config').doc('inventario').set({
     data: JSON.stringify(PRODUCTOS.map(function(p){return {id:p.id,stock_und:p.stock_und,stock:p.stock};})),
@@ -7647,10 +7786,24 @@ function guardarProducto(){
   }
 }
 
+// IMPORTANTE: el catalogo de productos NUNCA debe guardar stock/stock_und.
+// El stock real vive UNICAMENTE en config/inventario (se actualiza solo con
+// una importacion o edicion manual desde Admin -> Inventario). Si el
+// catalogo tambien guardara una copia del stock, cualquier accion que lo
+// resalve (como cargar un archivo de precios) terminaria congelando en
+// Firebase el valor de stock que hubiera en memoria en ESE momento,
+// pudiendo pisar mas adelante al stock real importado si algo queda
+// desincronizado. Separando por completo ambos datos, este riesgo
+// desaparece del todo.
 function guardarCatalogoProductosFirebase(){
   renderAdminProductos();
+  var catalogoSinStock=PRODUCTOS.map(function(p){
+    var copia={};
+    for(var k in p){ if(k!=='stock' && k!=='stock_und') copia[k]=p[k]; }
+    return copia;
+  });
   db.collection('config').doc('catalogo_productos').set({
-    data: JSON.stringify(PRODUCTOS),
+    data: JSON.stringify(catalogoSinStock),
     actualizado: new Date().toISOString()
   }).catch(function(){ toast('Error al guardar el catalogo de productos'); });
 }
@@ -8907,7 +9060,9 @@ function cargarConfigFirebase(callback){
     db.collection('config').doc('promociones_custom').get(),
     db.collection('config').doc('catalogo_productos').get(),
     db.collection('config').doc('reposicion').get(),
-    db.collection('config').doc('reposicion_historial').get()
+    db.collection('config').doc('reposicion_historial').get(),
+    db.collection('config').doc('stock_estimado').get(),
+    db.collection('config').doc('historial_agotado').get()
   ];
   Promise.all(promesas).then(function(docs){
     // Catalogo completo de productos (reemplaza el listado inicial si ya
@@ -8923,7 +9078,16 @@ function cargarConfigFirebase(callback){
         var catalogo=JSON.parse(docs[10].data().data||'[]');
         if(catalogo.length>0){
           PRODUCTOS.length=0;
-          for(var i=0;i<catalogo.length;i++) PRODUCTOS.push(catalogo[i]);
+          for(var i=0;i<catalogo.length;i++){
+            // Por seguridad: si este catalogo se guardo con una version
+            // anterior de la app (antes de separar stock del catalogo),
+            // puede traer un stock/stock_und viejo pegado. Se anula aqui
+            // para que el UNICO que pueda definir el stock sea el overlay
+            // de "Inventario" de mas abajo - nunca un residuo del catalogo.
+            delete catalogo[i].stock;
+            delete catalogo[i].stock_und;
+            PRODUCTOS.push(catalogo[i]);
+          }
         }
       }
     }catch(e){}
@@ -8957,6 +9121,12 @@ function cargarConfigFirebase(callback){
         if(!PRODUCTOS[j].stock && PRODUCTOS[j].stock_und){
           PRODUCTOS[j].stock=Math.floor(PRODUCTOS[j].stock_und/parseInt(PRODUCTOS[j].uni_venta||1));
         }
+        // Respaldo final: un producto que solo exista en el catalogo (sin
+        // haber pasado nunca por una importacion de inventario) no debe
+        // quedar con stock "undefined" en pantalla - se muestra como 0
+        // (agotado) hasta que se cargue su stock real.
+        if(PRODUCTOS[j].stock===undefined) PRODUCTOS[j].stock=0;
+        if(PRODUCTOS[j].stock_und===undefined) PRODUCTOS[j].stock_und=0;
       }
     }catch(e){}
     // Precios
@@ -9057,6 +9227,24 @@ function cargarConfigFirebase(callback){
         var repoHist=JSON.parse(docs[12].data().data||'[]');
         REPO_HISTORIAL.length=0;
         for(var i=0;i<repoHist.length;i++) REPO_HISTORIAL.push(repoHist[i]);
+      }
+    }catch(e){}
+    // Stock estimado en vivo (interno, solo para Reposicion) e historial de
+    // periodos agotados por producto
+    try{
+      if(docs[13] && docs[13].exists){
+        var stockEstGuardado=JSON.parse(docs[13].data().data||'{}');
+        for(var k in stockEstGuardado) STOCK_ESTIMADO[k]=stockEstGuardado[k];
+      }
+      if(docs[14] && docs[14].exists){
+        var histAgotGuardado=JSON.parse(docs[14].data().data||'{}');
+        for(var k in histAgotGuardado) HISTORIAL_AGOTADO[k]=histAgotGuardado[k];
+      }
+      // Cualquier producto que todavia no tenga un valor propio (primera
+      // vez que corre esta funcionalidad, o producto nuevo) arranca desde
+      // su stock oficial actual
+      for(var i=0;i<PRODUCTOS.length;i++){
+        if(STOCK_ESTIMADO[PRODUCTOS[i].id]===undefined) STOCK_ESTIMADO[PRODUCTOS[i].id]=PRODUCTOS[i].stock||0;
       }
     }catch(e){}
     // Llamar callback cuando todo está listo
