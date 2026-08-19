@@ -9806,7 +9806,11 @@ function renderVerificadorResultado(){
     }
   }
   if((VERIF_FILTRO_ACTUAL==='todos'||VERIF_FILTRO_ACTUAL==='huerfanos') && huerfanos.length>0){
-    html+='<div style="font-weight:600;font-size:13px;margin:10px 0 6px;color:var(--ambar)">Cobros confirmados sin reflejar ('+huerfanos.length+')</div>';
+    var huerfanosConDoc=huerfanos.filter(function(h){return h.existe;});
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px">'+
+      '<div style="font-weight:600;font-size:13px;color:var(--ambar)">Cobros confirmados sin reflejar ('+huerfanos.length+')</div>'+
+      (huerfanosConDoc.length>1?'<button class="btn btn-p btn-sm" onclick="reaplicarTodosLosHuerfanos()">Reaplicar todos ('+huerfanosConDoc.length+')</button>':'')+
+    '</div>';
     for(var h=0;h<huerfanos.length;h++){
       var hf=huerfanos[h];
       html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
@@ -9822,6 +9826,36 @@ function renderVerificadorResultado(){
     }
   }
   el.innerHTML=html;
+}
+
+// --- Reaplicar TODOS los abonos huerfanos de una vez (misma logica que
+// abrirReaplicarAbono/ejecutarReaplicarAbono, pero en lote) ---
+function reaplicarTodosLosHuerfanos(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  var huerfanos=(VERIF_ULTIMO_HUERFANOS||[]).filter(function(h){return h.existe;});
+  if(huerfanos.length===0){ toast('No hay abonos pendientes por reaplicar'); return; }
+  if(!confirm('Vas a reaplicar '+huerfanos.length+' abono(s) de una vez, restando cada monto confirmado del saldo actual de su documento. ¿Confirmas?')) return;
+  var aplicados=0;
+  for(var h=0;h<huerfanos.length;h++){
+    var hf=huerfanos[h];
+    var doc=null;
+    for(var k=0;k<CUENTAS_COBRAR.length;k++){ if(CUENTAS_COBRAR[k].numero===hf.numero){ doc=CUENTAS_COBRAR[k]; break; } }
+    if(!doc) continue;
+    doc.saldoAntesUltimoPago=doc.saldo;
+    doc.saldo=Math.round((doc.saldo-hf.monto)*100)/100;
+    doc.abonadoEnApp=true;
+    aplicados++;
+  }
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    toast(aplicados+' abono(s) reaplicados correctamente');
+    renderResumenCxC();
+    verificarIntegridadCobros();
+  }).catch(function(){
+    toast('Error guardando en Firebase, intenta de nuevo');
+  });
 }
 
 // --- Reaplicar abono a un documento que quedo sin marcar (con confirmacion editable) ---
@@ -10715,7 +10749,18 @@ function aplicarPagoADocumentosCxC(pago, saldoPendienteObjetivo){
     var doc=CUENTAS_COBRAR.find(function(x){return x.numero===num;});
     if(!doc) continue;
     var saldoAntes=doc.saldo;
-    doc.saldoAntesUltimoPago=doc.saldo;
+    // IMPORTANTE: esta funcion se llama DOS VECES por cada pago (al
+    // reportarlo, y de nuevo al confirmarlo) - eso es intencional para
+    // que sea idempotente. Pero saldoAntesUltimoPago debe capturar el
+    // saldo verdadero de ANTES de que este pago tocara el documento por
+    // primera vez, no el saldo ya reducido de la segunda pasada - si no,
+    // reconciliarCxC() nunca puede reconocer "esto es lo mismo que ya
+    // tenia" cuando llega un Excel nuevo, y termina pisando el pago ya
+    // aplicado. Por eso solo se captura si ESTE pago (no otro) todavia no
+    // le habia aplicado nada a este documento.
+    if(!pago.documentos[i].montoAplicado){
+      doc.saldoAntesUltimoPago=doc.saldo;
+    }
     var esUltimo=(i===pago.documentos.length-1);
     if(esUltimo){
       // Al ultimo documento se le deja exactamente lo que sobre o falte,
