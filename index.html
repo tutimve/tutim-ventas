@@ -1560,6 +1560,21 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
+<!-- MODAL EDITAR SALDO DE UN DOCUMENTO CXC -->
+<div class="modal-bg" id="mEditarSaldoCxC">
+  <div class="modal">
+    <h3 style="color:var(--azul)">Editar saldo del documento</h3>
+    <p style="font-size:13px;color:#555;margin-bottom:6px">Doc. <strong id="editarSaldoNumero"></strong> — <span id="editarSaldoCliente"></span></p>
+    <p style="font-size:12px;color:#888;margin-bottom:14px">Saldo actual: <strong id="editarSaldoActual"></strong>. Escribe el nuevo saldo (puede ser negativo si es un saldo a favor). Este cambio queda registrado con tu nombre y la fecha.</p>
+    <div class="field"><label>Nuevo saldo (US$)</label><input type="number" step="0.01" id="editarSaldoNuevoInput"></div>
+    <div class="field"><label>Motivo del ajuste (obligatorio)</label><textarea id="editarSaldoMotivo" rows="2" placeholder="Ej: correccion manual solicitada por administracion, ajuste de nota de credito, etc."></textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:var(--azul);color:#fff;font-weight:600" onclick="ejecutarEditarSaldoCxC()">Guardar nuevo saldo</button>
+      <button class="btn btn-s" onclick="cerrarModal('mEditarSaldoCxC')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL REAPLICAR ABONO A UN DOCUMENTO CXC -->
 <div class="modal-bg" id="mReaplicarAbono">
   <div class="modal">
@@ -9705,6 +9720,54 @@ function ejecutarEliminarDocCxC(){
   });
 }
 
+// --- Editar saldo de un documento CxC directamente (solo 01/20). Para
+// cualquier ajuste manual que no encaje en "reportar un pago" ni en
+// "reaplicar abono" - queda registrado con quien lo hizo, cuando, y el
+// motivo, para poder auditarlo despues. ---
+var docCxCEditandoSaldoNumero=null;
+function confirmarEditarSaldoCxC(numero){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  var doc=null;
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(CUENTAS_COBRAR[i].numero===numero){ doc=CUENTAS_COBRAR[i]; break; } }
+  if(!doc){ toast('No se encontro el documento'); return; }
+  docCxCEditandoSaldoNumero=numero;
+  var cliReal=null;
+  for(var j=0;j<CLIENTES_PROFIT.length;j++){ if(CLIENTES_PROFIT[j].id===doc.clienteId){ cliReal=CLIENTES_PROFIT[j]; break; } }
+  document.getElementById('editarSaldoNumero').textContent=numero;
+  document.getElementById('editarSaldoCliente').textContent=(cliReal?cliReal.nombre:doc.clienteNombre)+' (Cod: '+doc.clienteId+')';
+  document.getElementById('editarSaldoActual').textContent='$'+formatearNumeroConMiles(doc.saldo,2);
+  document.getElementById('editarSaldoNuevoInput').value=doc.saldo;
+  document.getElementById('editarSaldoMotivo').value='';
+  document.getElementById('mEditarSaldoCxC').classList.add('open');
+}
+function ejecutarEditarSaldoCxC(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))){ cerrarModal('mEditarSaldoCxC'); return; }
+  var numero=docCxCEditandoSaldoNumero;
+  var doc=null;
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(CUENTAS_COBRAR[i].numero===numero){ doc=CUENTAS_COBRAR[i]; break; } }
+  if(!doc){ cerrarModal('mEditarSaldoCxC'); toast('El documento ya no existe'); return; }
+  var nuevoSaldo=parseFloat(document.getElementById('editarSaldoNuevoInput').value);
+  if(isNaN(nuevoSaldo)){ toast('Indica un saldo valido'); return; }
+  var motivo=document.getElementById('editarSaldoMotivo').value.trim();
+  if(!motivo){ toast('El motivo del ajuste es obligatorio'); return; }
+  var saldoAnterior=doc.saldo;
+  doc.saldo=Math.round(nuevoSaldo*100)/100;
+  doc.ajusteManual={
+    saldoAnterior:saldoAnterior, saldoNuevo:doc.saldo, motivo:motivo,
+    realizadoPor:VEND.nombre+' (VEND '+VEND.codigo+')', fecha:new Date().toLocaleString('es-VE')
+  };
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    cerrarModal('mEditarSaldoCxC');
+    toast('Saldo del documento '+numero+' actualizado');
+    renderResumenCxC();
+  }).catch(function(){
+    toast('Error guardando en Firebase, intenta de nuevo');
+  });
+}
+
 // ═══ VERIFICADOR DE INTEGRIDAD DE COBROS ═══
 // Detecta dos tipos de problema:
 // 1) Documentos duplicados: mismo "numero" repetido en la base actual
@@ -9940,6 +10003,9 @@ function renderListaCxCAdmin(){
         :(d.origenBase==='diferencia'
           ?' <span class="tag" style="background:#e3d9fc;color:#5b3fa0;font-size:9px">Dif DCTO.</span>'
           :(d.tieneCruce?' <span class="tag tag-v" style="font-size:9px">Cruzado</span>':''));
+      if(d.ajusteManual){
+        origenTxt+=' <span class="tag" style="background:#FFF3CD;color:#856404;font-size:9px" title="'+(d.ajusteManual.realizadoPor||'')+' - '+(d.ajusteManual.fecha||'')+' - '+(d.ajusteManual.motivo||'').replace(/"/g,'&quot;')+'">Ajustado</span>';
+      }
       var puedeBorrarDoc=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'));
       html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:13px">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
@@ -9948,7 +10014,7 @@ function renderListaCxCAdmin(){
         '<div style="font-size:11px;color:#888">Doc.'+d.numero+' | VEND '+d.vendedor+' | Vence: '+d.vencimiento+diasTxt+'</div>'+
         '<div style="font-size:13px;font-weight:700;color:'+(esCredito?'var(--verde)':'var(--azul)')+'">'+(esCredito?'($'+formatearNumeroConMiles(Math.abs(d.saldo),2)+')':'$'+formatearNumeroConMiles(d.saldo,2))+'</div>'+
         '</div>'+
-        (puedeBorrarDoc?'<button class="btn btn-s btn-sm" style="color:var(--rojo);flex-shrink:0" onclick="confirmarEliminarDocCxC(\''+d.numero+'\')">Eliminar</button>':'')+
+        (puedeBorrarDoc?'<div style="display:flex;gap:6px;flex-shrink:0"><button class="btn btn-s btn-sm" style="color:var(--azul)" onclick="confirmarEditarSaldoCxC(\''+d.numero+'\')">Editar saldo</button><button class="btn btn-s btn-sm" style="color:var(--rojo)" onclick="confirmarEliminarDocCxC(\''+d.numero+'\')">Eliminar</button></div>':'')+
         '</div>'+
       '</div>';
     }
