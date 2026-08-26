@@ -9386,6 +9386,11 @@ function reconciliarCxC(nuevosDocs, callback){
   var resultado=[];
   var mantenidos=0;
   var mantenidosList=[];
+  // Diagnostico: documentos que TENIAN abonadoEnApp y lo pierden en este
+  // pase - se guarda el detalle exacto (saldo de la app vs. saldo que
+  // trajo el Excel) para poder diagnosticar sin tener que reconstruirlo
+  // despues desde una captura de pantalla.
+  var liberadosList=[];
   for(var i=0;i<nuevosDocs.length;i++){
     var nuevo=nuevosDocs[i];
     var actual=actualMap[nuevo.numero];
@@ -9395,9 +9400,15 @@ function reconciliarCxC(nuevosDocs, callback){
       mantenidosList.push({numero:actual.numero, clienteId:actual.clienteId, clienteNombre:actual.clienteNombre, saldo:actual.saldo});
       continue;
     }
+    if(actual && actual.abonadoEnApp){
+      liberadosList.push({
+        numero:actual.numero, clienteId:actual.clienteId, clienteNombre:actual.clienteNombre,
+        saldoAppAntes:actual.saldo, saldoExcelNuevo:nuevo.saldo
+      });
+    }
     resultado.push(nuevo);
   }
-  callback(resultado, mantenidos, mantenidosList);
+  callback(resultado, mantenidos, mantenidosList, liberadosList);
 }
 
 // El monto coincide si es igual, o si el fiscal es 35% menor al real
@@ -9628,6 +9639,12 @@ function verDetalleCargaCxC(detalleOverride){
   html+=seccion('Mantenidos por pago ya confirmado en la app', d.mantenidosList, 'var(--ambar)', function(item){
     return filaDoc(item, 'Saldo protegido: $'+formatearNumeroConMiles(item.saldo,2));
   });
+  html+=seccion('Protegidos de una desaparicion temporal en el cruce', d.protegidosPorDesaparicion, '#5b3fa0', function(numero){
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--borde);font-size:12px"><strong>Doc. '+numero+'</strong></div>';
+  });
+  html+=seccion('⚠ Documentos que PERDIERON su proteccion en esta carga', d.liberadosList, 'var(--rojo)', function(item){
+    return filaDoc(item, 'Saldo que tenia la app: $'+formatearNumeroConMiles(item.saldoAppAntes,2)+' → Saldo que trajo el Excel: $'+formatearNumeroConMiles(item.saldoExcelNuevo,2)+' (se adopto este ultimo)');
+  });
 
   if(html.indexOf('margin-bottom:16px')<0){
     html+='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin cambios que mostrar en esta carga</div>';
@@ -9664,7 +9681,7 @@ function cargarExcelCxC(input, tipo){
     }).then(function(){
       estadoEl.innerHTML='<span style="color:#aaa">Cruzando bases real y fiscal...</span>';
       var fusion=fusionarBasesRealFiscal(CUENTAS_COBRAR_REAL, CUENTAS_COBRAR_FISCAL);
-      reconciliarCxC(fusion.resultado,function(docsFinal,mantenidos,mantenidosList){
+      reconciliarCxC(fusion.resultado,function(docsFinal,mantenidos,mantenidosList,liberadosList){
         // Red de seguridad adicional: subir Real y Fiscal por separado (el
         // unico modo que tiene VEND 00) hace que, justo entre un archivo y
         // el otro, el cruce corra con un lado fresco y el otro todavia
@@ -9694,13 +9711,14 @@ function cargarExcelCxC(input, tipo){
         }).then(function(){
           var faltaOtra=(tipo==='real' && CUENTAS_COBRAR_FISCAL.length===0) || (tipo==='fiscal' && CUENTAS_COBRAR_REAL.length===0);
           var modoTxt=modoCarga==='agregar'?'Modo: agregado/actualizado sin borrar lo demas. ':'Modo: base reemplazada por completo. ';
-          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+modoTxt+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.descartadosFiscal>0?' | '+fusion.descartadosFiscal+' fiscales descartados (sin match en Real)':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+(protegidosPorDesaparicion.length>0?' | '+protegidosPorDesaparicion.length+' protegidos de desaparicion temporal (doc. '+protegidosPorDesaparicion.join(', ')+')':'')+'</span>'+diagTxt+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'')+
+          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+modoTxt+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.descartadosFiscal>0?' | '+fusion.descartadosFiscal+' fiscales descartados (sin match en Real)':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+(protegidosPorDesaparicion.length>0?' | '+protegidosPorDesaparicion.length+' protegidos de desaparicion temporal (doc. '+protegidosPorDesaparicion.join(', ')+')':'')+(liberadosList.length>0?' | <strong style="color:var(--rojo)">'+liberadosList.length+' documento(s) perdieron su proteccion en esta carga (doc. '+liberadosList.map(function(l){return l.numero;}).join(', ')+') - revisa el detalle</strong>':'')+'</span>'+diagTxt+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'')+
             '<div style="margin-top:8px"><button class="btn btn-s btn-sm" onclick="verDetalleCargaCxC()">Ver detalle de esta carga</button></div>';
           ULTIMA_CARGA_CXC_DETALLE={
             tipo:tipo, nombreBase:nombreBase, modoCarga:modoCarga,
             nuevosEstaBase:nuevosEstaBase, actualizadosEstaBase:actualizadosEstaBase,
             coincidenciasList:fusion.coincidenciasList, docsDiferenciaList:fusion.docsDiferenciaList,
-            descartadosFiscalList:fusion.descartadosFiscalList, mantenidosList:mantenidosList
+            descartadosFiscalList:fusion.descartadosFiscalList, mantenidosList:mantenidosList,
+            protegidosPorDesaparicion:protegidosPorDesaparicion, liberadosList:liberadosList
           };
           guardarHistorialCargaCxC(ULTIMA_CARGA_CXC_DETALLE);
           toast('Base de Cuentas por Cobrar actualizada');
@@ -9846,7 +9864,16 @@ function verificarIntegridadCobros(){
         var docActual=null;
         for(var k=0;k<CUENTAS_COBRAR.length;k++){ if(CUENTAS_COBRAR[k].numero===num2){ docActual=CUENTAS_COBRAR[k]; break; } }
         if(!docActual){
-          huerfanos.push({numero:num2, cliente:pago.clienteNombre, monto:montoAplicado, fecha:pago.fecha, existe:false, motivo:'El documento ya no existe en la base actual'});
+          // Si el pago se confirmo hace mas de 20 dias y el documento ya no
+          // aparece en ninguna carga reciente, lo mas probable es que
+          // Profit ya lo haya procesado como pagado del todo (por eso dejo
+          // de aparecer en "Sin Cancelar") - no necesariamente es un
+          // problema, se marca aparte para no generar alarma innecesaria.
+          var diasDesdePago=Math.floor((new Date()-new Date(pago.fecha))/(1000*60*60*24));
+          var probableLiquidado=diasDesdePago>20;
+          huerfanos.push({numero:num2, cliente:pago.clienteNombre, monto:montoAplicado, fecha:pago.fecha, existe:false,
+            motivo: probableLiquidado ? 'El documento ya no existe en la base — con '+diasDesdePago+' dias desde el pago, lo mas probable es que Profit ya lo proceso como liquidado del todo' : 'El documento ya no existe en la base actual',
+            probableLiquidado:probableLiquidado});
         } else if(!docActual.abonadoEnApp){
           huerfanos.push({numero:num2, cliente:pago.clienteNombre, monto:montoAplicado, fecha:pago.fecha, existe:true, motivo:'El documento cargado no tiene marcado el abono (posible sobre-escritura en una recarga de Excel)'});
         }
@@ -9905,18 +9932,23 @@ function renderVerificadorResultado(){
   }
   if((VERIF_FILTRO_ACTUAL==='todos'||VERIF_FILTRO_ACTUAL==='huerfanos') && huerfanos.length>0){
     var huerfanosConDoc=huerfanos.filter(function(h){return h.existe;});
+    var huerfanosUrgentes=huerfanos.filter(function(h){return !h.probableLiquidado;}).length;
+    var huerfanosLiquidados=huerfanos.length-huerfanosUrgentes;
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px">'+
-      '<div style="font-weight:600;font-size:13px;color:var(--ambar)">Cobros confirmados sin reflejar ('+huerfanos.length+')</div>'+
+      '<div style="font-weight:600;font-size:13px;color:var(--ambar)">Cobros confirmados sin reflejar ('+huerfanos.length+')'+
+        (huerfanosLiquidados>0?' <span style="font-weight:400;font-size:11px;color:#999">— '+huerfanosUrgentes+' ameritan revision, '+huerfanosLiquidados+' probablemente ya liquidados hace tiempo</span>':'')+
+      '</div>'+
       (huerfanosConDoc.length>1?'<button class="btn btn-p btn-sm" onclick="reaplicarTodosLosHuerfanos()">Reaplicar todos ('+huerfanosConDoc.length+')</button>':'')+
     '</div>';
     for(var h=0;h<huerfanos.length;h++){
       var hf=huerfanos[h];
-      html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+      var colorMotivo=hf.probableLiquidado?'#999':'var(--ambar)';
+      html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:12px'+(hf.probableLiquidado?';opacity:.7':'')+'">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
         '<div style="flex:1">'+
         '<div style="font-weight:600">Doc.'+hf.numero+' - '+hf.cliente+'</div>'+
         '<div style="color:#888">Pago confirmado el '+hf.fecha+' por $'+formatearNumeroConMiles(hf.monto,2)+'</div>'+
-        '<div style="color:var(--ambar)">'+hf.motivo+'</div>'+
+        '<div style="color:'+colorMotivo+'">'+hf.motivo+'</div>'+
         '</div>'+
         (hf.existe?'<button class="btn btn-s btn-sm" style="color:var(--ambar);flex-shrink:0" onclick="abrirReaplicarAbono(\''+hf.numero+'\','+hf.monto+',\''+(hf.cliente||'').replace(/'/g,"\\'")+'\')">Reaplicar abono</button>':'')+
         '</div>'+
