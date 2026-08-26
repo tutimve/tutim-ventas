@@ -9363,10 +9363,23 @@ function parsearExcelCxC(file, callback){
   reader.readAsArrayBuffer(file);
 }
 
-// Al cargar una base nueva: si un documento ya fue marcado como pagado en la
-// app (pagadoEnApp) y el saldo que trae Profit todavia coincide con el que
-// tenia ANTES de ese pago, Profit aun no lo ha reflejado -> se mantiene tal
-// cual esta en la app. Si el saldo ya cambio, se toma como la verdad.
+// Al cargar una base nueva: si un documento ya fue marcado como pagado en
+// la app (abonadoEnApp), se protege su saldo actual MIENTRAS el Excel
+// nuevo siga mostrando MAS deuda que la que la app ya tiene aplicada -
+// eso significa que Profit todavia no reflejo (todo o parte de) lo que se
+// cobro aqui. En cuanto el Excel muestre un saldo igual o menor al de la
+// app, se asume que Profit ya se puso al dia (o paso algo legitimo aparte,
+// como una nota de credito) y se adopta ese valor nuevo como la verdad mas
+// actual, liberando la proteccion.
+//
+// A proposito NO se compara contra una "foto" fija de un solo pago
+// anterior (saldoAntesUltimoPago) - eso fallaba en cuanto un documento
+// recibia DOS O MAS abonos parciales mientras Profit seguia sin
+// reflejar ninguno: la foto solo recordaba el ultimo, así que Profit
+// seguia mostrando un saldo mas viejo (de antes de TODOS los abonos) que
+// ya no coincidia con nada, y la proteccion fallaba. Comparar siempre
+// contra el saldo actual (que sí refleja la suma de todos los abonos)
+// funciona sin importar cuantos se hayan acumulado.
 function reconciliarCxC(nuevosDocs, callback){
   var actualMap={};
   for(var i=0;i<CUENTAS_COBRAR.length;i++){ actualMap[CUENTAS_COBRAR[i].numero]=CUENTAS_COBRAR[i]; }
@@ -9376,7 +9389,7 @@ function reconciliarCxC(nuevosDocs, callback){
   for(var i=0;i<nuevosDocs.length;i++){
     var nuevo=nuevosDocs[i];
     var actual=actualMap[nuevo.numero];
-    if(actual && actual.abonadoEnApp && actual.saldoAntesUltimoPago!==undefined && Math.abs(nuevo.saldo-actual.saldoAntesUltimoPago)<0.01){
+    if(actual && actual.abonadoEnApp && nuevo.saldo>actual.saldo+0.01){
       resultado.push(actual);
       mantenidos++;
       mantenidosList.push({numero:actual.numero, clienteId:actual.clienteId, clienteNombre:actual.clienteNombre, saldo:actual.saldo});
@@ -9652,6 +9665,28 @@ function cargarExcelCxC(input, tipo){
       estadoEl.innerHTML='<span style="color:#aaa">Cruzando bases real y fiscal...</span>';
       var fusion=fusionarBasesRealFiscal(CUENTAS_COBRAR_REAL, CUENTAS_COBRAR_FISCAL);
       reconciliarCxC(fusion.resultado,function(docsFinal,mantenidos,mantenidosList){
+        // Red de seguridad adicional: subir Real y Fiscal por separado (el
+        // unico modo que tiene VEND 00) hace que, justo entre un archivo y
+        // el otro, el cruce corra con un lado fresco y el otro todavia
+        // viejo. Para los documentos normales esto no afecta nada, pero
+        // los de "diferencia" (35% IVA) solo EXISTEN si el cruce encuentra
+        // pareja - si en ese momento intermedio no la encuentra, el
+        // documento desaparece del todo de este resultado, y si tenia un
+        // abono aplicado, se perderia sin que la proteccion normal (que
+        // solo actua sobre documentos que SI siguen existiendo) tuviera
+        // oportunidad de actuar. Aqui se evita que eso pase: cualquier
+        // documento con abono ya aplicado que desaparezca por completo del
+        // cruce nuevo se mantiene, en vez de perderse en silencio.
+        var numerosEnCruceNuevo={};
+        for(var i=0;i<docsFinal.length;i++){ numerosEnCruceNuevo[docsFinal[i].numero]=true; }
+        var protegidosPorDesaparicion=[];
+        for(var i=0;i<CUENTAS_COBRAR.length;i++){
+          var viejo=CUENTAS_COBRAR[i];
+          if(viejo.abonadoEnApp && !numerosEnCruceNuevo[viejo.numero]){
+            docsFinal.push(viejo);
+            protegidosPorDesaparicion.push(viejo.numero);
+          }
+        }
         CUENTAS_COBRAR=docsFinal;
         db.collection('config').doc('cuentas_cobrar').set({
           data:JSON.stringify(CUENTAS_COBRAR),
@@ -9659,7 +9694,7 @@ function cargarExcelCxC(input, tipo){
         }).then(function(){
           var faltaOtra=(tipo==='real' && CUENTAS_COBRAR_FISCAL.length===0) || (tipo==='fiscal' && CUENTAS_COBRAR_REAL.length===0);
           var modoTxt=modoCarga==='agregar'?'Modo: agregado/actualizado sin borrar lo demas. ':'Modo: base reemplazada por completo. ';
-          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+modoTxt+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.descartadosFiscal>0?' | '+fusion.descartadosFiscal+' fiscales descartados (sin match en Real)':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+'</span>'+diagTxt+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'')+
+          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+modoTxt+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.descartadosFiscal>0?' | '+fusion.descartadosFiscal+' fiscales descartados (sin match en Real)':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+(protegidosPorDesaparicion.length>0?' | '+protegidosPorDesaparicion.length+' protegidos de desaparicion temporal (doc. '+protegidosPorDesaparicion.join(', ')+')':'')+'</span>'+diagTxt+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'')+
             '<div style="margin-top:8px"><button class="btn btn-s btn-sm" onclick="verDetalleCargaCxC()">Ver detalle de esta carga</button></div>';
           ULTIMA_CARGA_CXC_DETALLE={
             tipo:tipo, nombreBase:nombreBase, modoCarga:modoCarga,
