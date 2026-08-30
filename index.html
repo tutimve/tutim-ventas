@@ -924,7 +924,45 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <input type="checkbox" id="repoIncluirBonif" checked style="width:16px;height:16px">
           Incluir unidades gratis de promociones (ej. Promo Bultos Bolsa) en el consumo real
         </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="repoAsumirCeroPrimeraCompra" checked style="width:16px;height:16px">
+          En el calculo "Inv:" (reconciliacion), si un producto no tiene una foto de inventario de antes, asumir que su stock era 0 el dia antes de su primera compra registrada
+        </label>
         <div id="repoResultados"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Toca "Calcular sugerencia" para ver el analisis</div></div>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--borde)">
+          <button class="btn btn-s btn-sm" onclick="verDiagnosticoStockEstimado()">Ver diagnostico del stock estimado</button>
+          <div id="diagnosticoStockEstimado" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <!-- Registrar Compras (solo 00/01/20) - para el calculo de reposicion
+           por reconciliacion de inventario -->
+      <div class="card" id="cardRegistrarCompras" style="display:none">
+        <div class="card-title">Registrar Compras</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Cada compra que registres aqui, junto con tus cargas de inventario, permite calcular cuanto se vendio realmente (Stock inicial + Compras − Stock final) — un segundo metodo que complementa al de arriba (calculado por pedidos), para poder comparar ambos.</p>
+
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px">Cargar manualmente</div>
+        <div class="field"><label>Fecha de la compra</label><input type="date" id="compraFecha"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">
+          <div class="field" style="flex:2;min-width:160px">
+            <label>Producto</label>
+            <select id="compraProdSelect"></select>
+          </div>
+          <div class="field" style="flex:1;min-width:90px">
+            <label>Bultos</label>
+            <input type="number" min="0" step="0.01" id="compraProdCant">
+          </div>
+          <button class="btn btn-s btn-sm" onclick="agregarItemCompraTemp()">+ Agregar</button>
+        </div>
+        <div id="compraItemsTempList" style="margin-bottom:8px"></div>
+        <button class="btn btn-p btn-sm" onclick="guardarCompraManual()">Guardar compra(s)</button>
+
+        <div style="font-weight:600;font-size:13px;margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--borde)">Cargar por Excel (varias compras o un contenedor completo)</div>
+        <p style="font-size:11px;color:#888;margin-bottom:8px">El archivo debe tener columnas: Fecha, Codigo (el codigo de producto, igual al de tu catalogo) y Cantidad (en bultos).</p>
+        <input type="file" id="compraExcelInput" accept=".xlsx,.xls" onchange="cargarExcelCompras(this)">
+
+        <div style="font-weight:600;font-size:13px;margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--borde)">Compras registradas recientemente</div>
+        <div id="comprasRecientesList"></div>
       </div>
 
       <div class="card" id="repoBackfillCard" style="display:none">
@@ -951,10 +989,12 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         <button class="btn btn-s btn-sm" onclick="rptFiltro('hoy')">Hoy</button>
         <button class="btn btn-s btn-sm" onclick="rptFiltro('semana')">Esta semana</button>
+        <button class="btn btn-s btn-sm" onclick="rptFiltro('semana_anterior')">Semana Anterior</button>
         <button class="btn btn-s btn-sm" onclick="rptFiltro('mes')">Este mes</button>
+        <button class="btn btn-s btn-sm" onclick="rptFiltro('mes_anterior')">Mes Anterior</button>
         <button class="btn btn-s btn-sm" onclick="rptFiltro('todo')">Todo</button>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
         <div style="flex:1;min-width:130px">
           <label style="font-size:11px">Desde</label>
           <input type="date" id="rptDesde" onchange="renderReportes()"
@@ -965,6 +1005,18 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <input type="date" id="rptHasta" onchange="renderReportes()"
             style="padding:8px;font-size:13px;width:100%;box-sizing:border-box">
         </div>
+      </div>
+      <div id="rptVendedorWrap" class="field" style="margin-bottom:8px">
+        <label>Vendedor</label>
+        <select id="rptVendedor" onchange="renderReportes()">
+          <option value="todos">Todos los vendedores</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:0;position:relative">
+        <label>Cliente</label>
+        <input type="text" id="rptClienteBusq" placeholder="Todos los clientes (escribe para buscar)" autocomplete="off" oninput="filtrarRptClienteOpciones()" onfocus="filtrarRptClienteOpciones()" onblur="setTimeout(function(){var d=document.getElementById('rptClienteOpciones'); if(d) d.style.display='none';},150)">
+        <input type="hidden" id="rptCliente" value="todos">
+        <div id="rptClienteOpciones" style="display:none;position:absolute;z-index:20;background:#fff;border:1px solid var(--borde);border-radius:8px;max-height:220px;overflow-y:auto;width:100%;box-shadow:0 4px 12px rgba(0,0,0,.12);font-size:13px"></div>
       </div>
     </div>
 
@@ -979,25 +1031,13 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
     </div>
 
-    <!-- Por Vendedor (con filtros de vendedor/cliente que afectan a todos los reportes) -->
+    <!-- Por Vendedor -->
     <div class="card" style="padding:0;overflow:hidden">
       <div onclick="toggleRptCard('rptCardVendedor')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
         <span class="card-title" style="margin:0">Por Vendedor (% de participacion)</span>
-        <span id="rptCardVendedor-arrow" style="color:#aaa;font-size:11px">▲</span>
+        <span id="rptCardVendedor-arrow" style="color:#aaa;font-size:11px">▼</span>
       </div>
-      <div id="rptCardVendedor-body" style="padding:0 16px 16px">
-        <div id="rptVendedorWrap" class="field" style="margin-bottom:8px">
-          <label>Vendedor</label>
-          <select id="rptVendedor" onchange="renderReportes()">
-            <option value="todos">Todos los vendedores</option>
-          </select>
-        </div>
-        <div class="field" style="margin-bottom:8px;position:relative">
-          <label>Cliente</label>
-          <input type="text" id="rptClienteBusq" placeholder="Todos los clientes (escribe para buscar)" autocomplete="off" oninput="filtrarRptClienteOpciones()" onfocus="filtrarRptClienteOpciones()" onblur="setTimeout(function(){var d=document.getElementById('rptClienteOpciones'); if(d) d.style.display='none';},150)">
-          <input type="hidden" id="rptCliente" value="todos">
-          <div id="rptClienteOpciones" style="display:none;position:absolute;z-index:20;background:#fff;border:1px solid var(--borde);border-radius:8px;max-height:220px;overflow-y:auto;width:100%;box-shadow:0 4px 12px rgba(0,0,0,.12);font-size:13px"></div>
-        </div>
+      <div id="rptCardVendedor-body" class="hidden" style="padding:0 16px 16px">
         <div id="rptPorVendedor"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
       </div>
     </div>
@@ -1060,6 +1100,22 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
     </div>
 
+    <!-- Cobros y descuentos (por vendedor, con rango de fecha) -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div onclick="toggleRptCard('rptCardCobrosDesc')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        <span class="card-title" style="margin:0">Cobros y Descuentos</span>
+        <span id="rptCardCobrosDesc-arrow" style="color:#aaa;font-size:11px">▼</span>
+      </div>
+      <div id="rptCardCobrosDesc-body" class="hidden" style="padding:0 16px 16px">
+        <p style="font-size:11px;color:#888;margin:0 0 8px">Cuanto se cobro (pagos confirmados) y cuanto se dejo de cobrar por descuentos, dentro del rango de fecha y el vendedor que tengas seleccionados arriba.</p>
+        <button class="btn btn-p btn-sm" onclick="generarReporteCobrosDescuentos()">Generar</button>
+        <div id="rptCobrosDescuentos" style="margin-top:10px"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Toca "Generar" para cargar los pagos de este periodo</div></div>
+        <div style="display:flex;gap:8px;margin-top:10px" id="rptCobrosDescExportWrap" class="hidden">
+          <button class="btn btn-g btn-sm" onclick="descargarExcelCobrosDescuentos()">Excel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Clientes nuevos activados -->
     <div class="card" style="padding:0;overflow:hidden">
       <div onclick="toggleRptCard('rptCardClientesNuevos')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
@@ -1099,10 +1155,20 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <!-- Comparativo mensual -->
     <div class="card" style="padding:0;overflow:hidden">
       <div onclick="toggleRptCard('rptCardComparativo')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-        <span class="card-title" style="margin:0">Comparativo Mes Actual vs. Mes Anterior</span>
+        <span class="card-title" style="margin:0">Comparativo Mensual</span>
         <span id="rptCardComparativo-arrow" style="color:#aaa;font-size:11px">▼</span>
       </div>
       <div id="rptCardComparativo-body" class="hidden" style="padding:0 16px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <label style="font-size:12px;color:#666">Meses a comparar</label>
+          <select id="rptComparativoMeses" onchange="renderReportes()" style="padding:5px 8px;font-size:13px;border:1.5px solid var(--borde);border-radius:6px">
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+        </div>
         <div id="rptComparativo"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
       </div>
     </div>
@@ -2594,6 +2660,8 @@ function goScreen(name){
         rptFiltro('hoy');
       });
     }
+    var cardCompras=document.getElementById('cardRegistrarCompras');
+    if(cardCompras) cardCompras.style.display='none';
   }
   if(name==='historial'){
     var ahora2=new Date();
@@ -2771,10 +2839,29 @@ function filtrarCli(){
   document.getElementById('listaCli').innerHTML=html;
 }
 
-function calcularDeudaCliente(clienteId){
+// Suma la deuda pendiente de un cliente, cruzando tanto por codigo como
+// por RIF. Esto es importante porque un cliente "nuevo" creado en la app
+// (con codigo provisional NEW-xxx) nunca va a coincidir por codigo con su
+// ficha real en Cuentas por Cobrar - pero SI comparte el mismo RIF. Sin
+// este cruce adicional, ese cliente podria seguir comprando sin limite
+// aunque ya tenga deuda pendiente bajo su codigo oficial de Profit.
+function calcularDeudaCliente(cli){
+  var clienteId=typeof cli==='string'?cli:cli.id;
+  var rifNorm=(typeof cli==='object' && cli.rif)?normalizarRif(cli.rif):'';
+  // Mapa codigo->RIF (normalizado) de toda la base de clientes, para poder
+  // cruzar CUENTAS_COBRAR por RIF sin tener que buscar cliente por cliente
+  var rifPorCodigo={};
+  if(rifNorm){
+    for(var i=0;i<CLIENTES_PROFIT.length;i++){
+      rifPorCodigo[CLIENTES_PROFIT[i].id]=normalizarRif(CLIENTES_PROFIT[i].rif);
+    }
+  }
   var total=0;
   for(var i=0;i<CUENTAS_COBRAR.length;i++){
-    if(CUENTAS_COBRAR[i].clienteId===clienteId) total+=CUENTAS_COBRAR[i].saldo;
+    var doc=CUENTAS_COBRAR[i];
+    var coincide=(doc.clienteId===clienteId);
+    if(!coincide && rifNorm && rifPorCodigo[doc.clienteId]===rifNorm) coincide=true;
+    if(coincide) total+=doc.saldo;
   }
   return total;
 }
@@ -2813,7 +2900,7 @@ function selCli(id){
   for(var i=0;i<CLIENTES.length;i++){if(CLIENTES[i].id===id){cli=CLIENTES[i];break;}}
   if(!cli) return;
   if(LIMITE_DEUDA_PEDIDOS>0){
-    var deuda=calcularDeudaCliente(id);
+    var deuda=calcularDeudaCliente(cli);
     if(deuda>LIMITE_DEUDA_PEDIDOS){
       abrirBloqueoDeudaPedido(cli, deuda);
       return;
@@ -5954,6 +6041,18 @@ function rptFiltro(tipo){
     desde=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   } else if(tipo==='mes'){
     desde=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-01';
+  } else if(tipo==='semana_anterior'){
+    var d=new Date(hoy);
+    d.setDate(d.getDate()-d.getDay()); // inicio de esta semana (domingo)
+    var finSemanaAnt=new Date(d); finSemanaAnt.setDate(d.getDate()-1); // sabado de la semana anterior
+    var inicioSemanaAnt=new Date(finSemanaAnt); inicioSemanaAnt.setDate(finSemanaAnt.getDate()-6); // domingo de la semana anterior
+    desde=inicioSemanaAnt.getFullYear()+'-'+String(inicioSemanaAnt.getMonth()+1).padStart(2,'0')+'-'+String(inicioSemanaAnt.getDate()).padStart(2,'0');
+    hasta=finSemanaAnt.getFullYear()+'-'+String(finSemanaAnt.getMonth()+1).padStart(2,'0')+'-'+String(finSemanaAnt.getDate()).padStart(2,'0');
+  } else if(tipo==='mes_anterior'){
+    var mesAnt=new Date(hoy.getFullYear(), hoy.getMonth()-1, 1);
+    var finMesAnt=new Date(hoy.getFullYear(), hoy.getMonth(), 0); // dia 0 del mes actual = ultimo dia del mes anterior
+    desde=mesAnt.getFullYear()+'-'+String(mesAnt.getMonth()+1).padStart(2,'0')+'-01';
+    hasta=finMesAnt.getFullYear()+'-'+String(finMesAnt.getMonth()+1).padStart(2,'0')+'-'+String(finMesAnt.getDate()).padStart(2,'0');
   } else {
     desde=''; hasta='';
   }
@@ -6037,6 +6136,327 @@ function renderGraficaVendedoresRpt(porVend){
   cont.innerHTML=html;
 }
 
+// ═══ REPORTE: COBROS Y DESCUENTOS ═══
+// Usa los mismos filtros de fecha/vendedor que ya tiene Reportes arriba.
+// Se carga aparte (bajo demanda) porque los pagos de Cobros no forman
+// parte del ciclo normal de renderReportes() (que trabaja sobre pedidos).
+var ULTIMO_REPORTE_COBROS_DESCUENTOS={lista:[], periodo:''};
+
+// Monto original de las facturas de un pago, ANTES de aplicar el
+// descuento. Los pagos guardados desde este cambio en adelante lo traen
+// directo (sumaDocsOriginal). Los pagos de antes no lo tenian guardado -
+// para esos se reconstruye matematicamente a partir del "esperado" (que
+// siempre vino con el descuento ya restado) y el % que se uso.
+function montoOriginalPago(p){
+  if(p.sumaDocsOriginal!==undefined && p.sumaDocsOriginal!==null) return p.sumaDocsOriginal;
+  var pct=p.descuentoPct||0;
+  if(pct>=100) return p.montoEsperado||p.montoUSD;
+  return (p.montoEsperado||p.montoUSD)/(1-pct/100);
+}
+
+function generarReporteCobrosDescuentos(){
+  var cont=document.getElementById('rptCobrosDescuentos');
+  cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando pagos...</div>';
+  var alcanceRptCob=alcanceVendedoresVisibles();
+  cargarTodosPagosCobranzaFirebase(function(pagos){
+    var desde=document.getElementById('rptDesde').value;
+    var hasta=document.getElementById('rptHasta').value;
+    var vendSelCob=document.getElementById('rptVendedor').value;
+    var lista=pagos.filter(function(p){
+      if(p.estado!=='confirmado') return false;
+      if(desde && p.fecha<desde) return false;
+      if(hasta && p.fecha>hasta) return false;
+      if(vendSelCob!=='todos' && (p.vendedor||'??')!==vendSelCob) return false;
+      if(alcanceRptCob && alcanceRptCob.indexOf(p.vendedor||'??')<0) return false;
+      return true;
+    });
+    var periodoTxt=desde?(desde===hasta?desde:('Del '+desde+' al '+hasta)):'Todo el periodo';
+    ULTIMO_REPORTE_COBROS_DESCUENTOS={lista:lista, periodo:periodoTxt};
+
+    if(lista.length===0){
+      cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin pagos confirmados en este periodo</div>';
+      document.getElementById('rptCobrosDescExportWrap').classList.add('hidden');
+      return;
+    }
+
+    // Agrupar por vendedor
+    var porVendCob={};
+    var totalCobrado=0, totalDescuentoMonto=0, totalOriginal=0;
+    var porPctDesc={}; // cuantos pagos, cuanto se cobro y cuanto se dejo de cobrar en cada % de descuento
+    for(var i=0;i<lista.length;i++){
+      var p=lista[i];
+      var vid=p.vendedor||'??';
+      if(!porVendCob[vid]) porVendCob[vid]={nombre:p.vendedorNombre||('VEND '+vid), cobrado:0, descuentoMonto:0, original:0, pagos:0};
+      var original=montoOriginalPago(p);
+      var descMonto=Math.max(0, Math.round((original-p.montoUSD)*100)/100);
+      porVendCob[vid].cobrado+=p.montoUSD;
+      porVendCob[vid].descuentoMonto+=descMonto;
+      porVendCob[vid].original+=original;
+      porVendCob[vid].pagos++;
+      totalCobrado+=p.montoUSD;
+      totalDescuentoMonto+=descMonto;
+      totalOriginal+=original;
+      var pctKey=(p.descuentoPct||0)+'%';
+      if(!porPctDesc[pctKey]) porPctDesc[pctKey]={pagos:0, cobrado:0, descuentoMonto:0};
+      porPctDesc[pctKey].pagos++;
+      porPctDesc[pctKey].cobrado+=p.montoUSD;
+      porPctDesc[pctKey].descuentoMonto+=descMonto;
+    }
+
+    var html='<div class="metrics" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
+      '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica('$'+Math.round(totalCobrado),16)+';color:var(--verde)">$'+formatearNumeroConMiles(totalCobrado,0)+'</div><div class="lbl">Total cobrado</div></div>'+
+      '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica('$'+Math.round(totalDescuentoMonto),16)+';color:var(--rojo)">$'+formatearNumeroConMiles(totalDescuentoMonto,0)+'</div><div class="lbl">Total en descuentos ('+(totalOriginal>0?(Math.round(totalDescuentoMonto/totalOriginal*1000)/10):0)+'% del original)</div></div>'+
+      '<div class="metric"><div class="num" style="font-size:18px">'+lista.length+'</div><div class="lbl">Pagos confirmados</div></div>'+
+    '</div>';
+
+    html+='<div style="font-weight:700;font-size:12px;color:#666;margin:10px 0 6px">Por vendedor</div>';
+    var vidsCob=Object.keys(porVendCob).sort(function(a,b){return porVendCob[b].cobrado-porVendCob[a].cobrado;});
+    for(var i=0;i<vidsCob.length;i++){
+      var d=porVendCob[vidsCob[i]];
+      var pctSobreOriginal=d.original>0?(Math.round(d.descuentoMonto/d.original*1000)/10):0;
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--borde)">'+
+        '<div><strong style="font-size:13px">VEND '+vidsCob[i]+' - '+d.nombre+'</strong><div style="font-size:11px;color:#888">'+d.pagos+' pago'+(d.pagos!==1?'s':'')+'</div></div>'+
+        '<div style="text-align:right"><strong style="font-size:14px;color:var(--verde)">$'+formatearNumeroConMiles(d.cobrado,2)+'</strong><div style="font-size:11px;color:var(--rojo)">-$'+formatearNumeroConMiles(d.descuentoMonto,2)+' dcto. ('+pctSobreOriginal+'% del original)</div></div>'+
+      '</div>';
+    }
+
+    html+='<div style="font-weight:700;font-size:12px;color:#666;margin:14px 0 6px">Por % de descuento usado</div>';
+    var pctKeysOrdenados=Object.keys(porPctDesc).sort(function(a,b){return parseInt(a)-parseInt(b);});
+    for(var i=0;i<pctKeysOrdenados.length;i++){
+      var pk=pctKeysOrdenados[i];
+      var d=porPctDesc[pk];
+      html+='<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+        '<span>'+(pk==='0%'?'Sin descuento':pk)+' — '+d.pagos+' pago'+(d.pagos!==1?'s':'')+'</span>'+
+        '<span style="text-align:right"><strong>$'+formatearNumeroConMiles(d.cobrado,2)+'</strong> cobrado'+(d.descuentoMonto>0?' <span style="color:var(--rojo)">(-$'+formatearNumeroConMiles(d.descuentoMonto,2)+' dcto.)</span>':'')+'</span>'+
+      '</div>';
+    }
+
+    // Cuentas por Cobrar: el saldo pendiente ACTUAL (no es historico del
+    // periodo, es la foto de hoy), pero respeta el mismo filtro de
+    // vendedor que el resto de este reporte - mismos parametros que el
+    // resumen de Admin -> Cuentas x Cobrar (documentos + saldo total).
+    // Se excluyen documentos en saldo cero o a favor (creditos), igual que
+    // ya hace la vista de antiguedad en Cobros - un documento en $0 no es
+    // "pendiente" de verdad.
+    var cxcFiltrada=CUENTAS_COBRAR.filter(function(d){
+      if(d.saldo<=0.009) return false;
+      if(vendSelCob!=='todos' && (d.vendedor||'??')!==vendSelCob) return false;
+      if(alcanceRptCob && alcanceRptCob.indexOf(d.vendedor||'??')<0) return false;
+      return true;
+    });
+    var cxcTotalDocs=cxcFiltrada.length;
+    var cxcTotalSaldo=0;
+    for(var i=0;i<cxcFiltrada.length;i++) cxcTotalSaldo+=cxcFiltrada[i].saldo;
+
+    // Por vendedor: documentos pendientes y saldo, usando la misma cartera
+    // filtrada de arriba
+    var porVendCxC={};
+    for(var i=0;i<cxcFiltrada.length;i++){
+      var dCxC=cxcFiltrada[i];
+      var vidCxC=dCxC.vendedor||'??';
+      if(!porVendCxC[vidCxC]) porVendCxC[vidCxC]={docs:0, saldo:0};
+      porVendCxC[vidCxC].docs++;
+      porVendCxC[vidCxC].saldo+=dCxC.saldo;
+    }
+
+    // % de cuentas cobradas y dias promedio de cobro: se recorren los
+    // documentos TOCADOS por algun pago confirmado en el periodo (por
+    // vendedor y en general). Un documento se cuenta como "cobrado" si ya
+    // no tiene saldo pendiente en la base actual (saldo<=0 o ya no existe,
+    // lo que normalmente significa que Profit lo termino de procesar).
+    // Los dias de cobro se miden desde la fecha de emision del documento
+    // hasta la fecha del pago - solo se puede calcular para pagos hechos
+    // desde que se empezo a guardar la emision (los mas viejos se omiten
+    // de este promedio en vez de mostrar un dato incorrecto).
+    var saldoPorNumero={};
+    for(var i=0;i<CUENTAS_COBRAR.length;i++){ saldoPorNumero[CUENTAS_COBRAR[i].numero]=CUENTAS_COBRAR[i].saldo; }
+    var porVendCobranza={}; // vid -> {docsUnicos:{}, docsCobrados:{}, diasCobro:[]}
+    var docsUnicosTotal={}, docsCobradosTotal={}, diasCobroTotal=[];
+    for(var i=0;i<lista.length;i++){
+      var p=lista[i];
+      var vid=p.vendedor||'??';
+      if(!porVendCobranza[vid]) porVendCobranza[vid]={docsUnicos:{}, docsCobrados:{}, diasCobro:[]};
+      var docsDelPago=p.documentos||[];
+      for(var j=0;j<docsDelPago.length;j++){
+        var docP=docsDelPago[j];
+        docsUnicosTotal[docP.numero]=true;
+        porVendCobranza[vid].docsUnicos[docP.numero]=true;
+        var saldoActualDoc=saldoPorNumero[docP.numero];
+        var estaCobrado=(saldoActualDoc===undefined || saldoActualDoc<=0.009);
+        if(estaCobrado){
+          docsCobradosTotal[docP.numero]=true;
+          porVendCobranza[vid].docsCobrados[docP.numero]=true;
+        }
+        var emisionDoc=docP.emision||buscarEmisionDocumento(docP.numero);
+        if(emisionDoc){
+          var dias=diasEntreEmisionYPago(emisionDoc, p.fecha);
+          if(dias!==null){
+            diasCobroTotal.push(dias);
+            porVendCobranza[vid].diasCobro.push(dias);
+          }
+        }
+      }
+    }
+    function promedio(arr){ if(arr.length===0) return null; var s=0; for(var k=0;k<arr.length;k++) s+=arr[k]; return Math.round(s/arr.length*10)/10; }
+    var pctCobradoTotal=Object.keys(docsUnicosTotal).length>0?Math.round(Object.keys(docsCobradosTotal).length/Object.keys(docsUnicosTotal).length*1000)/10:0;
+    var diasPromTotal=promedio(diasCobroTotal);
+
+    html+='<div style="font-weight:700;font-size:12px;color:#666;margin:14px 0 6px">Cuentas por Cobrar (saldo pendiente actual'+(vendSelCob!=='todos'?', mismo vendedor':'')+')</div>'+
+      '<p style="font-size:11px;color:#888;margin:0 0 6px">Esto es la foto de hoy, no del rango de fechas de arriba — la deuda pendiente no tiene periodo, solo vendedor.</p>'+
+      '<div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px">'+
+        '<div class="metric"><div class="num" style="font-size:18px">'+cxcTotalDocs+'</div><div class="lbl">Documentos pendientes</div></div>'+
+        '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica((cxcTotalSaldo<0?'($':'$')+Math.round(Math.abs(cxcTotalSaldo)),16)+';color:'+(cxcTotalSaldo<0?'var(--verde)':'var(--rojo)')+'">'+(cxcTotalSaldo<0?('($'+formatearNumeroConMiles(Math.abs(cxcTotalSaldo),2)+')'):('$'+formatearNumeroConMiles(cxcTotalSaldo,2)))+'</div><div class="lbl">Saldo pendiente total</div></div>'+
+      '</div>';
+
+    var vidsCxC=Object.keys(porVendCxC).sort(function(a,b){return porVendCxC[b].saldo-porVendCxC[a].saldo;});
+    for(var i=0;i<vidsCxC.length;i++){
+      var vidC=vidsCxC[i];
+      var dC=porVendCxC[vidC];
+      var vObjC=null;
+      for(var vi=0;vi<VENDEDORES.length;vi++){ if(VENDEDORES[vi].id===vidC){ vObjC=VENDEDORES[vi]; break; } }
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+        '<span>VEND '+vidC+' - '+(vObjC?vObjC.nombre:'')+' <span style="color:#888">('+dC.docs+' doc.)</span></span>'+
+        '<strong style="color:'+(dC.saldo<0?'var(--verde)':'var(--rojo)')+'">'+(dC.saldo<0?('($'+formatearNumeroConMiles(Math.abs(dC.saldo),2)+')'):('$'+formatearNumeroConMiles(dC.saldo,2)))+'</strong>'+
+      '</div>';
+    }
+
+    // Por antiguedad, con los mismos rangos que ya usa la vista de Cobros
+    // (0-7, 8-14, 15-21, 22-30, 31+ dias desde la emision)
+    var porBucketCxC={};
+    for(var b=0;b<BUCKETS_VENCIMIENTO.length;b++){ porBucketCxC[BUCKETS_VENCIMIENTO[b].key]={docs:0, saldo:0}; }
+    for(var i=0;i<cxcFiltrada.length;i++){
+      var dBk=cxcFiltrada[i];
+      var diasBk=diasDesdeEmision(dBk.emision);
+      var bucketKey=bucketVencimiento(diasBk);
+      porBucketCxC[bucketKey].docs++;
+      porBucketCxC[bucketKey].saldo+=dBk.saldo;
+    }
+    html+='<div style="font-weight:700;font-size:12px;color:#666;margin:14px 0 6px">Por Antiguedad</div>';
+    for(var b=0;b<BUCKETS_VENCIMIENTO.length;b++){
+      var bk=BUCKETS_VENCIMIENTO[b];
+      var dBk2=porBucketCxC[bk.key];
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+        '<span>'+bk.label+' <span style="color:#888">('+dBk2.docs+')</span></span>'+
+        '<strong>$'+formatearNumeroConMiles(dBk2.saldo,2)+'</strong>'+
+      '</div>';
+    }
+
+    // % de cuentas cobradas y dias promedio de cobro
+    html+='<div style="font-weight:700;font-size:12px;color:#666;margin:14px 0 6px">Efectividad de Cobro</div>'+
+      '<p style="font-size:11px;color:#888;margin:0 0 8px">De los documentos que tuvieron algun pago dentro del periodo: que porcentaje quedo totalmente saldado, y cuantos dias en promedio pasaron desde que se emitio el documento hasta que se cobro (la fecha de emision se busca en el documento del pago, o si no la tiene guardada, en la base de Cuentas por Cobrar mas reciente que la haya incluido).</p>'+
+      '<div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px">'+
+        '<div class="metric"><div class="num" style="font-size:18px;color:var(--verde)">'+pctCobradoTotal+'%</div><div class="lbl">Cuentas totalmente cobradas</div></div>'+
+        '<div class="metric"><div class="num" style="font-size:18px">'+(diasPromTotal!==null?diasPromTotal:'-')+'</div><div class="lbl">Dias promedio de cobro</div></div>'+
+      '</div>';
+    var vidsEfect=Object.keys(porVendCobranza).sort(function(a,b){return Object.keys(porVendCobranza[b].docsUnicos).length-Object.keys(porVendCobranza[a].docsUnicos).length;});
+    for(var i=0;i<vidsEfect.length;i++){
+      var vidE=vidsEfect[i];
+      var dE=porVendCobranza[vidE];
+      var totalE=Object.keys(dE.docsUnicos).length;
+      if(totalE===0) continue;
+      var pctE=Math.round(Object.keys(dE.docsCobrados).length/totalE*1000)/10;
+      var diasE=promedio(dE.diasCobro);
+      var vObjE=null;
+      for(var vi=0;vi<VENDEDORES.length;vi++){ if(VENDEDORES[vi].id===vidE){ vObjE=VENDEDORES[vi]; break; } }
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+        '<span>VEND '+vidE+' - '+(vObjE?vObjE.nombre:'')+'</span>'+
+        '<span style="text-align:right"><strong style="color:var(--verde)">'+pctE+'%</strong> cobrado <span style="color:#888">| '+(diasE!==null?diasE+' dias prom.':'sin dato')+'</span></span>'+
+      '</div>';
+    }
+
+    // Resumen final de totales, al cierre del reporte
+    var pctDescuentoTotal=totalOriginal>0?(Math.round(totalDescuentoMonto/totalOriginal*1000)/10):0;
+    html+='<div style="margin-top:18px;padding-top:14px;border-top:2px solid var(--azul)">'+
+      '<div style="font-weight:700;font-size:13px;color:var(--azul);margin-bottom:8px">TOTALES DEL PERIODO</div>'+
+      '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px"><span>Total cobrado</span><strong style="color:var(--verde)">$'+formatearNumeroConMiles(totalCobrado,2)+'</strong></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px"><span>Total de descuentos otorgados</span><strong style="color:var(--rojo)">$'+formatearNumeroConMiles(totalDescuentoMonto,2)+'</strong></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px"><span>Monto original de los documentos</span><strong>$'+formatearNumeroConMiles(totalOriginal,2)+'</strong></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-top:1px solid var(--borde);margin-top:4px"><span>% que representa el descuento del original</span><strong style="color:var(--rojo)">'+pctDescuentoTotal+'%</strong></div>'+
+    '</div>';
+
+    cont.innerHTML=html;
+    document.getElementById('rptCobrosDescExportWrap').classList.remove('hidden');
+  });
+}
+
+function descargarExcelCobrosDescuentos(){
+  var lista=ULTIMO_REPORTE_COBROS_DESCUENTOS.lista;
+  if(!lista || lista.length===0){ toast('Genera el reporte primero'); return; }
+  var filas=[
+    ['Cobros y Descuentos'],
+    [ULTIMO_REPORTE_COBROS_DESCUENTOS.periodo],
+    [],
+    ['Fecha','Vendedor','Cliente','Monto Original','% Descuento','Monto Descuento','Monto Cobrado','Forma de pago']
+  ];
+  for(var i=0;i<lista.length;i++){
+    var p=lista[i];
+    var original=montoOriginalPago(p);
+    var descMonto=Math.max(0, Math.round((original-p.montoUSD)*100)/100);
+    var formaPagoTxt=(p.depositos||[]).map(function(d){
+      return d.formaPago==='transferencia'?'Transferencia':(d.formaPago==='efectivo'?'Efectivo':'Divisas');
+    }).join(' + ');
+    filas.push([
+      p.fecha, 'VEND '+(p.vendedor||'??')+' - '+(p.vendedorNombre||''), p.clienteNombre,
+      Math.round(original*100)/100, (p.descuentoPct||0)+'%', descMonto, p.montoUSD, formaPagoTxt
+    ]);
+  }
+  filas.push([]);
+  var totCobrado=0, totDesc=0, totOriginal=0;
+  for(var i=0;i<lista.length;i++){
+    var original=montoOriginalPago(lista[i]);
+    totOriginal+=original;
+    totCobrado+=lista[i].montoUSD;
+    totDesc+=Math.max(0, Math.round((original-lista[i].montoUSD)*100)/100);
+  }
+  filas.push(['TOTAL','','',Math.round(totOriginal*100)/100,'',Math.round(totDesc*100)/100,Math.round(totCobrado*100)/100,'']);
+  filas.push([]);
+  filas.push(['TOTALES DEL PERIODO']);
+  filas.push(['Total cobrado', Math.round(totCobrado*100)/100]);
+  filas.push(['Total de descuentos otorgados', Math.round(totDesc*100)/100]);
+  filas.push(['Monto original de los documentos', Math.round(totOriginal*100)/100]);
+  filas.push(['% que representa el descuento del original', (totOriginal>0?(Math.round(totDesc/totOriginal*1000)/10):0)+'%']);
+
+  // Cuentas por Cobrar (saldo pendiente actual, mismo filtro de vendedor
+  // que el resto de este reporte - no tiene rango de fecha, es la foto de
+  // hoy)
+  var vendSelCobXls=document.getElementById('rptVendedor').value;
+  var alcanceRptCobXls=alcanceVendedoresVisibles();
+  var cxcFiltradaXls=CUENTAS_COBRAR.filter(function(d){
+    if(d.saldo<=0.009) return false;
+    if(vendSelCobXls!=='todos' && (d.vendedor||'??')!==vendSelCobXls) return false;
+    if(alcanceRptCobXls && alcanceRptCobXls.indexOf(d.vendedor||'??')<0) return false;
+    return true;
+  });
+  var cxcTotalSaldoXls=0;
+  for(var i=0;i<cxcFiltradaXls.length;i++) cxcTotalSaldoXls+=cxcFiltradaXls[i].saldo;
+  filas.push([]);
+  filas.push(['CUENTAS POR COBRAR (saldo pendiente actual, no es del periodo)']);
+  filas.push(['Documentos pendientes', cxcFiltradaXls.length]);
+  filas.push(['Saldo pendiente total', Math.round(cxcTotalSaldoXls*100)/100]);
+  filas.push([]);
+  filas.push(['Por antiguedad', 'Documentos', 'Saldo']);
+  var porBucketXls={};
+  for(var b=0;b<BUCKETS_VENCIMIENTO.length;b++){ porBucketXls[BUCKETS_VENCIMIENTO[b].key]={docs:0, saldo:0}; }
+  for(var i=0;i<cxcFiltradaXls.length;i++){
+    var dBx=cxcFiltradaXls[i];
+    var bucketKeyX=bucketVencimiento(diasDesdeEmision(dBx.emision));
+    porBucketXls[bucketKeyX].docs++;
+    porBucketXls[bucketKeyX].saldo+=dBx.saldo;
+  }
+  for(var b=0;b<BUCKETS_VENCIMIENTO.length;b++){
+    var bkX=BUCKETS_VENCIMIENTO[b];
+    filas.push([bkX.label, porBucketXls[bkX.key].docs, Math.round(porBucketXls[bkX.key].saldo*100)/100]);
+  }
+
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols']=[{wch:12},{wch:22},{wch:30},{wch:14},{wch:12},{wch:14},{wch:14},{wch:18}];
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}},{s:{r:1,c:0},e:{r:1,c:7}}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Cobros y Descuentos');
+  XLSX.writeFile(wb, 'cobros_descuentos_'+ULTIMO_REPORTE_COBROS_DESCUENTOS.periodo.replace(/[\/ ]/g,'_')+'.xlsx', {cellStyles:true});
+  toast('Excel generado');
+}
+
 function toggleRptCard(id){
   var body=document.getElementById(id+'-body');
   var arrow=document.getElementById(id+'-arrow');
@@ -6087,6 +6507,26 @@ function seleccionarRptCliente(id, nombre){
   renderReportes();
 }
 
+// Bultos-equivalente regalados por promociones en un pedido (convierte
+// las unidades gratis de bonificacionesUnidades usando las unidades por
+// bulto de cada producto). Se usa para mostrar, ademas de los bultos
+// facturados, el total real que salio de bodega.
+function bultosEquivalentesBonif(ped){
+  var total=0;
+  if(!ped.bonificacionesUnidades) return 0;
+  var ids=Object.keys(ped.bonificacionesUnidades);
+  for(var i=0;i<ids.length;i++){
+    var bpid=ids[i];
+    var unidades=ped.bonificacionesUnidades[bpid]||0;
+    if(!unidades) continue;
+    var prod=null;
+    for(var j=0;j<PRODUCTOS.length;j++){ if(PRODUCTOS[j].id===bpid){ prod=PRODUCTOS[j]; break; } }
+    var uniVenta=prod?(parseInt(prod.uni_venta)||1):1;
+    total+=unidades/uniVenta;
+  }
+  return total;
+}
+
 function renderReportes(){
   var lista=rptGetPedidosFiltrados();
   var vendSel=document.getElementById('rptVendedor').value;
@@ -6101,23 +6541,28 @@ function renderReportes(){
 
   // Reporte 1: Resumen general
   var totPedidos=lista.length;
-  var totBultos=0, totMonto=0;
+  var totBultos=0, totMonto=0, totBultosPromo=0;
   var clientesMap={};
   for(var i=0;i<lista.length;i++){
     var p=lista[i];
     totBultos+=p.bultos;
     totMonto+=p.monto;
+    totBultosPromo+=bultosEquivalentesBonif(p);
     var cid=p.cliente.id+'|'+p.cliente.nombre;
     if(!clientesMap[cid]) clientesMap[cid]=0;
     clientesMap[cid]++;
   }
+  totBultosPromo=Math.round(totBultosPromo*100)/100;
+  var totVendido=Math.round((totBultos+totBultosPromo)*100)/100;
   var clientesRepeat=Object.keys(clientesMap).filter(function(k){return clientesMap[k]>1;}).length;
   var montoTxt='$'+totMonto.toFixed(0);
 
   document.getElementById('rptResumen').innerHTML=
     '<div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:8px">'+
     '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(totPedidos,22)+'">'+totPedidos+'</div><div class="lbl">Pedidos</div></div>'+
-    '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(totBultos,22)+'">'+totBultos+'</div><div class="lbl">Bultos</div></div>'+
+    '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(totBultos,22)+'">'+totBultos+'</div><div class="lbl">Bultos</div>'+
+      (totBultosPromo>0?'<div style="font-size:12px;color:var(--ambar);margin-top:4px">+'+totBultosPromo+' promo</div><div style="font-size:13px;color:var(--azul);font-weight:700">= '+totVendido+' total vendido</div>':'')+
+    '</div>'+
     '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(montoTxt,22)+';color:var(--verde)">'+montoTxt+'</div><div class="lbl">Monto total</div></div>'+
     '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(clientesRepeat,22)+';color:var(--ambar)">'+clientesRepeat+'</div><div class="lbl">Clientes con Recompra</div></div>'+
     '</div>';
@@ -6132,9 +6577,10 @@ function renderReportes(){
     var vObjR=null;
     for(var vri=0;vri<VENDEDORES.length;vri++){if(VENDEDORES[vri].id===vid){vObjR=VENDEDORES[vri];break;}}
     var vnom=vObjR?vObjR.nombre:('VEND '+vid);
-    if(!porVend[vid]) porVend[vid]={id:vid,nombre:vnom,pedidos:0,bultos:0,monto:0,clientes:{}};
+    if(!porVend[vid]) porVend[vid]={id:vid,nombre:vnom,pedidos:0,bultos:0,bultosPromo:0,monto:0,clientes:{}};
     porVend[vid].pedidos++;
     porVend[vid].bultos+=p.bultos;
+    porVend[vid].bultosPromo+=bultosEquivalentesBonif(p);
     porVend[vid].monto+=p.monto;
     var cid2=p.cliente.id;
     if(!porVend[vid].clientes[cid2]) porVend[vid].clientes[cid2]=0;
@@ -6154,6 +6600,8 @@ function renderReportes(){
       var montoVendTxt='$'+vd.monto.toFixed(0);
       var pctBultosVend=totBultos>0?Math.round(vd.bultos/totBultos*1000)/10:0;
       var pctMontoVend=totMonto>0?Math.round(vd.monto/totMonto*1000)/10:0;
+      var bultosPromoVend=Math.round(vd.bultosPromo*100)/100;
+      var totalVendidoVend=Math.round((vd.bultos+vd.bultosPromo)*100)/100;
       htmlVend+=
         '<div style="border:1px solid var(--borde);border-radius:10px;padding:12px;margin-bottom:8px">'+
         '<div style="background:var(--azul);color:#fff;border-radius:6px;padding:6px 10px;margin-bottom:8px;display:flex;justify-content:space-between">'+
@@ -6166,7 +6614,9 @@ function renderReportes(){
         '</div>'+
         '<div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:6px">'+
           '<div class="metric" style="padding:8px"><div class="num" style="font-size:'+fontSizeParaMetrica(vd.pedidos,18)+'">'+vd.pedidos+'</div><div class="lbl">Pedidos</div></div>'+
-          '<div class="metric" style="padding:8px"><div class="num" style="font-size:'+fontSizeParaMetrica(vd.bultos,18)+'">'+vd.bultos+'</div><div class="lbl">Bultos</div></div>'+
+          '<div class="metric" style="padding:8px"><div class="num" style="font-size:'+fontSizeParaMetrica(vd.bultos,18)+'">'+vd.bultos+'</div><div class="lbl">Bultos</div>'+
+            (bultosPromoVend>0?'<div style="font-size:11px;color:var(--ambar);margin-top:3px">+'+bultosPromoVend+' promo</div><div style="font-size:12px;color:var(--azul);font-weight:700">= '+totalVendidoVend+' total</div>':'')+
+          '</div>'+
           '<div class="metric" style="padding:8px"><div class="num" style="font-size:'+fontSizeParaMetrica(montoVendTxt,16)+';color:var(--verde)">'+montoVendTxt+'</div><div class="lbl">Monto</div></div>'+
           '<div class="metric" style="padding:8px"><div class="num" style="font-size:'+fontSizeParaMetrica(cliRepeat2,18)+';color:var(--ambar)">'+cliRepeat2+'</div><div class="lbl">Cli. Recompra</div></div>'+
         '</div>'+
@@ -6326,40 +6776,100 @@ function renderReportes(){
   // Reporte: Comparativo mes actual vs mes anterior (calendario, no el
   // rango Desde/Hasta), respetando el filtro de vendedor/cliente
   var hoyComp=new Date();
-  var mesActualStr=hoyComp.getFullYear()+'-'+String(hoyComp.getMonth()+1).padStart(2,'0');
-  var mesAntDate=new Date(hoyComp.getFullYear(), hoyComp.getMonth()-1, 1);
-  var mesAntStr=mesAntDate.getFullYear()+'-'+String(mesAntDate.getMonth()+1).padStart(2,'0');
+  var numMesesComp=parseInt(document.getElementById('rptComparativoMeses')?document.getElementById('rptComparativoMeses').value:2,10)||2;
+  var nombresMesComp=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  // Lista de meses a comparar, del mas viejo al mas reciente (el ultimo
+  // siempre es el mes actual)
+  var mesesComp=[];
+  for(var m=numMesesComp-1;m>=0;m--){
+    var fechaMesComp=new Date(hoyComp.getFullYear(), hoyComp.getMonth()-m, 1);
+    mesesComp.push({
+      key:fechaMesComp.getFullYear()+'-'+String(fechaMesComp.getMonth()+1).padStart(2,'0'),
+      label:nombresMesComp[fechaMesComp.getMonth()]+' '+fechaMesComp.getFullYear(),
+      stats:{bultos:0,bultosPromo:0,monto:0,pedidos:0}
+    });
+  }
   var baseComp=RPT_PEDIDOS.filter(function(p){ return !p.anulado; });
   if(vendSel!=='todos') baseComp=baseComp.filter(function(p){ return (p.vendedor||'??')===vendSel; });
   if(cliSel!=='todos') baseComp=baseComp.filter(function(p){ return p.cliente.id===cliSel; });
-  var statsActual={bultos:0,monto:0,pedidos:0}, statsAnt={bultos:0,monto:0,pedidos:0};
   for(var i=0;i<baseComp.length;i++){
     var p=baseComp[i];
     var mesP=fechaToISO(p.fecha).substring(0,7);
-    if(mesP===mesActualStr){ statsActual.bultos+=p.bultos; statsActual.monto+=p.monto; statsActual.pedidos++; }
-    else if(mesP===mesAntStr){ statsAnt.bultos+=p.bultos; statsAnt.monto+=p.monto; statsAnt.pedidos++; }
+    for(var m=0;m<mesesComp.length;m++){
+      if(mesesComp[m].key===mesP){
+        mesesComp[m].stats.bultos+=p.bultos; mesesComp[m].stats.monto+=p.monto; mesesComp[m].stats.pedidos++;
+        mesesComp[m].stats.bultosPromo+=bultosEquivalentesBonif(p);
+        break;
+      }
+    }
   }
   function pctCambio(actual, anterior){
     if(anterior>0) return Math.round((actual-anterior)/anterior*1000)/10;
     return actual>0?100:0;
   }
-  var cambioMonto=pctCambio(statsActual.monto, statsAnt.monto);
-  var cambioBultos=pctCambio(statsActual.bultos, statsAnt.bultos);
-  var nombresMesComp=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  var labelMesActual=nombresMesComp[hoyComp.getMonth()]+' '+hoyComp.getFullYear();
-  var labelMesAnt=nombresMesComp[mesAntDate.getMonth()]+' '+mesAntDate.getFullYear();
   function flechaCambio(pct){
     if(pct>0) return '<span style="color:var(--verde)">▲ +'+pct+'%</span>';
     if(pct<0) return '<span style="color:var(--rojo)">▼ '+pct+'%</span>';
     return '<span style="color:#888">= 0%</span>';
   }
-  var htmlComp='<table style="width:100%;border-collapse:collapse;font-size:13px">'+
-    '<tr style="background:var(--azul-c);color:var(--azul)"><th style="padding:6px;text-align:left">&nbsp;</th><th style="padding:6px;text-align:right">'+labelMesAnt+'</th><th style="padding:6px;text-align:right">'+labelMesActual+'</th><th style="padding:6px;text-align:right">Cambio</th></tr>'+
-    '<tr><td style="padding:6px;border-bottom:1px solid var(--borde)">Pedidos</td><td style="padding:6px;text-align:right;border-bottom:1px solid var(--borde)">'+statsAnt.pedidos+'</td><td style="padding:6px;text-align:right;border-bottom:1px solid var(--borde);font-weight:700">'+statsActual.pedidos+'</td><td style="padding:6px;text-align:right;border-bottom:1px solid var(--borde)">'+flechaCambio(pctCambio(statsActual.pedidos,statsAnt.pedidos))+'</td></tr>'+
-    '<tr><td style="padding:6px;border-bottom:1px solid var(--borde)">Bultos</td><td style="padding:6px;text-align:right;border-bottom:1px solid var(--borde)">'+statsAnt.bultos+'</td><td style="padding:6px;text-align:right;border-bottom:1px solid var(--borde);font-weight:700">'+statsActual.bultos+'</td><td style="padding:6px;text-align:right;border-bottom:1px solid var(--borde)">'+flechaCambio(cambioBultos)+'</td></tr>'+
-    '<tr><td style="padding:6px">Monto</td><td style="padding:6px;text-align:right">$'+formatearNumeroConMiles(statsAnt.monto,0)+'</td><td style="padding:6px;text-align:right;font-weight:700;color:var(--azul)">$'+formatearNumeroConMiles(statsActual.monto,0)+'</td><td style="padding:6px;text-align:right">'+flechaCambio(cambioMonto)+'</td></tr>'+
-    '</table>';
+  // Se quita la columna unica de "Cambio" al final - ahora cada mes (a
+  // partir del segundo) muestra su propio % de cambio intermensual, es
+  // decir, contra el mes inmediatamente anterior a el, no contra el
+  // primero de la lista. Asi, con 6 meses se ve la tendencia mes a mes
+  // completa, no solo el ultimo salto.
+  var mesActualComp=mesesComp[mesesComp.length-1];
+  var mesAntComp=mesesComp[mesesComp.length-2];
+  // La tabla usa TODO el ancho disponible (width:100%) - la columna de
+  // etiqueta tiene un ancho fijo chico, y las columnas de cada mes se
+  // reparten en partes iguales sobre el espacio restante (table-layout:
+  // fixed hace esto automaticamente al dejarlas sin ancho explicito). Asi
+  // no queda espacio muerto a los lados, sea que se muestren 2 o 6 meses.
+  // min-width solo entra en juego en pantallas angostas con muchos meses,
+  // para que ahi sí aparezca scroll horizontal en vez de apretar el texto.
+  var minAnchoTotal=90+mesesComp.length*95;
+  var htmlComp='<div style="overflow-x:auto"><table style="table-layout:fixed;width:100%;min-width:'+minAnchoTotal+'px;border-collapse:collapse;font-size:13px">'+
+    '<colgroup><col style="width:70px">';
+  for(var m=0;m<mesesComp.length;m++){ htmlComp+='<col>'; }
+  htmlComp+='</colgroup>'+
+    '<tr style="background:var(--azul-c);color:var(--azul)"><th style="padding:6px;text-align:left">&nbsp;</th>';
+  for(var m=0;m<mesesComp.length;m++){ htmlComp+='<th style="padding:6px;text-align:right">'+mesesComp[m].label+'</th>'; }
+  htmlComp+='</tr>';
+  function filaComp(label, campo, formatoMoneda){
+    var fila='<tr><td style="padding:6px;border-bottom:1px solid var(--borde)">'+label+'</td>';
+    for(var m=0;m<mesesComp.length;m++){
+      var esUltimo=(m===mesesComp.length-1);
+      var val=mesesComp[m].stats[campo];
+      var valTxt=formatoMoneda?('$'+formatearNumeroConMiles(val,0)):val;
+      var cambioTxt='';
+      if(m>0){
+        var pctMes=pctCambio(val, mesesComp[m-1].stats[campo]);
+        cambioTxt='<span style="font-size:12px;margin-left:6px;font-weight:600">'+flechaCambio(pctMes)+'</span>';
+      }
+      var promoTxt='';
+      if(campo==='bultos'){
+        var promoM=Math.round(mesesComp[m].stats.bultosPromo*100)/100;
+        if(promoM>0){
+          var totalM=Math.round((val+promoM)*100)/100;
+          promoTxt='<div style="font-size:11px;color:var(--ambar);margin-top:3px">+'+promoM+' promo</div><div style="font-size:12px;color:var(--azul);font-weight:700">= '+totalM+' total</div>';
+        }
+      }
+      fila+='<td style="padding:6px;text-align:right;border-bottom:1px solid var(--borde)'+(esUltimo?';font-weight:700'+(formatoMoneda?';color:var(--azul)':''):'')+'"><span style="white-space:nowrap">'+valTxt+cambioTxt+'</span>'+promoTxt+'</td>';
+    }
+    fila+='</tr>';
+    return fila;
+  }
+  htmlComp+=filaComp('Pedidos','pedidos',false);
+  htmlComp+=filaComp('Bultos','bultos',false);
+  htmlComp+=filaComp('Monto','monto',true);
+  htmlComp+='</table></div>';
+  if(mesesComp.length>1) htmlComp+='<p style="font-size:11px;color:#888;margin-top:8px">El % debajo de cada mes compara ese mes contra el inmediatamente anterior (intermensual) — no contra el primero de la lista.</p>';
   document.getElementById('rptComparativo').innerHTML=htmlComp;
+  // Se mantienen estas variables (a partir de los ultimos dos meses de la
+  // lista de arriba) porque la seccion de "Clientes en Riesgo" mas abajo
+  // siempre compara mes actual vs mes anterior, sin importar cuantos
+  // meses se esten mostrando en el comparativo.
+  var mesActualStr=mesActualComp.key, mesAntStr=mesAntComp.key;
+  var labelMesActual=mesActualComp.label, labelMesAnt=mesAntComp.label;
 
   // Reporte: Clientes en riesgo - compraron el mes anterior pero cayeron
   // 40% o mas este mes (incluye los que llegaron a compra cero). Reutiliza
@@ -7009,6 +7519,18 @@ function adminTab(tab){
     var backfillCard=document.getElementById('repoBackfillCard');
     if(backfillCard) backfillCard.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'block':'none';
     renderHistorialRepo();
+    var cardCompras=document.getElementById('cardRegistrarCompras');
+    if(cardCompras){
+      if(puedeRegistrarCompras()){
+        cardCompras.style.display='';
+        poblarSelectProductosCompra();
+        renderListaComprasRecientes();
+        var fCompraHoy=document.getElementById('compraFecha');
+        if(fCompraHoy && !fCompraHoy.value) fCompraHoy.value=fechaHoyISO();
+      } else {
+        cardCompras.style.display='none';
+      }
+    }
   }
 }
 
@@ -7170,6 +7692,200 @@ function guardarStockEstimadoFirebase(){
   }).catch(function(){});
 }
 
+// Muestra, producto por producto, el stock oficial (el que ve el
+// vendedor) contra el stock estimado en vivo (el que se descuenta solo
+// con cada pedido, invisible para el vendedor a proposito). Sirve para
+// confirmar que el mecanismo dinamico realmente esta funcionando, ya que
+// en el resto de la app no hay ningun otro lugar donde se vea.
+function verDiagnosticoStockEstimado(){
+  var cont=document.getElementById('diagnosticoStockEstimado');
+  var html='<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+    '<tr style="background:var(--azul-c);color:var(--azul)"><th style="padding:5px;text-align:left">Producto</th><th style="padding:5px;text-align:right">Stock Oficial</th><th style="padding:5px;text-align:right">Stock Estimado</th><th style="padding:5px;text-align:left">Estado</th></tr>';
+  for(var i=0;i<PRODUCTOS.length;i++){
+    var p=PRODUCTOS[i];
+    if(p.activo===false) continue;
+    var estimado=STOCK_ESTIMADO[p.id];
+    var estimadoTxt=(estimado===undefined)?'sin datos':Math.round(estimado*100)/100;
+    var periodos=HISTORIAL_AGOTADO[p.id]||[];
+    var abierto=periodos.length>0 && periodos[periodos.length-1].hasta===null;
+    var estadoTxt=abierto
+      ?'<span style="color:var(--rojo);font-weight:600">Agotado desde '+periodos[periodos.length-1].desde+'</span>'
+      :(periodos.length>0?'<span style="color:#888">'+periodos.length+' periodo(s) agotado en el historial</span>':'<span style="color:var(--verde)">Sin historial de agotado</span>');
+    var difiere=estimado!==undefined && Math.round(estimado*100)/100!==p.stock;
+    html+='<tr style="border-bottom:1px solid var(--borde)'+(difiere?';background:#FFF9E6':'')+'">'+
+      '<td style="padding:5px">'+p.nombre+'</td>'+
+      '<td style="padding:5px;text-align:right">'+p.stock+'</td>'+
+      '<td style="padding:5px;text-align:right;font-weight:'+(difiere?'700':'400')+'">'+estimadoTxt+'</td>'+
+      '<td style="padding:5px">'+estadoTxt+'</td>'+
+    '</tr>';
+  }
+  html+='</table>'+
+    '<p style="font-size:11px;color:#888;margin-top:8px">"Stock Oficial" es el que ve el vendedor (solo cambia con una importacion o edicion manual). "Stock Estimado" se descuenta solo con cada pedido creado/editado/anulado/reactivado, y es el que usa el calculo de Reposicion para saber cuando un producto estuvo realmente agotado. Si los dos numeros son distintos (resaltado en amarillo), es porque hubo movimiento de pedidos desde la ultima vez que importaste inventario — eso confirma que el mecanismo esta activo.</p>';
+  cont.innerHTML=html;
+}
+
+// ═══ REGISTRO DE COMPRAS (para el calculo de reposicion por reconciliacion) ═══
+var COMPRAS_REGISTRADAS=[];
+var COMPRA_ITEMS_TEMP=[];
+
+function puedeRegistrarCompras(){
+  return VEND && (VEND.codigo==='01'||VEND.codigo==='20'||VEND.codigo==='00');
+}
+
+function poblarSelectProductosCompra(){
+  var sel=document.getElementById('compraProdSelect');
+  if(!sel) return;
+  var actual=sel.value;
+  var html='';
+  var activos=PRODUCTOS.filter(function(p){ return p.activo!==false; }).sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
+  for(var i=0;i<activos.length;i++){ html+='<option value="'+activos[i].id+'">'+activos[i].nombre+'</option>'; }
+  sel.innerHTML=html;
+  if(actual) sel.value=actual;
+}
+
+function agregarItemCompraTemp(){
+  if(!puedeRegistrarCompras()) return;
+  var prodId=document.getElementById('compraProdSelect').value;
+  var cant=parseFloat(document.getElementById('compraProdCant').value);
+  if(!prodId){ toast('Selecciona un producto'); return; }
+  if(isNaN(cant)||cant<=0){ toast('Indica una cantidad valida'); return; }
+  COMPRA_ITEMS_TEMP.push({productoId:prodId, cantidad:cant});
+  document.getElementById('compraProdCant').value='';
+  renderCompraItemsTemp();
+}
+
+function quitarItemCompraTemp(idx){
+  COMPRA_ITEMS_TEMP.splice(idx,1);
+  renderCompraItemsTemp();
+}
+
+function renderCompraItemsTemp(){
+  var cont=document.getElementById('compraItemsTempList');
+  if(!cont) return;
+  if(COMPRA_ITEMS_TEMP.length===0){ cont.innerHTML='<div style="color:#aaa;font-size:12px">Sin productos agregados todavia</div>'; return; }
+  var html='';
+  for(var i=0;i<COMPRA_ITEMS_TEMP.length;i++){
+    var it=COMPRA_ITEMS_TEMP[i];
+    var prod=null;
+    for(var j=0;j<PRODUCTOS.length;j++){ if(PRODUCTOS[j].id===it.productoId){ prod=PRODUCTOS[j]; break; } }
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+      '<span>'+(prod?prod.nombre:it.productoId)+' — '+it.cantidad+' bultos</span>'+
+      '<button onclick="quitarItemCompraTemp('+i+')" style="background:none;border:none;color:var(--rojo);cursor:pointer">Quitar</button>'+
+    '</div>';
+  }
+  cont.innerHTML=html;
+}
+
+function guardarComprasFirebase(){
+  db.collection('config').doc('compras_registradas').set({
+    data: JSON.stringify(COMPRAS_REGISTRADAS),
+    actualizado: new Date().toISOString()
+  }).catch(function(){ toast('Error guardando las compras en Firebase'); });
+}
+
+function guardarCompraManual(){
+  if(!puedeRegistrarCompras()) return;
+  if(COMPRA_ITEMS_TEMP.length===0){ toast('Agrega al menos un producto'); return; }
+  var fecha=document.getElementById('compraFecha').value;
+  if(!fecha){ toast('Indica la fecha de la compra'); return; }
+  var nuevos=COMPRA_ITEMS_TEMP.map(function(it){
+    return {id:'C'+Date.now()+Math.random().toString(36).substr(2,6), fecha:fecha, productoId:it.productoId, cantidad:it.cantidad, realizadoPor:VEND.nombre+' (VEND '+VEND.codigo+')'};
+  });
+  COMPRAS_REGISTRADAS=COMPRAS_REGISTRADAS.concat(nuevos);
+  guardarComprasFirebase();
+  COMPRA_ITEMS_TEMP=[];
+  renderCompraItemsTemp();
+  toast(nuevos.length+' producto(s) de compra guardados');
+  renderListaComprasRecientes();
+}
+
+// Normaliza una celda de fecha de Excel (puede venir como objeto Date de
+// SheetJS, como texto DD/MM/YYYY, o como texto YYYY-MM-DD) a YYYY-MM-DD
+function normalizarFechaExcelCompra(valor){
+  if(!valor) return null;
+  if(valor instanceof Date){
+    return valor.getFullYear()+'-'+String(valor.getMonth()+1).padStart(2,'0')+'-'+String(valor.getDate()).padStart(2,'0');
+  }
+  var str=String(valor).trim();
+  var m=str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  if(/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)){
+    var partes=str.split('-');
+    return partes[0]+'-'+partes[1].padStart(2,'0')+'-'+partes[2].padStart(2,'0');
+  }
+  return null;
+}
+
+function cargarExcelCompras(input){
+  if(!puedeRegistrarCompras()){ input.value=''; return; }
+  var file=input.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb=XLSX.read(e.target.result, {type:'binary', cellDates:true});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(ws, {header:1, raw:false, dateNF:'yyyy-mm-dd'});
+      var headers=(rows[0]||[]).map(function(h){ return (h||'').toString().trim().toUpperCase(); });
+      var idxFecha=headers.indexOf('FECHA');
+      var idxCodigo=headers.indexOf('CODIGO')>=0?headers.indexOf('CODIGO'):headers.indexOf('CO_ART');
+      var idxCant=headers.indexOf('CANTIDAD')>=0?headers.indexOf('CANTIDAD'):headers.indexOf('BULTOS');
+      if(idxFecha<0||idxCodigo<0||idxCant<0){ toast('El Excel debe tener columnas Fecha, Codigo y Cantidad'); return; }
+      var nuevos=[];
+      var noEncontrados=0, sinFecha=0;
+      for(var i=1;i<rows.length;i++){
+        var row=rows[i];
+        if(!row||row[idxCodigo]===undefined||row[idxCodigo]===null||row[idxCodigo]==='') continue;
+        var codigo=String(row[idxCodigo]).trim();
+        var prod=null;
+        for(var j=0;j<PRODUCTOS.length;j++){ if(PRODUCTOS[j].id===codigo || PRODUCTOS[j].co_art===codigo){ prod=PRODUCTOS[j]; break; } }
+        if(!prod){ noEncontrados++; continue; }
+        var cant=parseFloat(row[idxCant])||0;
+        if(cant<=0) continue;
+        var fechaISO=normalizarFechaExcelCompra(row[idxFecha]);
+        if(!fechaISO){ sinFecha++; continue; }
+        nuevos.push({id:'C'+Date.now()+Math.random().toString(36).substr(2,6)+i, fecha:fechaISO, productoId:prod.id, cantidad:cant, realizadoPor:VEND.nombre+' (VEND '+VEND.codigo+')'});
+      }
+      if(nuevos.length===0){ toast('No se encontraron filas validas para cargar'); return; }
+      COMPRAS_REGISTRADAS=COMPRAS_REGISTRADAS.concat(nuevos);
+      guardarComprasFirebase();
+      var avisoExtra=(noEncontrados>0?' | '+noEncontrados+' codigo(s) no encontrados':'')+(sinFecha>0?' | '+sinFecha+' fila(s) con fecha invalida':'');
+      toast(nuevos.length+' compra(s) cargadas'+avisoExtra);
+      renderListaComprasRecientes();
+      input.value='';
+    }catch(err){
+      toast('Error leyendo el archivo: '+err.message);
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function renderListaComprasRecientes(){
+  var cont=document.getElementById('comprasRecientesList');
+  if(!cont) return;
+  var ultimas=COMPRAS_REGISTRADAS.slice().sort(function(a,b){ return b.fecha<a.fecha?-1:(b.fecha>a.fecha?1:0); }).slice(0,15);
+  if(ultimas.length===0){ cont.innerHTML='<div style="color:#aaa;font-size:12px;text-align:center;padding:8px">Sin compras registradas todavia</div>'; return; }
+  var html='';
+  for(var i=0;i<ultimas.length;i++){
+    var c=ultimas[i];
+    var prod=null;
+    for(var j=0;j<PRODUCTOS.length;j++){ if(PRODUCTOS[j].id===c.productoId){ prod=PRODUCTOS[j]; break; } }
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+      '<span>'+c.fecha+' — '+(prod?prod.nombre:c.productoId)+': '+c.cantidad+' bultos</span>'+
+      '<button onclick="eliminarCompraRegistrada(\''+c.id+'\')" style="background:none;border:none;color:var(--rojo);cursor:pointer;font-size:11px">Eliminar</button>'+
+    '</div>';
+  }
+  if(COMPRAS_REGISTRADAS.length>15) html+='<div style="font-size:11px;color:#888;text-align:center;padding-top:6px">Mostrando las 15 mas recientes de '+COMPRAS_REGISTRADAS.length+' en total</div>';
+  cont.innerHTML=html;
+}
+
+function eliminarCompraRegistrada(id){
+  if(!puedeRegistrarCompras()) return;
+  COMPRAS_REGISTRADAS=COMPRAS_REGISTRADAS.filter(function(c){ return c.id!==id; });
+  guardarComprasFirebase();
+  renderListaComprasRecientes();
+  toast('Compra eliminada');
+}
+
 function calcularReposicion(){
   var resEl=document.getElementById('repoResultados');
   resEl.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando ventas historicas...</div>';
@@ -7249,6 +7965,60 @@ function calcularReposicion(){
     var aireCm=(REPO_CONFIG.espacioAireCm!==undefined?REPO_CONFIG.espacioAireCm:12);
     var alturaUtilCm=alturaContCm-aireCm;
 
+    // Preparar datos para el calculo alternativo por reconciliacion de
+    // inventario (Stock inicial + Compras del periodo - Stock final).
+    // Busca, por PRODUCTO, el snapshot real mas reciente que sea <= la
+    // fecha pedida. Si no hay ninguno, y el usuario activo la opcion de
+    // abajo, se asume que el stock era 0 el dia antes de la primera
+    // compra que se le haya registrado a ese producto - asi no hace falta
+    // esperar a tener una foto de inventario real de antes para poder
+    // usar esta funcionalidad.
+    var desdeISO=desde.getFullYear()+'-'+String(desde.getMonth()+1).padStart(2,'0')+'-'+String(desde.getDate()).padStart(2,'0');
+    var hastaISO=hasta.getFullYear()+'-'+String(hasta.getMonth()+1).padStart(2,'0')+'-'+String(hasta.getDate()).padStart(2,'0');
+    var asumirCeroPrimeraCompra=document.getElementById('repoAsumirCeroPrimeraCompra')?document.getElementById('repoAsumirCeroPrimeraCompra').checked:false;
+    function primeraFechaCompraProducto(pid){
+      var primera=null;
+      for(var ci=0;ci<COMPRAS_REGISTRADAS.length;ci++){
+        if(COMPRAS_REGISTRADAS[ci].productoId===pid && (!primera || COMPRAS_REGISTRADAS[ci].fecha<primera)) primera=COMPRAS_REGISTRADAS[ci].fecha;
+      }
+      return primera;
+    }
+    function stockParaProductoEnFecha(pid, fechaISO){
+      // 1. El snapshot real mas reciente que sea <= fechaISO y que tenga
+      // dato para este producto especifico
+      var mejor=null;
+      for(var si=0;si<HISTORIAL_INVENTARIO_SNAPSHOTS.length;si++){
+        var snap=HISTORIAL_INVENTARIO_SNAPSHOTS[si];
+        if(snap.fecha<=fechaISO && snap.stocks[pid]!==undefined && (!mejor || snap.fecha>mejor.fecha)) mejor=snap;
+      }
+      if(mejor) return {valor:mejor.stocks[pid], asumido:false, fecha:mejor.fecha};
+      // 2. Respaldo: asumir stock 0 el dia antes de la PRIMERA compra que
+      // se le haya registrado jamas a este producto (sin importar si esa
+      // compra cae antes o dentro del rango de analisis elegido), y
+      // reconstruir el stock a la fecha pedida sumando TODAS las compras
+      // registradas desde ese punto de partida hasta esa fecha. Esto es
+      // necesario porque compras "viejas" (anteriores al rango elegido)
+      // ya estan reflejadas en el stock actual, y si no se cuentan aqui,
+      // el calculo las pierde por completo y sale artificialmente bajo.
+      if(asumirCeroPrimeraCompra){
+        var primeraCompra=primeraFechaCompraProducto(pid);
+        if(primeraCompra){
+          var diaAntes=new Date(primeraCompra+'T00:00:00'); diaAntes.setDate(diaAntes.getDate()-1);
+          var diaAntesISO=diaAntes.getFullYear()+'-'+String(diaAntes.getMonth()+1).padStart(2,'0')+'-'+String(diaAntes.getDate()).padStart(2,'0');
+          if(diaAntesISO<=fechaISO){
+            var comprasHastaFecha=0;
+            for(var ci=0;ci<COMPRAS_REGISTRADAS.length;ci++){
+              var c=COMPRAS_REGISTRADAS[ci];
+              if(c.productoId===pid && c.fecha>diaAntesISO && c.fecha<=fechaISO) comprasHastaFecha+=c.cantidad;
+            }
+            return {valor:Math.round(comprasHastaFecha*100)/100, asumido:true, fecha:diaAntesISO};
+          }
+        }
+      }
+      return null;
+    }
+    var hastaEsHoyOFuturo=hasta>=ahora;
+
     var filas=[];
     var totalCbmSugerido=0;
     for(var i=0;i<PRODUCTOS.length;i++){
@@ -7288,12 +8058,52 @@ function calcularReposicion(){
       var estado='verde';
       if(coberturaActualDias<leadTime) estado='rojo';
       else if(coberturaActualDias<leadTime+REPO_CONFIG.cicloSugeridoDias*0.3) estado='amarillo';
+      // Calculo alternativo por reconciliacion de inventario, si hay
+      // suficiente historial de snapshots (o el respaldo de stock cero
+      // desde la primera compra) para este producto
+      var reconciliacion=null;
+      var stockInicialInfo=stockParaProductoEnFecha(prod.id, desdeISO);
+      if(stockInicialInfo){
+        var stockFinalProd;
+        var stockFinalAsumido=false;
+        if(hastaEsHoyOFuturo){ stockFinalProd=prod.stock||0; }
+        else{
+          var stockFinalInfo=stockParaProductoEnFecha(prod.id, hastaISO);
+          stockFinalProd=stockFinalInfo?stockFinalInfo.valor:undefined;
+          stockFinalAsumido=stockFinalInfo?stockFinalInfo.asumido:false;
+        }
+        if(stockFinalProd!==undefined){
+          var comprasProd=0;
+          for(var ci=0;ci<COMPRAS_REGISTRADAS.length;ci++){
+            var cReg=COMPRAS_REGISTRADAS[ci];
+            if(cReg.productoId===prod.id && cReg.fecha>desdeISO && cReg.fecha<=hastaISO) comprasProd+=cReg.cantidad;
+          }
+          var ventaCalculada=Math.round((stockInicialInfo.valor+comprasProd-stockFinalProd)*100)/100;
+          // Si el "punto de partida" de este producto (su snapshot real, o
+          // el dia antes de su primera compra asumida) cae DENTRO del
+          // rango elegido - es decir, el producto es mas nuevo que el
+          // rango completo - se divide entre los dias reales desde ese
+          // punto, no entre TODOS los dias del rango. Si no se hiciera
+          // esto, el promedio saldria diluido con dias en los que el
+          // producto ni siquiera existia todavia.
+          var fechaEfectivaInicio=stockInicialInfo.fecha>desdeISO?stockInicialInfo.fecha:desdeISO;
+          var diasEfectivosRecon=Math.max(1, Math.round((new Date(hastaISO+'T00:00:00')-new Date(fechaEfectivaInicio+'T00:00:00'))/86400000)+1);
+          reconciliacion={
+            ventaCalculada:ventaCalculada,
+            promedioDiarioRecon:Math.round((ventaCalculada/diasEfectivosRecon)*100)/100,
+            comprasProd:Math.round(comprasProd*100)/100,
+            stockInicialProd:stockInicialInfo.valor, stockFinalProd:stockFinalProd,
+            stockInicialAsumido:stockInicialInfo.asumido, stockFinalAsumido:stockFinalAsumido,
+            diasEfectivosRecon:diasEfectivosRecon
+          };
+        }
+      }
       filas.push({
         id:prod.id, nombre:prod.nombre, sabor:prod.sabor||'', tipo:prod.tipo||'', cbmCaja:cbmCaja, cbmCajaNominal:cbmCajaNominal, stockActual:stockActual,
         promedioDiario:promedioDiario, coberturaActualDias:coberturaActualDias,
         cantidadSugerida:cantidadSugerida, estado:estado,
         filaLargo:orientacion?orientacion.largoDim:0, cajasPorFila:orientacion?orientacion.cajasPorFila:0,
-        sinMedidas:!orientacion, diasAgotadoEnVentana:diasAgotadoEnVentana
+        sinMedidas:!orientacion, diasAgotadoEnVentana:diasAgotadoEnVentana, reconciliacion:reconciliacion
       });
     }
 
@@ -7439,6 +8249,9 @@ function calcularReposicion(){
     var labelEstado={rojo:'Urgente',amarillo:'Vigilar',verde:'OK'};
     var fmtFechaCorta=function(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); };
     var html='<div style="font-size:11px;color:#888;margin-bottom:8px">Analizando ventas del '+fmtFechaCorta(desde)+' al '+fmtFechaCorta(hasta)+' ('+ventana+' dias)'+(incluirBonifRepo?' - incluye unidades gratis de promociones':' - NO incluye unidades gratis de promociones')+'</div>';
+    if(HISTORIAL_INVENTARIO_SNAPSHOTS.length>0){
+      html+='<div style="font-size:11px;color:#888;margin-bottom:8px">"Inv:" en Rotacion/dia es un segundo calculo, por reconciliacion de inventario (Stock inicial + Compras del periodo − Stock final) — pasa el cursor (o mantén presionado en el celular) para ver el detalle. Un asterisco (*) indica que el stock inicial se asumio en 0 por no tener una foto de inventario de antes. Si se aleja mucho del numero de arriba (calculado por pedidos), puede ser que falte cargar una compra, o que haya ventas fuera de la app.</div>';
+    }
     var anchos=['22%','8%','10%','8%','9%','19%','9%','15%']; // graduales: mas espacio donde hay mas texto/valor
     html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">';
     html+='<colgroup>'+anchos.map(function(w){return '<col style="width:'+w+'">';}).join('')+'</colgroup>';
@@ -7460,7 +8273,7 @@ function calcularReposicion(){
       html+='<tr style="border-bottom:1px solid #eee">'+
         '<td style="padding:6px 6px 6px 0;font-weight:600;overflow:hidden;text-overflow:ellipsis">'+f.nombre+(f.sinMedidas?' <span title="Faltan medidas de la caja" style="color:#D68910">&#9888;</span>':'')+(f.diasAgotadoEnVentana>0?' <span title="Estuvo agotado '+f.diasAgotadoEnVentana+' dia(s) dentro de este rango - esos dias no se contaron como demanda cero" style="color:#C0392B">&#128230;</span>':'')+'</td>'+
         '<td style="padding:6px">'+f.stockActual+' bto</td>'+
-        '<td style="padding:6px">'+f.promedioDiario.toFixed(2)+'</td>'+
+        '<td style="padding:6px">'+f.promedioDiario.toFixed(2)+(f.reconciliacion?'<div style="font-size:10px;color:#666;margin-top:2px" title="Stock inicial '+f.reconciliacion.stockInicialProd+(f.reconciliacion.stockInicialAsumido?' (asumido en 0, sin foto de antes)':'')+' + Compras '+f.reconciliacion.comprasProd+' - Stock final '+f.reconciliacion.stockFinalProd+(f.reconciliacion.stockFinalAsumido?' (asumido en 0)':'')+' = '+f.reconciliacion.ventaCalculada+' vendido, dividido entre '+f.reconciliacion.diasEfectivosRecon+' dias reales del producto en este rango">Inv: '+f.reconciliacion.promedioDiarioRecon+(f.reconciliacion.stockInicialAsumido?'*':'')+'</div>':'')+'</td>'+
         '<td style="padding:6px">'+(f.coberturaActualDias>900?'999+':f.coberturaActualDias.toFixed(0))+' d</td>'+
         '<td style="padding:6px"><span style="color:'+colorEstado[f.estado]+';font-weight:700">'+labelEstado[f.estado]+'</span></td>'+
         '<td style="padding:6px;font-weight:700">'+f.cantidadSugeridaAjustada+' bto ('+pctSugerido.toFixed(0)+'%)</td>'+
@@ -7546,6 +8359,44 @@ function renderAdminInv(){
   document.getElementById('adminInvList').innerHTML=html;
 }
 
+// Historial de snapshots de inventario: cada vez que se actualiza el
+// stock (manual o por archivo), se guarda una foto de TODOS los productos
+// con la fecha. Necesario para poder comparar "stock de hace X dias" vs
+// "stock de hoy" en el calculo de reposicion por reconciliacion
+// (Vendido = Stock inicial + Compras - Stock final).
+var HISTORIAL_INVENTARIO_SNAPSHOTS=[];
+function guardarSnapshotInventario(){
+  var hoyISO=fechaHoyISO();
+  var snapshot={fecha:hoyISO, stocks:{}};
+  for(var i=0;i<PRODUCTOS.length;i++){ snapshot.stocks[PRODUCTOS[i].id]=PRODUCTOS[i].stock||0; }
+  // Si ya hay un snapshot de HOY, se reemplaza (no tiene sentido guardar
+  // dos fotos del mismo dia si se corrige el inventario varias veces)
+  var idxHoy=-1;
+  for(var i=0;i<HISTORIAL_INVENTARIO_SNAPSHOTS.length;i++){ if(HISTORIAL_INVENTARIO_SNAPSHOTS[i].fecha===hoyISO){ idxHoy=i; break; } }
+  if(idxHoy>=0) HISTORIAL_INVENTARIO_SNAPSHOTS[idxHoy]=snapshot;
+  else HISTORIAL_INVENTARIO_SNAPSHOTS.push(snapshot);
+  HISTORIAL_INVENTARIO_SNAPSHOTS.sort(function(a,b){ return a.fecha<b.fecha?-1:(a.fecha>b.fecha?1:0); });
+  // Limitar a los ultimos 60 snapshots para no dejar crecer el documento
+  // indefinidamente (aprox 2 meses si se actualiza a diario, mucho mas si
+  // es semanal/quincenal como es lo tipico)
+  if(HISTORIAL_INVENTARIO_SNAPSHOTS.length>60) HISTORIAL_INVENTARIO_SNAPSHOTS=HISTORIAL_INVENTARIO_SNAPSHOTS.slice(HISTORIAL_INVENTARIO_SNAPSHOTS.length-60);
+  db.collection('config').doc('historial_inventario').set({
+    data: JSON.stringify(HISTORIAL_INVENTARIO_SNAPSHOTS),
+    actualizado: new Date().toISOString()
+  }).catch(function(){});
+}
+// Busca el snapshot mas cercano a una fecha dada (el mas reciente que sea
+// <= esa fecha; si no hay ninguno anterior, el mas antiguo disponible)
+function buscarSnapshotCercano(fechaISO){
+  if(HISTORIAL_INVENTARIO_SNAPSHOTS.length===0) return null;
+  var mejor=null;
+  for(var i=0;i<HISTORIAL_INVENTARIO_SNAPSHOTS.length;i++){
+    var s=HISTORIAL_INVENTARIO_SNAPSHOTS[i];
+    if(s.fecha<=fechaISO) mejor=s;
+  }
+  return mejor||HISTORIAL_INVENTARIO_SNAPSHOTS[0];
+}
+
 function guardarInventario(){
   for(var i=0;i<PRODUCTOS.length;i++){
     var p=PRODUCTOS[i];
@@ -7558,6 +8409,7 @@ function guardarInventario(){
     }
   }
   guardarStockEstimadoFirebase();
+  guardarSnapshotInventario();
   // Guardar en Firebase
   db.collection('config').doc('inventario').set({
     data: JSON.stringify(PRODUCTOS.map(function(p){return {id:p.id,stock_und:p.stock_und,stock:p.stock};})),
@@ -9077,7 +9929,9 @@ function cargarConfigFirebase(callback){
     db.collection('config').doc('reposicion').get(),
     db.collection('config').doc('reposicion_historial').get(),
     db.collection('config').doc('stock_estimado').get(),
-    db.collection('config').doc('historial_agotado').get()
+    db.collection('config').doc('historial_agotado').get(),
+    db.collection('config').doc('historial_inventario').get(),
+    db.collection('config').doc('compras_registradas').get()
   ];
   Promise.all(promesas).then(function(docs){
     // Catalogo completo de productos (reemplaza el listado inicial si ya
@@ -9260,6 +10114,16 @@ function cargarConfigFirebase(callback){
       // su stock oficial actual
       for(var i=0;i<PRODUCTOS.length;i++){
         if(STOCK_ESTIMADO[PRODUCTOS[i].id]===undefined) STOCK_ESTIMADO[PRODUCTOS[i].id]=PRODUCTOS[i].stock||0;
+      }
+    }catch(e){}
+    // Historial de snapshots de inventario, y compras registradas (para el
+    // calculo de reposicion por reconciliacion)
+    try{
+      if(docs[15] && docs[15].exists){
+        HISTORIAL_INVENTARIO_SNAPSHOTS=JSON.parse(docs[15].data().data||'[]');
+      }
+      if(docs[16] && docs[16].exists){
+        COMPRAS_REGISTRADAS=JSON.parse(docs[16].data().data||'[]');
       }
     }catch(e){}
     // Llamar callback cuando todo está listo
@@ -9735,9 +10599,10 @@ function cargarExcelCxC(input, tipo){
 }
 
 function renderResumenCxC(){
-  var totalDocs=CUENTAS_COBRAR.length;
+  var pendientes=CUENTAS_COBRAR.filter(function(d){ return d.saldo>0.009; });
+  var totalDocs=pendientes.length;
   var totalSaldo=0;
-  for(var i=0;i<CUENTAS_COBRAR.length;i++) totalSaldo+=CUENTAS_COBRAR[i].saldo;
+  for(var i=0;i<pendientes.length;i++) totalSaldo+=pendientes[i].saldo;
   var elD=document.getElementById('cxcResumDocs'); if(elD){ elD.textContent=totalDocs; ajustarFontMetrica('cxcResumDocs',18); }
   var elS=document.getElementById('cxcResumSaldo'); if(elS){ elS.textContent=totalSaldo<0?('($'+formatearNumeroConMiles(Math.abs(totalSaldo),2)+')'):('$'+formatearNumeroConMiles(totalSaldo,2)); ajustarFontMetrica('cxcResumSaldo',18); }
   renderListaCxCAdmin();
@@ -10243,6 +11108,36 @@ function calcularDiasVencimiento(fechaStr){
 // Dias transcurridos desde la fecha de EMISION de un documento (no desde el
 // vencimiento). Se usa para el control de antiguedad de cuentas por cobrar
 // y los avisos de "Cobrar hoy" / "Por vencer manana" en Inicio.
+// Dias transcurridos entre la emision de un documento (formato DD/MM/YYYY,
+// igual que en CUENTAS_COBRAR) y la fecha en que se registro el pago
+// (formato YYYY-MM-DD). Se usa para "dias promedio de cobro".
+// Busca la fecha de emision de un documento por numero, primero en
+// CUENTAS_COBRAR (los pendientes de hoy) y si no aparece ahi, en las
+// bases crudas Real/Fiscal - en modo "agregar" esas bases NUNCA borran
+// entradas viejas, asi que un documento que ya se cobro del todo (y por
+// eso ya no aparece en CUENTAS_COBRAR) puede seguir ahi con su fecha de
+// emision intacta, aunque su saldo guardado ya no sea el actual. Esto
+// permite recuperar la emision incluso de pagos confirmados antes de que
+// se empezara a guardar en el propio pago.
+function buscarEmisionDocumento(numero){
+  if(!numero) return null;
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(CUENTAS_COBRAR[i].numero===numero) return CUENTAS_COBRAR[i].emision||null; }
+  for(var i=0;i<CUENTAS_COBRAR_REAL.length;i++){ if(CUENTAS_COBRAR_REAL[i].numero===numero) return CUENTAS_COBRAR_REAL[i].emision||null; }
+  for(var i=0;i<CUENTAS_COBRAR_FISCAL.length;i++){ if(CUENTAS_COBRAR_FISCAL[i].numero===numero) return CUENTAS_COBRAR_FISCAL[i].emision||null; }
+  return null;
+}
+
+function diasEntreEmisionYPago(fechaEmisionStr, fechaPagoISO){
+  if(!fechaEmisionStr || !fechaPagoISO) return null;
+  var p=fechaEmisionStr.split('/');
+  if(p.length!==3) return null;
+  var fEmi=new Date(parseInt(p[2],10),parseInt(p[1],10)-1,parseInt(p[0],10));
+  var fPago=new Date(fechaPagoISO+'T00:00:00');
+  fEmi.setHours(0,0,0,0);
+  var dias=Math.round((fPago-fEmi)/(1000*60*60*24));
+  return (isNaN(dias)||dias<0)?null:dias;
+}
+
 function diasDesdeEmision(fechaStr){
   if(!fechaStr) return null;
   var p=fechaStr.split('/');
@@ -10599,7 +11494,7 @@ function guardarPagoCobro(){
   var sumaDocs=0;
   for(var i=0;i<cobroDocsSeleccionados.length;i++){
     var d=CUENTAS_COBRAR.find(function(x){return x.numero===cobroDocsSeleccionados[i];});
-    if(d){ docsSeleccionadosInfo.push({numero:d.numero, saldo:d.saldo, vencimiento:d.vencimiento}); sumaDocs+=d.saldo; }
+    if(d){ docsSeleccionadosInfo.push({numero:d.numero, saldo:d.saldo, vencimiento:d.vencimiento, emision:d.emision}); sumaDocs+=d.saldo; }
   }
   var esperado=sumaDocs*(1-descPct/100);
   var cliInfo=obtenerClientesConDeuda().find(function(x){return x.id===cobroClienteSeleccionado;});
@@ -10620,6 +11515,7 @@ function guardarPagoCobro(){
     montoUSD:montoUSDTotal,
     descuentoPct:descPct,
     montoEsperado:esperado,
+    sumaDocsOriginal:sumaDocs,
     vendedor:(esEdicion && pagoOriginal)?pagoOriginal.vendedor:VEND.codigo,
     vendedorNombre:(esEdicion && pagoOriginal)?pagoOriginal.vendedorNombre:VEND.nombre,
     estado:'pendiente',
