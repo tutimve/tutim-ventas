@@ -609,6 +609,10 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <option value="15">15%</option>
         </select>
       </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="cobroRetencionIVA" style="width:16px;height:16px">
+        Hubo retencion de IVA en este pago (75% retenido, solo entra 25% del IVA en dinero)
+      </label>
       <div id="cobroValidacion" style="margin-bottom:10px"></div>
       <div class="field">
         <label>Foto(s) del comprobante</label>
@@ -758,6 +762,46 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         </div>
         <button class="btn btn-p btn-sm" onclick="cargarCSVClientes()">Procesar archivo(s)</button>
         <div id="estadoCargaClientes" style="margin-top:8px;font-size:13px;color:#666"></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--borde)">
+          <button class="btn btn-s btn-sm" onclick="verClientesProvisionales()">Ver clientes con codigo provisional</button>
+          <button class="btn btn-s btn-sm" onclick="analizarStorageClientesHuerfanos()">Buscar documentos huerfanos en Storage</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: archivos huerfanos en Storage (recuperacion) -->
+    <div class="modal-bg" id="mStorageHuerfanos">
+      <div class="modal" style="max-width:600px">
+        <h3>Documentos huerfanos en Storage</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:10px">Archivos que quedaron en Firebase Storage pero que actualmente ningun cliente referencia — normalmente porque se perdio el link al reemplazar la base de clientes en vez de fusionarla. Busca el cliente oficial correcto y toca "Vincular" para reconectarlos. Esto nunca se hace automaticamente.</p>
+        <div id="storageHuerfanosContenido" style="max-height:60vh;overflow-y:auto"></div>
+        <div style="margin-top:16px">
+          <button class="btn btn-s" onclick="cerrarModal('mStorageHuerfanos')">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: clientes vinculados en la ultima carga -->
+    <div class="modal-bg" id="mClientesVinculadosCarga">
+      <div class="modal" style="max-width:600px">
+        <h3>Clientes cruzados en esta carga</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:10px">Clientes que tenian un codigo provisional (creados por un vendedor) y quedaron vinculados con su codigo oficial de Profit, por coincidir el RIF.</p>
+        <div id="clientesVinculadosCargaContenido" style="max-height:60vh;overflow-y:auto"></div>
+        <div style="margin-top:16px">
+          <button class="btn btn-s" onclick="cerrarModal('mClientesVinculadosCarga')">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: clientes con codigo provisional (todavia sin cruzar) -->
+    <div class="modal-bg" id="mClientesProvisionales">
+      <div class="modal" style="max-width:600px">
+        <h3>Clientes con codigo provisional</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:10px">Clientes creados por vendedores que todavia no tienen un codigo oficial de Profit — se cruzan automaticamente por RIF la proxima vez que subas la base de clientes.</p>
+        <div id="clientesProvisionalesContenido" style="max-height:60vh;overflow-y:auto"></div>
+        <div style="margin-top:16px">
+          <button class="btn btn-s" onclick="cerrarModal('mClientesProvisionales')">Cerrar</button>
+        </div>
       </div>
     </div>
 
@@ -988,6 +1032,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="card">
         <div class="card-title">Calcular Comisiones</div>
         <p style="font-size:12px;color:#666;margin-bottom:10px">Se calcula sobre los cobros confirmados cuya fecha de REGISTRO (cuando se reporto el pago, no la fecha del pago en si) caiga dentro del rango elegido.</p>
+        <button class="btn btn-s btn-sm" style="margin-bottom:10px" onclick="verCandidatosRetencionIVA()">Ver posibles candidatos a retencion de IVA</button>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <div class="field" style="flex:1;min-width:130px"><label>Desde</label><input type="date" id="comDesde"></div>
           <div class="field" style="flex:1;min-width:130px"><label>Hasta</label><input type="date" id="comHasta"></div>
@@ -1030,6 +1075,35 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div style="display:flex;gap:8px">
         <button class="btn btn-p" onclick="ejecutarMarcarComisionPagada()">Confirmar pago</button>
         <button class="btn btn-s" onclick="cerrarModal('mMarcarComisionPagada')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL EDITAR RETENCION DE IVA DE UN PAGO YA CONFIRMADO -->
+  <div class="modal-bg" id="mEditarRetencionPago">
+    <div class="modal">
+      <h3>Retencion de IVA</h3>
+      <p style="font-size:13px;color:#555;margin-bottom:10px" id="editarRetencionInfo"></p>
+      <p style="font-size:12px;color:#888;margin-bottom:12px">Este cambio solo afecta el calculo de comisiones — no toca el saldo de las cuentas por cobrar, que ya quedo aplicado cuando se confirmo este pago.</p>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:14px;cursor:pointer">
+        <input type="checkbox" id="editarRetencionCheckbox" style="width:16px;height:16px">
+        Hubo retencion de IVA en este pago (75% retenido, solo entra 25% del IVA en dinero)
+      </label>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-p" onclick="guardarRetencionPago()">Guardar</button>
+        <button class="btn btn-s" onclick="cerrarModal('mEditarRetencionPago')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL POSIBLES CANDIDATOS A RETENCION DE IVA (pista, no confirmacion) -->
+  <div class="modal-bg" id="mCandidatosRetencionIVA">
+    <div class="modal" style="max-width:600px">
+      <h3>Posibles candidatos a retencion de IVA</h3>
+      <p style="font-size:12px;color:#888;margin-bottom:10px">Documentos que originalmente tenian IVA, y cuyo saldo pendiente actual se parece al 75% de ese IVA — esto es solo una PISTA para saber por donde revisar, no una confirmacion de que hubo retencion. Verifica cada uno contra tus comprobantes antes de marcarlo.</p>
+      <div id="candidatosRetencionIVAContenido" style="max-height:60vh;overflow-y:auto"></div>
+      <div style="margin-top:16px">
+        <button class="btn btn-s" onclick="cerrarModal('mCandidatosRetencionIVA')">Cerrar</button>
       </div>
     </div>
   </div>
@@ -1741,6 +1815,11 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   <div class="modal">
     <h3>Historial de cargas</h3>
     <p style="font-size:12px;color:#666;margin-bottom:10px">Se guardan las ultimas 20 cargas. Toca cualquiera para ver su detalle completo.</p>
+    <div class="field" style="margin-bottom:10px">
+      <label>Buscar un documento en todo el historial</label>
+      <input type="text" id="buscarDocEnHistorial" placeholder="Ej: 1462" oninput="buscarDocumentoEnHistorialCargas()">
+    </div>
+    <div id="resultadoBusquedaDocHistorial"></div>
     <div id="historialCargasCxCContenido" style="max-height:70vh;overflow-y:auto"></div>
     <div style="margin-top:16px">
       <button class="btn btn-s" onclick="cerrarModal('mHistorialCargasCxC')">Cerrar</button>
@@ -2587,7 +2666,7 @@ function verDetalleComisionVendedor(id){
       '<div style="overflow-x:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:11px">'+
         '<tr style="color:#888"><th style="padding:3px;text-align:left">Cliente</th><th style="padding:3px;text-align:left">Fecha</th><th style="padding:3px;text-align:right">Dias</th><th style="padding:3px;text-align:right">Cobrado $</th><th style="padding:3px;text-align:right">%</th><th style="padding:3px;text-align:right">Comision $</th></tr>'+
         r.detallePagos.map(function(pg){
-          return '<tr style="border-top:1px solid var(--borde)"><td style="padding:3px">'+pg.clienteNombre+'</td><td style="padding:3px">'+pg.fecha+'</td><td style="padding:3px;text-align:right">'+(pg.diasCobro!==null&&pg.diasCobro!==undefined?pg.diasCobro:'-')+'</td><td style="padding:3px;text-align:right">$'+formatearNumeroConMiles(pg.montoUSD,2)+'</td><td style="padding:3px;text-align:right">'+pg.pctAplicado+'%</td><td style="padding:3px;text-align:right">$'+formatearNumeroConMiles(pg.comisionUSD,2)+'</td></tr>';
+          return '<tr style="border-top:1px solid var(--borde)"><td style="padding:3px">'+pg.clienteNombre+'</td><td style="padding:3px">'+pg.fecha+'</td><td style="padding:3px;text-align:right">'+(pg.diasCobro!==null&&pg.diasCobro!==undefined?pg.diasCobro:'-')+'</td><td style="padding:3px;text-align:right">$'+formatearNumeroConMiles(pg.montoUSD,2)+(pg.ivaRetenido>0?'<div style="font-size:9px;color:var(--ambar)">-$'+formatearNumeroConMiles(pg.ivaRetenido,2)+' IVA (no comisiona)</div>':'')+'</td><td style="padding:3px;text-align:right">'+pg.pctAplicado+'%</td><td style="padding:3px;text-align:right">$'+formatearNumeroConMiles(pg.comisionUSD,2)+'</td></tr>';
         }).join('')+
       '</table></div>'+
     '</div>';
@@ -2870,7 +2949,17 @@ function goScreen(name){
     }
   }
   if(name==='cobros'){
-    renderCxCPorVencimiento();
+    // Igual que en Admin -> Cuentas x Cobrar: se refresca desde Firebase
+    // antes de renderizar, para no mostrar una foto vieja si la carga de
+    // un Excel se hizo en otra sesion o dispositivo.
+    var cxcPorVencCont=document.getElementById('cxcPorVencimientoList');
+    if(cxcPorVencCont) cxcPorVencCont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Actualizando desde Firebase...</div>';
+    db.collection('config').doc('cuentas_cobrar').get().then(function(doc){
+      try{ if(doc && doc.exists) CUENTAS_COBRAR=JSON.parse(doc.data().data||'[]'); }catch(e){}
+      renderCxCPorVencimiento();
+    }).catch(function(){
+      renderCxCPorVencimiento();
+    });
     var ahora4=new Date();
     var hoy4=ahora4.getFullYear()+'-'+String(ahora4.getMonth()+1).padStart(2,'0')+'-'+String(ahora4.getDate()).padStart(2,'0');
     if(!document.getElementById('filtroCobroDesde').value) document.getElementById('filtroCobroDesde').value=hoy4;
@@ -7626,7 +7715,28 @@ function adminTab(tab){
     var limEl=document.getElementById('limiteDeudaInput');
     if(limEl) limEl.value=LIMITE_DEUDA_PEDIDOS>0?LIMITE_DEUDA_PEDIDOS:'';
     ajustarModoCargaCxC();
-    renderResumenCxC();
+    document.getElementById('cxcListaCompleta').innerHTML='<div style="color:#aaa;text-align:center;padding:12px">Actualizando desde Firebase...</div>';
+    // IMPORTANTE: se vuelve a consultar Firebase aqui en vez de confiar en
+    // lo que ya estaba en memoria - si la carga de un Excel se hizo en
+    // otra sesion (otro dispositivo, u otra pestaña del navegador), o
+    // incluso horas antes en esta misma sesion, la memoria local puede
+    // estar desactualizada y mostrar documentos como si no existieran
+    // aunque ya esten guardados en Firebase.
+    Promise.all([
+      db.collection('config').doc('cuentas_cobrar').get(),
+      db.collection('config').doc('cuentas_cobrar_real').get(),
+      db.collection('config').doc('cuentas_cobrar_fiscal').get()
+    ]).then(function(docs){
+      try{
+        if(docs[0] && docs[0].exists) CUENTAS_COBRAR=JSON.parse(docs[0].data().data||'[]');
+        if(docs[1] && docs[1].exists) CUENTAS_COBRAR_REAL=JSON.parse(docs[1].data().data||'[]');
+        if(docs[2] && docs[2].exists) CUENTAS_COBRAR_FISCAL=JSON.parse(docs[2].data().data||'[]');
+      }catch(e){}
+      renderResumenCxC();
+    }).catch(function(){
+      toast('No se pudo actualizar desde Firebase, mostrando la ultima version conocida');
+      renderResumenCxC();
+    });
     var verifCard=document.getElementById('cxcVerificadorCard');
     if(verifCard) verifCard.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'block':'none';
     document.getElementById('cxcPagosPendientesList').innerHTML='<div style="color:#aaa;text-align:center;padding:12px">Cargando...</div>';
@@ -8086,7 +8196,7 @@ function calcularComisiones(){
     for(var i=0;i<confirmados.length;i++){
       var p=confirmados[i];
       var vid=p.vendedor||'??';
-      if(!porVend[vid]) porVend[vid]={montoUSD:0, montoBS:0, montoUSDTransferencia:0, pagos:[]};
+      if(!porVend[vid]) porVend[vid]={montoUSD:0, montoComisionableUSD:0, montoBS:0, montoUSDTransferencia:0, pagos:[]};
       porVend[vid].montoUSD+=p.montoUSD||0;
       var montoBSpago=0, montoUSDTransfPago=0;
       var deps=p.depositos||[];
@@ -8113,27 +8223,44 @@ function calcularComisiones(){
         }
       }
       var diasCobroProm=diasCobroLista.length>0?Math.round(diasCobroLista.reduce(function(a,b){return a+b;},0)/diasCobroLista.length):null;
+      // El IVA NUNCA genera comision, sin importar como se haya cobrado:
+      // - Sin retencion: el 100% del IVA entro en dinero, y ese 100% ya
+      //   esta adentro de montoUSD -> se resta el 100% del IVA.
+      // - Con retencion: solo el 25% del IVA entro en dinero (el 75%
+      //   restante se cubrio con un comprobante de retencion, nunca fue
+      //   dinero) -> montoUSD solo trae ese 25% adentro -> se resta
+      //   unicamente ese 25%, no el 75%.
+      // En ambos casos el resultado final es el mismo: queda solo el
+      // monto neto (sin ningun IVA) como base de la comision.
+      var ivaDelPago=0;
+      for(var jd=0;jd<docsPago.length;jd++){ ivaDelPago+=(docsPago[jd].iva||0); }
+      var ivaExcluidoUSD=Math.round((p.retencionIVA?ivaDelPago*0.25:ivaDelPago)*100)/100;
+      var montoComisionablePago=Math.round(((p.montoUSD||0)-ivaExcluidoUSD)*100)/100;
+      porVend[vid].montoComisionableUSD+=montoComisionablePago;
       porVend[vid].pagos.push({
         clienteNombre:p.clienteNombre||'', clienteId:p.clienteId||'', fecha:(p.fechaRegistroISO||'').substring(0,10),
-        montoUSD:Math.round((p.montoUSD||0)*100)/100, montoBS:Math.round(montoBSpago*100)/100, diasCobro:diasCobroProm
+        montoUSD:Math.round((p.montoUSD||0)*100)/100, montoComisionable:montoComisionablePago, ivaRetenido:ivaExcluidoUSD,
+        montoBS:Math.round(montoBSpago*100)/100, diasCobro:diasCobroProm
       });
     }
     var vendedoresACalcular=vendSel==='todos'?VENDEDORES.slice():VENDEDORES.filter(function(v){return v.id===vendSel;});
     var resultado=[];
     for(var i=0;i<vendedoresACalcular.length;i++){
       var v=vendedoresACalcular[i];
-      var datos=porVend[v.id]||{montoUSD:0, montoBS:0, montoUSDTransferencia:0, pagos:[]};
+      var datos=porVend[v.id]||{montoUSD:0, montoComisionableUSD:0, montoBS:0, montoUSDTransferencia:0, pagos:[]};
       var pct=v.comisionPct||0;
-      var comisionPropiaUSD=Math.round(datos.montoUSD*pct/100*100)/100;
+      var comisionPropiaUSD=Math.round(datos.montoComisionableUSD*pct/100*100)/100;
       // Tasa promedio real, ponderada por lo que efectivamente cobro este
       // vendedor por transferencia en el periodo (viene de los depositos
       // reales, no de una tasa externa)
       var tasaProm=datos.montoUSDTransferencia>0?(datos.montoBS/datos.montoUSDTransferencia):0;
       // Detalle cobro por cobro, con la comision que le corresponde a
-      // cada uno segun el % del vendedor (se recalcula si el % se edita)
+      // cada uno segun el % del vendedor (se recalcula si el % se edita).
+      // La comision se calcula sobre el monto COMISIONABLE (ya sin el IVA
+      // retenido), no sobre el monto cobrado completo.
       var detallePagos=datos.pagos.map(function(pg){
-        var comUSD=Math.round(pg.montoUSD*pct/100*100)/100;
-        return {clienteNombre:nombreClienteConCodigoProfit(pg.clienteId, pg.clienteNombre), fecha:pg.fecha, montoUSD:pg.montoUSD, montoBS:pg.montoBS, pctAplicado:pct, comisionUSD:comUSD, comisionBS:Math.round(comUSD*tasaProm*100)/100, diasCobro:pg.diasCobro};
+        var comUSD=Math.round(pg.montoComisionable*pct/100*100)/100;
+        return {clienteNombre:nombreClienteConCodigoProfit(pg.clienteId, pg.clienteNombre), fecha:pg.fecha, montoUSD:pg.montoUSD, montoComisionable:pg.montoComisionable, ivaRetenido:pg.ivaRetenido, montoBS:pg.montoBS, pctAplicado:pct, comisionUSD:comUSD, comisionBS:Math.round(comUSD*tasaProm*100)/100, diasCobro:pg.diasCobro};
       }).sort(function(a,b){ return a.fecha<b.fecha?-1:(a.fecha>b.fecha?1:0); });
 
       var esSuper=!!v.esSupervisor;
@@ -8144,11 +8271,11 @@ function calcularComisiones(){
         for(var s=0;s<v.supervisados.length;s++){
           var sid=v.supervisados[s];
           var datosS=porVend[sid];
-          if(datosS && datosS.montoUSD>0){
+          if(datosS && datosS.montoComisionableUSD>0){
             var vObjS=null;
             for(var vi=0;vi<VENDEDORES.length;vi++){ if(VENDEDORES[vi].id===sid){ vObjS=VENDEDORES[vi]; break; } }
-            detalleSupervisados.push({id:sid, nombre:vObjS?vObjS.nombre:sid, montoUSD:Math.round(datosS.montoUSD*100)/100});
-            montoSupervisadoTotalUSD+=datosS.montoUSD;
+            detalleSupervisados.push({id:sid, nombre:vObjS?vObjS.nombre:sid, montoUSD:Math.round(datosS.montoComisionableUSD*100)/100});
+            montoSupervisadoTotalUSD+=datosS.montoComisionableUSD;
           }
         }
       }
@@ -8160,6 +8287,7 @@ function calcularComisiones(){
       resultado.push({
         vendedorId:v.id, vendedorNombre:v.nombre,
         montoCobradoUSD:Math.round(datos.montoUSD*100)/100,
+        montoComisionableUSD:Math.round(datos.montoComisionableUSD*100)/100,
         montoCobradoBS:Math.round(datos.montoBS*100)/100,
         tasaPromedio:Math.round(tasaProm*100)/100,
         pctPropio:pct, comisionPropiaUSD:comisionPropiaUSD,
@@ -8239,7 +8367,7 @@ function renderResultadosComisiones(){
         for(var k=0;k<r.detallePagos.length;k++){
           var pg=r.detallePagos[k];
           html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:3px">'+pg.clienteNombre+'</td><td style="padding:3px">'+pg.fecha+'</td><td style="padding:3px;text-align:right" title="Dias entre la emision del documento y la fecha del pago">'+(pg.diasCobro!==null&&pg.diasCobro!==undefined?pg.diasCobro:'-')+'</td>'+
-            (verUSD?'<td style="padding:3px;text-align:right">$'+formatearNumeroConMiles(pg.montoUSD,2)+'</td>':'')+
+            (verUSD?'<td style="padding:3px;text-align:right">$'+formatearNumeroConMiles(pg.montoUSD,2)+(pg.ivaRetenido>0?'<div style="font-size:9px;color:var(--ambar)">-$'+formatearNumeroConMiles(pg.ivaRetenido,2)+' IVA (no comisiona)</div>':'')+'</td>':'')+
             (verBS?'<td style="padding:3px;text-align:right">Bs '+formatearNumeroConMiles(pg.montoBS,2)+'</td>':'')+
             '<td style="padding:3px;text-align:right"><input type="number" min="0" max="100" step="0.01" value="'+pg.pctAplicado+'" onchange="actualizarPctComisionDetalle('+i+','+k+',this.value)" style="width:44px;text-align:right;padding:1px 3px;border:1px solid var(--borde);border-radius:3px;font-size:11px">%</td>'+
             (verUSD?'<td style="padding:3px;text-align:right">$'+formatearNumeroConMiles(pg.comisionUSD,2)+'</td>':'')+
@@ -8272,14 +8400,15 @@ function actualizarPctComisionDetalle(vendIdx, pagoIdx, nuevoValor){
   var r=ULTIMO_CALCULO_COMISIONES.lista[vendIdx];
   var pg=r.detallePagos[pagoIdx];
   pg.pctAplicado=pct;
-  pg.comisionUSD=Math.round(pg.montoUSD*pct/100*100)/100;
+  pg.comisionUSD=Math.round(pg.montoComisionable*pct/100*100)/100;
   pg.comisionBS=Math.round(pg.comisionUSD*r.tasaPromedio*100)/100;
   // Re-sumar la comision propia del vendedor a partir de sus lineas
   var sumaComisionUSD=0;
   for(var k=0;k<r.detallePagos.length;k++){ sumaComisionUSD+=r.detallePagos[k].comisionUSD; }
   r.comisionPropiaUSD=Math.round(sumaComisionUSD*100)/100;
   // El "% Propio" de arriba pasa a reflejar el promedio ponderado real
-  r.pctPropio=r.montoCobradoUSD>0?Math.round(r.comisionPropiaUSD/r.montoCobradoUSD*10000)/100:0;
+  // (sobre el monto comisionable, ya sin la retencion de IVA)
+  r.pctPropio=r.montoComisionableUSD>0?Math.round(r.comisionPropiaUSD/r.montoComisionableUSD*10000)/100:0;
   r.comisionTotalUSD=Math.round((r.comisionPropiaUSD+r.comisionSupervisorUSD)*100)/100;
   r.comisionTotalBS=Math.round(r.comisionTotalUSD*r.tasaPromedio*100)/100;
   renderResultadosComisiones();
@@ -8290,13 +8419,13 @@ function actualizarPctComisionVendedor(idx, nuevoValor){
   if(isNaN(pct)||pct<0) pct=0;
   var r=ULTIMO_CALCULO_COMISIONES.lista[idx];
   r.pctPropio=pct;
-  r.comisionPropiaUSD=Math.round(r.montoCobradoUSD*pct/100*100)/100;
+  r.comisionPropiaUSD=Math.round(r.montoComisionableUSD*pct/100*100)/100;
   r.comisionTotalUSD=Math.round((r.comisionPropiaUSD+r.comisionSupervisorUSD)*100)/100;
   r.comisionTotalBS=Math.round(r.comisionTotalUSD*r.tasaPromedio*100)/100;
   for(var k=0;k<r.detallePagos.length;k++){
     var pg=r.detallePagos[k];
     pg.pctAplicado=pct;
-    pg.comisionUSD=Math.round(pg.montoUSD*pct/100*100)/100;
+    pg.comisionUSD=Math.round(pg.montoComisionable*pct/100*100)/100;
     pg.comisionBS=Math.round(pg.comisionUSD*r.tasaPromedio*100)/100;
   }
   renderResultadosComisiones();
@@ -8567,7 +8696,7 @@ function descargarExcelComisiones(){
   // con su propio encabezado, en vez de una lista mezclada con columna
   // "Vendedor" repetida en cada fila)
   var encabezadoDet=['Cliente','Fecha','Dias'];
-  if(verUSD) encabezadoDet.push('Cobrado $');
+  if(verUSD) encabezadoDet.push('Cobrado $','IVA (no comisiona) $');
   if(verBS) encabezadoDet.push('Cobrado Bs');
   encabezadoDet.push('%');
   if(verUSD) encabezadoDet.push('Comision $');
@@ -8588,7 +8717,7 @@ function descargarExcelComisiones(){
     for(var k=0;k<r.detallePagos.length;k++){
       var pg=r.detallePagos[k];
       var filaDet=[pg.clienteNombre, pg.fecha, (pg.diasCobro!==null&&pg.diasCobro!==undefined?pg.diasCobro:'')];
-      if(verUSD) filaDet.push(pg.montoUSD);
+      if(verUSD) filaDet.push(pg.montoUSD, pg.ivaRetenido||0);
       if(verBS) filaDet.push(pg.montoBS);
       filaDet.push(pg.pctAplicado+'%');
       if(verUSD) filaDet.push(pg.comisionUSD);
@@ -8681,13 +8810,13 @@ function descargarPDFComisiones(){
     if(r.detallePagos.length===0) continue;
     html+='<div class="vend"><div class="vend-title">VEND '+r.vendedorId+' - '+r.vendedorNombre+'</div>'+
       '<table class="detalle"><tr><th>Cliente</th><th>Fecha</th><th class="num">Dias</th>'+
-        (verUSD?'<th class="num">Cobrado $</th>':'')+(verBS?'<th class="num">Cobrado Bs</th>':'')+
+        (verUSD?'<th class="num">Cobrado $</th><th class="num">IVA (no comisiona) $</th>':'')+(verBS?'<th class="num">Cobrado Bs</th>':'')+
         '<th class="num">%</th>'+(verUSD?'<th class="num">Comision $</th>':'')+(verBS?'<th class="num">Comision Bs</th>':'')+
       '</tr>';
     for(var k=0;k<r.detallePagos.length;k++){
       var pg=r.detallePagos[k];
       html+='<tr><td class="wrap">'+pg.clienteNombre+'</td><td>'+pg.fecha+'</td><td class="num">'+(pg.diasCobro!==null&&pg.diasCobro!==undefined?pg.diasCobro:'-')+'</td>'+
-        (verUSD?'<td class="num">$'+formatearNumeroConMiles(pg.montoUSD,2)+'</td>':'')+
+        (verUSD?'<td class="num">$'+formatearNumeroConMiles(pg.montoUSD,2)+'</td><td class="num">'+(pg.ivaRetenido>0?'-$'+formatearNumeroConMiles(pg.ivaRetenido,2):'-')+'</td>':'')+
         (verBS?'<td class="num">Bs '+formatearNumeroConMiles(pg.montoBS,2)+'</td>':'')+
         '<td class="num">'+pg.pctAplicado+'%</td>'+
         (verUSD?'<td class="num">$'+formatearNumeroConMiles(pg.comisionUSD,2)+'</td>':'')+
@@ -10566,10 +10695,380 @@ function cargarCSVClientes(){
   }
 }
 
+// Detalle de la ultima carga de base de clientes: quienes quedaron
+// cruzados (codigo provisional -> codigo oficial de Profit)
+var ULTIMO_REPORTE_CLIENTES_VINCULADOS=[];
+function verClientesVinculadosCarga(){
+  var cont=document.getElementById('clientesVinculadosCargaContenido');
+  var lista=ULTIMO_REPORTE_CLIENTES_VINCULADOS;
+  if(!lista || lista.length===0){
+    cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">No hubo clientes vinculados en la ultima carga</div>';
+  } else {
+    var html='<div style="font-weight:600;font-size:13px;color:var(--verde);margin-bottom:8px">'+lista.length+' cliente(s) cruzados</div>';
+    for(var i=0;i<lista.length;i++){
+      var v=lista[i];
+      html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:10px;margin-bottom:8px">'+
+        '<div style="font-size:13px"><span style="color:#999">'+v.provisionalId+'</span> → <strong style="color:var(--verde)">'+v.oficialId+'</strong></div>'+
+        '<div style="font-weight:600;font-size:13px;margin-top:2px">'+v.oficialNombre+'</div>'+
+        (v.rif?'<div style="font-size:11px;color:#888">RIF: '+v.rif+'</div>':'')+
+        (v.creadoPorNombre?'<div style="font-size:11px;color:#888">Creado originalmente por: '+v.creadoPorNombre+'</div>':'')+
+      '</div>';
+    }
+    cont.innerHTML=html;
+  }
+  document.getElementById('mClientesVinculadosCarga').classList.add('open');
+}
+
+// Ver todos los clientes que TODAVIA tienen codigo provisional (NEW-xxx),
+// es decir, que aun no se han cruzado con ningun codigo oficial de Profit
+// ═══ RECUPERACION: archivos huerfanos en Storage (clientes_nuevos/) ═══
+// Cuando un cliente provisional se cruza con su codigo oficial, sus
+// documentos deberian quedar referenciados desde el cliente oficial. Si
+// por algun motivo esa referencia se perdio (por ejemplo, el bug de
+// reemplazar la base completa en vez de fusionarla), los ARCHIVOS siguen
+// existiendo en Storage - solo se perdio el link que los conectaba. Esta
+// herramienta escanea Storage, encuentra archivos que NINGUN cliente
+// referencia actualmente, y deja buscar manualmente a que cliente oficial
+// deberian volver a conectarse - nunca lo hace de forma automatica.
+var STORAGE_HUERFANAS_CACHE=[];
+
+// Convierte una URL de descarga de Firebase Storage a su path interno
+// (ej: "clientes_nuevos/NEW-123/rif"), para poder comparar si dos URLs
+// distintas (por el token de acceso) en realidad apuntan al mismo archivo
+function extraerPathStorageDeUrl(url){
+  if(!url) return null;
+  var match=url.match(/\/o\/([^?]+)/);
+  if(!match) return null;
+  try{ return decodeURIComponent(match[1]); }catch(e){ return null; }
+}
+
+function analizarStorageClientesHuerfanos(){
+  var cont=document.getElementById('storageHuerfanosContenido');
+  cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Escaneando Firebase Storage, puede tardar un momento...</div>';
+  document.getElementById('mStorageHuerfanos').classList.add('open');
+
+  // Construir el conjunto de TODOS los paths ya referenciados por algun
+  // cliente (oficial o todavia provisional), para saber cuales archivos
+  // de Storage quedaron sin ninguna referencia
+  var pathsReferenciados={};
+  function registrarPaths(cli){
+    if(!cli) return;
+    ['docRifUrl','docRegistroUrl','docCedulaUrl','fotoEntradaUrl'].forEach(function(campo){
+      var p=extraerPathStorageDeUrl(cli[campo]);
+      if(p) pathsReferenciados[p]=true;
+    });
+    if(cli.facturasUrls){
+      cli.facturasUrls.forEach(function(u){
+        var p=extraerPathStorageDeUrl(u);
+        if(p) pathsReferenciados[p]=true;
+      });
+    }
+  }
+  for(var i=0;i<CLIENTES_PROFIT.length;i++) registrarPaths(CLIENTES_PROFIT[i]);
+  for(var i=0;i<(NUEVOS_TODOS_CACHE||[]).length;i++) registrarPaths(NUEVOS_TODOS_CACHE[i]);
+
+  db.collection('config').doc('storage_huerfanos_descartados').get().then(function(doc){
+    var descartados=[];
+    try{ descartados=doc.exists?JSON.parse(doc.data().data||'[]'):[]; }catch(e){}
+    DESCARTADOS_HUERFANOS_CACHE=descartados;
+    var descartadosSet={};
+    for(var i=0;i<descartados.length;i++) descartadosSet[descartados[i]]=true;
+
+    storage.ref('clientes_nuevos').listAll().then(function(res){
+      var carpetas=res.prefixes;
+      var pendientes=carpetas.length;
+      if(pendientes===0){
+        cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">No se encontraron carpetas en clientes_nuevos/ dentro de Storage</div>';
+        return;
+      }
+      var huerfanas=[];
+      carpetas.forEach(function(folderRef){
+        folderRef.listAll().then(function(filesRes){
+          var archivosHuerfanos=[];
+          var tareasUrl=filesRes.items.map(function(itemRef){
+            return itemRef.getDownloadURL().then(function(url){
+              if(!pathsReferenciados[itemRef.fullPath] && !descartadosSet[itemRef.fullPath]){
+                archivosHuerfanos.push({nombre:itemRef.name, url:url, path:itemRef.fullPath});
+              }
+            }).catch(function(){});
+          });
+          Promise.all(tareasUrl).then(function(){
+            if(archivosHuerfanos.length>0) huerfanas.push({carpetaId:folderRef.name, archivos:archivosHuerfanos});
+            pendientes--;
+            if(pendientes<=0) mostrarResultadoHuerfanas(huerfanas);
+          });
+        }).catch(function(){
+          pendientes--;
+          if(pendientes<=0) mostrarResultadoHuerfanas(huerfanas);
+        });
+      });
+    }).catch(function(e){
+      cont.innerHTML='<div style="color:var(--rojo);font-size:13px;text-align:center;padding:12px">Error accediendo a Firebase Storage: '+(e&&e.message?e.message:e)+'</div>';
+    });
+  }).catch(function(){
+    DESCARTADOS_HUERFANOS_CACHE=[];
+    cont.innerHTML='<div style="color:var(--rojo);font-size:13px;text-align:center;padding:12px">Error leyendo la lista de descartados, intenta de nuevo</div>';
+  });
+}
+var DESCARTADOS_HUERFANOS_CACHE=[];
+
+function mostrarResultadoHuerfanas(huerfanas){
+  STORAGE_HUERFANAS_CACHE=huerfanas;
+  var cont=document.getElementById('storageHuerfanosContenido');
+  if(huerfanas.length===0){
+    cont.innerHTML='<div style="color:var(--verde);font-size:13px;text-align:center;padding:12px">No se encontraron archivos huerfanos — todo lo que hay en Storage esta correctamente vinculado a algun cliente.</div>';
+    return;
+  }
+  var html='<div style="font-weight:600;font-size:13px;color:var(--ambar);margin-bottom:8px">'+huerfanas.length+' carpeta(s) con archivos sin vincular</div>';
+  for(var i=0;i<huerfanas.length;i++){
+    var h=huerfanas[i];
+    // Detectar si hay mas de un archivo del MISMO tipo en esta carpeta
+    // (ej: dos fotos de RIF) - si se vincula todo junto, solo la ultima
+    // queda referenciada y la otra se seguiria mostrando como huerfana.
+    var tipos={};
+    for(var j=0;j<h.archivos.length;j++){
+      var tipo=tipoDocumentoPorNombre(h.archivos[j].nombre);
+      tipos[tipo]=(tipos[tipo]||0)+1;
+    }
+    var hayDuplicados=Object.keys(tipos).some(function(t){ return tipos[t]>1; });
+    html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:10px;margin-bottom:10px">'+
+      '<div style="font-weight:600;font-size:12px;color:#999">Codigo original: '+h.carpetaId+'</div>'+
+      (hayDuplicados?'<div style="font-size:11px;color:var(--ambar);margin-top:4px">Hay mas de un archivo del mismo tipo aqui — si vinculas todo junto, solo el ultimo de cada tipo va a quedar guardado. Si alguno es una foto vieja o repetida, descartalo primero.</div>':'')+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">';
+    for(var j=0;j<h.archivos.length;j++){
+      var a=h.archivos[j];
+      html+='<div style="text-align:center">'+
+        '<a href="'+a.url+'" target="_blank" title="'+a.nombre+'"><img src="'+a.url+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1.5px solid var(--borde)" onerror="this.style.display=\'none\'"></a>'+
+        '<div style="font-size:9px;color:#999;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+a.nombre+'</div>'+
+        '<button onclick="descartarArchivoHuerfano('+i+','+j+')" style="font-size:9px;padding:1px 4px;background:none;border:1px solid var(--rojo);color:var(--rojo);border-radius:4px;cursor:pointer;margin-top:2px">Descartar</button>'+
+      '</div>';
+    }
+    html+='</div>'+
+      '<input type="text" id="vincularBusq_'+i+'" placeholder="Buscar cliente oficial por nombre o codigo..." style="width:100%;box-sizing:border-box;padding:6px;border:1px solid var(--borde);border-radius:6px;font-size:12px" oninput="filtrarClienteParaVincular('+i+')">'+
+      '<div id="vincularResultados_'+i+'" style="margin-top:6px"></div>'+
+    '</div>';
+  }
+  cont.innerHTML=html;
+}
+
+// Deduce el tipo de documento a partir del nombre del archivo (que puede
+// venir con o sin sufijo de fecha, ej: "rif" o "rif_1755000000000")
+function tipoDocumentoPorNombre(nombre){
+  var n=(nombre||'').toLowerCase();
+  if(n.indexOf('rif')===0) return 'RIF';
+  if(n.indexOf('registro')===0) return 'Registro';
+  if(n.indexOf('cedula')===0) return 'Cedula';
+  if(n.indexOf('foto_entrada')===0) return 'Foto de entrada';
+  return 'Factura';
+}
+
+// Marca un archivo huerfano como "no hace falta vincularlo a nada" (por
+// ejemplo, una foto vieja o repetida) - queda guardado en Firebase para
+// que no se vuelva a mostrar en futuros escaneos, sin necesidad de
+// conectarlo a ningun cliente.
+function descartarArchivoHuerfano(carpetaIdx, archivoIdx){
+  var h=STORAGE_HUERFANAS_CACHE[carpetaIdx];
+  if(!h) return;
+  var archivo=h.archivos[archivoIdx];
+  if(!archivo) return;
+  if(!confirm('¿Descartar "'+archivo.nombre+'" de la carpeta '+h.carpetaId+'? No se va a volver a mostrar como huerfano, pero el archivo sigue existiendo en Storage por si acaso.')) return;
+  DESCARTADOS_HUERFANOS_CACHE.push(archivo.path);
+  db.collection('config').doc('storage_huerfanos_descartados').set({
+    data: JSON.stringify(DESCARTADOS_HUERFANOS_CACHE),
+    actualizado: new Date().toISOString()
+  }).then(function(){
+    h.archivos.splice(archivoIdx,1);
+    if(h.archivos.length===0) STORAGE_HUERFANAS_CACHE.splice(carpetaIdx,1);
+    mostrarResultadoHuerfanas(STORAGE_HUERFANAS_CACHE);
+    toast('Archivo descartado');
+  }).catch(function(){ toast('Error guardando en Firebase'); });
+}
+
+function filtrarClienteParaVincular(idx){
+  var q=(document.getElementById('vincularBusq_'+idx).value||'').toLowerCase().trim();
+  var cont=document.getElementById('vincularResultados_'+idx);
+  if(q.length<2){ cont.innerHTML=''; return; }
+  var resultados=CLIENTES_PROFIT.filter(function(c){
+    return c.nombre.toLowerCase().indexOf(q)>=0 || c.id.toLowerCase().indexOf(q)>=0;
+  }).slice(0,8);
+  if(resultados.length===0){ cont.innerHTML='<div style="font-size:11px;color:#aaa;padding:4px">Sin resultados</div>'; return; }
+  var html='';
+  for(var i=0;i<resultados.length;i++){
+    var c=resultados[i];
+    html+='<div style="padding:5px;border-bottom:1px solid var(--borde);font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:6px">'+
+      '<span>'+c.id+' - '+c.nombre+(c.docRifUrl||c.docRegistroUrl||c.docCedulaUrl?' <span style="color:var(--ambar)">(ya tiene algun documento)</span>':'')+'</span>'+
+      '<button class="btn btn-p btn-sm" style="padding:2px 8px;font-size:11px;flex-shrink:0" onclick="vincularArchivosHuerfanosACliente('+idx+',\''+c.id+'\')">Vincular todo</button>'+
+    '</div>';
+  }
+  cont.innerHTML=html;
+}
+
+function vincularArchivosHuerfanosACliente(idx, clienteId){
+  var h=STORAGE_HUERFANAS_CACHE[idx];
+  if(!h){ toast('Ya no esta disponible, vuelve a escanear'); return; }
+  var cliente=null;
+  for(var i=0;i<CLIENTES_PROFIT.length;i++){ if(CLIENTES_PROFIT[i].id===clienteId){ cliente=CLIENTES_PROFIT[i]; break; } }
+  if(!cliente){ toast('Cliente no encontrado'); return; }
+  if(!confirm('¿Vincular estos '+h.archivos.length+' archivo(s) (codigo original '+h.carpetaId+') al cliente '+cliente.id+' - '+cliente.nombre+'? Si el cliente ya tenia algun documento igual, se sobreescribe. Si hay dos archivos del mismo tipo aqui, solo el ultimo va a quedar guardado — descarta el que no sirva antes de continuar si es el caso.')) return;
+  for(var j=0;j<h.archivos.length;j++){
+    var a=h.archivos[j];
+    var nombreArchivo=a.nombre.toLowerCase();
+    if(nombreArchivo.indexOf('rif')===0) cliente.docRifUrl=a.url;
+    else if(nombreArchivo.indexOf('registro')===0) cliente.docRegistroUrl=a.url;
+    else if(nombreArchivo.indexOf('cedula')===0) cliente.docCedulaUrl=a.url;
+    else if(nombreArchivo.indexOf('foto_entrada')===0) cliente.fotoEntradaUrl=a.url;
+    else {
+      if(!cliente.facturasUrls) cliente.facturasUrls=[];
+      cliente.facturasUrls.push(a.url);
+    }
+  }
+  cliente.fueClienteNuevo=true;
+  db.collection('config').doc('clientes').set({
+    data: JSON.stringify(CLIENTES_PROFIT),
+    actualizado: new Date().toISOString()
+  }).then(function(){
+    toast('Documentos vinculados a '+cliente.id+' - '+cliente.nombre);
+    STORAGE_HUERFANAS_CACHE.splice(idx,1);
+    mostrarResultadoHuerfanas(STORAGE_HUERFANAS_CACHE);
+  }).catch(function(){ toast('Error guardando en Firebase, intenta de nuevo'); });
+}
+
+function verClientesProvisionales(){
+  var cont=document.getElementById('clientesProvisionalesContenido');
+  cargarClientesNuevosFirebase(function(cns){
+    NUEVOS_TODOS_CACHE=cns;
+    var provisionales=(cns||[]).filter(function(c){ return esNuevo(c); });
+    if(provisionales.length===0){
+      cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">No hay clientes con codigo provisional pendientes</div>';
+    } else {
+      provisionales.sort(function(a,b){ return (b.fechaCreacion||'')<(a.fechaCreacion||'')?-1:1; });
+      PROVISIONALES_CACHE_MODAL=provisionales;
+      var html='<div style="font-weight:600;font-size:13px;color:var(--ambar);margin-bottom:8px">'+provisionales.length+' cliente(s) con codigo provisional</div>'+
+        '<p style="font-size:11px;color:#888;margin-bottom:10px">Si el cruce automatico por RIF no encontro pareja (por ejemplo, si el RIF se escribio sin la letra inicial, o con algun error de formato), puedes buscar y vincular manualmente al codigo oficial correcto.</p>';
+      for(var i=0;i<provisionales.length;i++){
+        var c=provisionales[i];
+        html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:10px;margin-bottom:8px">'+
+          '<div style="font-weight:600;font-size:13px">'+c.nombre+'</div>'+
+          '<div style="font-size:11px;color:#999">'+c.id+'</div>'+
+          (c.rif?'<div style="font-size:11px;color:#888">RIF: '+c.rif+'</div>':'')+
+          (c.creadoPorNombre?'<div style="font-size:11px;color:#888">Creado por: '+c.creadoPorNombre+(c.fechaCreacion?' — '+c.fechaCreacion:'')+'</div>':'')+
+          '<input type="text" id="vincManBusq_'+i+'" placeholder="Buscar cliente oficial por nombre, codigo o RIF..." style="width:100%;box-sizing:border-box;margin-top:8px;padding:6px;border:1px solid var(--borde);border-radius:6px;font-size:12px" oninput="filtrarClienteParaVincularManual('+i+')">'+
+          '<div id="vincManResultados_'+i+'" style="margin-top:6px"></div>'+
+        '</div>';
+      }
+      cont.innerHTML=html;
+    }
+    document.getElementById('mClientesProvisionales').classList.add('open');
+  });
+}
+
+var PROVISIONALES_CACHE_MODAL=[];
+function filtrarClienteParaVincularManual(idx){
+  var q=(document.getElementById('vincManBusq_'+idx).value||'').toLowerCase().trim();
+  var cont=document.getElementById('vincManResultados_'+idx);
+  if(q.length<2){ cont.innerHTML=''; return; }
+  var resultados=CLIENTES_PROFIT.filter(function(c){
+    return c.nombre.toLowerCase().indexOf(q)>=0 || c.id.toLowerCase().indexOf(q)>=0 || (c.rif||'').toLowerCase().indexOf(q)>=0;
+  }).slice(0,8);
+  if(resultados.length===0){ cont.innerHTML='<div style="font-size:11px;color:#aaa;padding:4px">Sin resultados</div>'; return; }
+  var html='';
+  for(var i=0;i<resultados.length;i++){
+    var c=resultados[i];
+    html+='<div style="padding:5px;border-bottom:1px solid var(--borde);font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:6px">'+
+      '<span>'+c.id+' - '+c.nombre+(c.rif?' <span style="color:#999">('+c.rif+')</span>':'')+'</span>'+
+      '<button class="btn btn-p btn-sm" style="padding:2px 8px;font-size:11px;flex-shrink:0" onclick="vincularClienteManualmente('+idx+',\''+c.id+'\')">Vincular</button>'+
+    '</div>';
+  }
+  cont.innerHTML=html;
+}
+
+// Vincula manualmente un cliente provisional a un codigo oficial elegido
+// a mano - para los casos donde el cruce automatico por RIF no encontro
+// pareja (tipicamente por un error de tipeo en el RIF del provisional).
+// Usa la misma logica de copia y reasignacion que el cruce automatico.
+function vincularClienteManualmente(idx, oficialId){
+  var cn=PROVISIONALES_CACHE_MODAL[idx];
+  if(!cn){ toast('No se encontro el cliente provisional'); return; }
+  var oficial=null;
+  for(var i=0;i<CLIENTES_PROFIT.length;i++){ if(CLIENTES_PROFIT[i].id===oficialId){ oficial=CLIENTES_PROFIT[i]; break; } }
+  if(!oficial){ toast('No se encontro el cliente oficial'); return; }
+  if(!confirm('¿Vincular "'+cn.nombre+'" ('+cn.id+') con el cliente oficial '+oficial.id+' - '+oficial.nombre+'? Esto copia su documentacion, reasigna sus pedidos, y elimina el registro provisional.')) return;
+  var vidDueno=cn.creadoPor;
+  if(!vidDueno){ toast('No se pudo determinar a que vendedor pertenece este cliente'); return; }
+  db.collection('vendedores').doc(vidDueno).get().then(function(doc){
+    var data=doc.exists?doc.data():{};
+    var cns=[];
+    try{ cns=JSON.parse(data.clientesNuevos||'[]'); }catch(e){}
+    var peds=[];
+    try{ peds=JSON.parse(data.pedidos||'[]'); }catch(e){}
+    var idxCn=-1;
+    for(var i=0;i<cns.length;i++){ if(cns[i].id===cn.id){ idxCn=i; break; } }
+    if(idxCn<0){ toast('Ese cliente provisional ya no existe (puede que ya se haya vinculado por otra via)'); verClientesProvisionales(); return; }
+    copiarDatosDeProvisionalAOficialYReasignarPedidos(cns[idxCn], oficial, peds);
+    cns.splice(idxCn,1);
+    doc.ref.set({
+      pedidos: JSON.stringify(peds),
+      visitas: data.visitas||'[]',
+      clientesNuevos: JSON.stringify(cns),
+      ultimaActualizacion: new Date().toISOString()
+    }).then(function(){
+      db.collection('config').doc('clientes').set({
+        data: JSON.stringify(CLIENTES_PROFIT),
+        actualizado: new Date().toISOString()
+      }).then(function(){
+        toast('Cliente vinculado correctamente a '+oficial.id);
+        CLIENTES=getClientesParaVendedor();
+        renderAdminCli();
+        verClientesProvisionales();
+      }).catch(function(){ toast('Error guardando el cliente oficial en Firebase'); });
+    }).catch(function(){ toast('Error guardando en Firebase'); });
+  }).catch(function(){ toast('Error accediendo a Firebase'); });
+}
+
 function guardarClientesBase(nuevaBase){
   if(nuevaBase.length===0){toast('No se encontraron clientes validos');return;}
   var estadoEl=document.getElementById('estadoCargaClientes');
   if(estadoEl) estadoEl.innerHTML='<span style="color:#aaa">Vinculando clientes nuevos por RIF...</span>';
+
+  // IMPORTANTE: se fusiona con la base YA EXISTENTE en vez de reemplazarla
+  // por completo. Si no se hace esto, cualquier documentacion (RIF,
+  // registro, cedula, fotos, facturas, aprobaciones) que se le hubiera
+  // copiado a un cliente en una vinculacion ANTERIOR se pierde cada vez
+  // que se sube una base fresca de Profit - asi esa carga no tenga nada
+  // que ver con ese cliente en particular - porque la base fresca de
+  // Profit nunca tuvo esos campos (son propios de la app, no algo que
+  // Profit exporte).
+  var camposPropiosDeLaApp=['docRifUrl','docRegistroUrl','docCedulaUrl','fotoEntradaUrl','facturasUrls','ubicacionMaps','fechaCreacion','dirEntrega','contacto','aprobRif','aprobRegistro','aprobCedula','aprobFacturas','aprobFoto','aprobadaPor','fechaAprobacionDocs','creadoPor','creadoPorNombre','fueClienteNuevo'];
+  var existentesPorId={};
+  for(var i=0;i<CLIENTES_PROFIT.length;i++){ existentesPorId[CLIENTES_PROFIT[i].id]=CLIENTES_PROFIT[i]; }
+  for(var i=0;i<nuevaBase.length;i++){
+    var existente=existentesPorId[nuevaBase[i].id];
+    if(existente){
+      for(var c=0;c<camposPropiosDeLaApp.length;c++){
+        var campo=camposPropiosDeLaApp[c];
+        if(existente[campo]!==undefined && nuevaBase[i][campo]===undefined){
+          nuevaBase[i][campo]=existente[campo];
+        }
+      }
+    }
+  }
+  // IMPORTANTE (parte 2): la carga NUNCA debe borrar clientes, aunque no
+  // vengan en este archivo especifico - por ejemplo, si Profit los marco
+  // "INACTIVO" (esta app los sigue necesitando si tienen pedidos o
+  // cuentas por cobrar pendientes), o si el archivo subido es un extracto
+  // parcial, no la base completa. Cualquier cliente que ya existiera y no
+  // este en esta carga se conserva tal cual estaba, en vez de
+  // desaparecer.
+  var idsEnNuevaBase={};
+  for(var i=0;i<nuevaBase.length;i++){ idsEnNuevaBase[nuevaBase[i].id]=true; }
+  var conservadosSinTocar=0;
+  for(var i=0;i<CLIENTES_PROFIT.length;i++){
+    if(!idsEnNuevaBase[CLIENTES_PROFIT[i].id]){
+      nuevaBase.push(CLIENTES_PROFIT[i]);
+      conservadosSinTocar++;
+    }
+  }
+
   // Crear mapa de clientes para lookup rápido (por codigo, para actualizar nombres en pedidos despues)
   var cliMapNuevo={};
   for(var i=0;i<nuevaBase.length;i++) cliMapNuevo[nuevaBase[i].id]=nuevaBase[i];
@@ -10578,7 +11077,7 @@ function guardarClientesBase(nuevaBase){
   // que los vendedores crearon con los codigos oficiales recien llegados de Profit.
   // Esto copia los documentos adjuntos al cliente oficial, reasigna sus pedidos
   // y elimina el registro fantasma "NEW-xxxx".
-  vincularClientesNuevosPorRif(nuevaBase, function(totalVinculados){
+  vincularClientesNuevosPorRif(nuevaBase, function(totalVinculados, vinculadosDetalle){
     if(estadoEl) estadoEl.innerHTML='<span style="color:#aaa">Guardando en Firebase...</span>';
     db.collection('config').doc('clientes').set({
       data:JSON.stringify(nuevaBase),
@@ -10591,7 +11090,11 @@ function guardarClientesBase(nuevaBase){
       // Actualizar nombres en pedidos de Firebase
       actualizarNombresEnPedidos(cliMapNuevo, function(actualizados){
         toast(nuevaBase.length+' clientes cargados'+(totalVinculados>0?' | '+totalVinculados+' vinculados por RIF':''));
-        if(estadoEl) estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+nuevaBase.length+' clientes guardados'+(totalVinculados>0?' | '+totalVinculados+' clientes nuevos vinculados por RIF':'')+(actualizados>0?' | '+actualizados+' pedidos actualizados':'')+'</span>';
+        if(estadoEl){
+          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+nuevaBase.length+' clientes en total'+(totalVinculados>0?' | '+totalVinculados+' clientes nuevos vinculados por RIF':'')+(actualizados>0?' | '+actualizados+' pedidos actualizados':'')+(conservadosSinTocar>0?' | '+conservadosSinTocar+' clientes que no venian en este archivo se conservaron sin cambios':'')+'</span>'+
+            (totalVinculados>0?'<div style="margin-top:8px"><button class="btn btn-s btn-sm" onclick="verClientesVinculadosCarga()">Ver clientes que quedaron cruzados</button></div>':'');
+        }
+        ULTIMO_REPORTE_CLIENTES_VINCULADOS=vinculadosDetalle;
         // Refrescar cache de clientes nuevos (algunos pudieron desaparecer al vincularse)
         cargarClientesNuevosFirebase(function(cns){
           NUEVOS_TODOS_CACHE=cns;
@@ -10615,17 +11118,54 @@ function normalizarRif(rif){
 // tienen un codigo oficial en la nueva base de Profit. Cuando encuentra una
 // coincidencia: copia los documentos adjuntos al cliente oficial, reasigna
 // los pedidos que apuntaban al codigo fantasma, y elimina ese registro.
+// Copia los datos propios de la app (documentacion, aprobaciones, etc.)
+// de un cliente provisional (cn) hacia su cliente oficial (oficial), y
+// reasigna en "peds" (los pedidos del vendedor que lo creo) cualquier
+// pedido que apuntara al codigo provisional. Se usa tanto en el cruce
+// automatico por RIF como en la vinculacion manual.
+function copiarDatosDeProvisionalAOficialYReasignarPedidos(cn, oficial, peds){
+  if(cn.docRifUrl) oficial.docRifUrl=cn.docRifUrl;
+  if(cn.docRegistroUrl) oficial.docRegistroUrl=cn.docRegistroUrl;
+  if(cn.docCedulaUrl) oficial.docCedulaUrl=cn.docCedulaUrl;
+  if(cn.fotoEntradaUrl) oficial.fotoEntradaUrl=cn.fotoEntradaUrl;
+  if(cn.facturasUrls && cn.facturasUrls.length) oficial.facturasUrls=cn.facturasUrls;
+  if(cn.ubicacionMaps) oficial.ubicacionMaps=cn.ubicacionMaps;
+  if(cn.fechaCreacion) oficial.fechaCreacion=cn.fechaCreacion;
+  if(cn.dirEntrega && cn.dirEntrega!==cn.dir) oficial.dirEntrega=cn.dirEntrega;
+  if(cn.tel) oficial.tel=cn.tel;
+  if(cn.contacto) oficial.contacto=cn.contacto;
+  if(cn.aprobRif) oficial.aprobRif=cn.aprobRif;
+  if(cn.aprobRegistro) oficial.aprobRegistro=cn.aprobRegistro;
+  if(cn.aprobCedula) oficial.aprobCedula=cn.aprobCedula;
+  if(cn.aprobFacturas) oficial.aprobFacturas=cn.aprobFacturas;
+  if(cn.aprobFoto) oficial.aprobFoto=cn.aprobFoto;
+  if(cn.aprobadaPor) oficial.aprobadaPor=cn.aprobadaPor;
+  if(cn.fechaAprobacionDocs) oficial.fechaAprobacionDocs=cn.fechaAprobacionDocs;
+  oficial.creadoPor=cn.creadoPor;
+  oficial.creadoPorNombre=cn.creadoPorNombre;
+  oficial.fueClienteNuevo=true;
+  for(var p=0;p<peds.length;p++){
+    if(peds[p].cliente && peds[p].cliente.id===cn.id){
+      peds[p].cliente.id=oficial.id;
+      peds[p].cliente.nombre=oficial.nombre||peds[p].cliente.nombre;
+      peds[p].cliente.rif=oficial.rif||peds[p].cliente.rif;
+      peds[p].cliente.esNuevo=false;
+    }
+  }
+}
+
 function vincularClientesNuevosPorRif(nuevaBase, callback){
   var rifMap={};
   for(var i=0;i<nuevaBase.length;i++){
     var rn=normalizarRif(nuevaBase[i].rif);
     if(rn) rifMap[rn]=nuevaBase[i];
   }
+  var vinculadosDetalle=[];
   db.collection('vendedores').get().then(function(snap){
     var docs=snap.docs;
     var pendientes=docs.length;
     var totalVinculados=0;
-    if(pendientes===0){ callback(0); return; }
+    if(pendientes===0){ callback(0, vinculadosDetalle); return; }
     docs.forEach(function(doc){
       var data=doc.data();
       var cns=[];
@@ -10639,34 +11179,12 @@ function vincularClientesNuevosPorRif(nuevaBase, callback){
         var rn=normalizarRif(cn.rif);
         var oficial=rn?rifMap[rn]:null;
         if(oficial){
-          if(cn.docRifUrl) oficial.docRifUrl=cn.docRifUrl;
-          if(cn.docRegistroUrl) oficial.docRegistroUrl=cn.docRegistroUrl;
-          if(cn.docCedulaUrl) oficial.docCedulaUrl=cn.docCedulaUrl;
-          if(cn.fotoEntradaUrl) oficial.fotoEntradaUrl=cn.fotoEntradaUrl;
-          if(cn.facturasUrls && cn.facturasUrls.length) oficial.facturasUrls=cn.facturasUrls;
-          if(cn.ubicacionMaps) oficial.ubicacionMaps=cn.ubicacionMaps;
-          if(cn.fechaCreacion) oficial.fechaCreacion=cn.fechaCreacion;
-          if(cn.dirEntrega && cn.dirEntrega!==cn.dir) oficial.dirEntrega=cn.dirEntrega;
-          if(cn.tel) oficial.tel=cn.tel;
-          if(cn.contacto) oficial.contacto=cn.contacto;
-          if(cn.aprobRif) oficial.aprobRif=cn.aprobRif;
-          if(cn.aprobRegistro) oficial.aprobRegistro=cn.aprobRegistro;
-          if(cn.aprobCedula) oficial.aprobCedula=cn.aprobCedula;
-          if(cn.aprobFacturas) oficial.aprobFacturas=cn.aprobFacturas;
-          if(cn.aprobFoto) oficial.aprobFoto=cn.aprobFoto;
-          if(cn.aprobadaPor) oficial.aprobadaPor=cn.aprobadaPor;
-          if(cn.fechaAprobacionDocs) oficial.fechaAprobacionDocs=cn.fechaAprobacionDocs;
-          oficial.creadoPor=cn.creadoPor;
-          oficial.creadoPorNombre=cn.creadoPorNombre;
-          oficial.fueClienteNuevo=true;
-          for(var p=0;p<peds.length;p++){
-            if(peds[p].cliente && peds[p].cliente.id===cn.id){
-              peds[p].cliente.id=oficial.id;
-              peds[p].cliente.nombre=oficial.nombre||peds[p].cliente.nombre;
-              peds[p].cliente.rif=oficial.rif||peds[p].cliente.rif;
-              peds[p].cliente.esNuevo=false;
-            }
-          }
+          vinculadosDetalle.push({
+            provisionalId:cn.id, provisionalNombre:cn.nombre, rif:cn.rif,
+            oficialId:oficial.id, oficialNombre:oficial.nombre,
+            creadoPorNombre:cn.creadoPorNombre||'', creadoPor:cn.creadoPor||''
+          });
+          copiarDatosDeProvisionalAOficialYReasignarPedidos(cn, oficial, peds);
           totalVinculados++;
           cambios=true;
           // No se agrega a cnsRestantes: el registro fantasma se elimina
@@ -10682,17 +11200,17 @@ function vincularClientesNuevosPorRif(nuevaBase, callback){
           ultimaActualizacion: new Date().toISOString()
         }).then(function(){
           pendientes--;
-          if(pendientes<=0) callback(totalVinculados);
+          if(pendientes<=0) callback(totalVinculados, vinculadosDetalle);
         }).catch(function(){
           pendientes--;
-          if(pendientes<=0) callback(totalVinculados);
+          if(pendientes<=0) callback(totalVinculados, vinculadosDetalle);
         });
       } else {
         pendientes--;
-        if(pendientes<=0) callback(totalVinculados);
+        if(pendientes<=0) callback(totalVinculados, vinculadosDetalle);
       }
     });
-  }).catch(function(){ callback(0); });
+  }).catch(function(){ callback(0, []); });
 }
 
 function actualizarNombresEnPedidos(cliMap, callback){
@@ -11032,18 +11550,28 @@ function parsearExcelCxC(file, callback){
       var col=function(offset){ return numeroCol+offset; };
       var docs=[];
       var filasVacias=0, filasSaldoCero=0, filasTotal=0;
+      // El nombre del cliente que trae el Excel de Profit suele venir
+      // cortado/truncado. El codigo si es confiable, asi que se usa para
+      // buscar el nombre COMPLETO en la base de clientes de la app. Si el
+      // codigo no existe ahi (tipicamente porque es un codigo provisional
+      // NEW-xxx de un cliente que un vendedor creo y aun no esta en
+      // Profit), se deja el nombre tal cual vino del Excel.
+      var nombreOficialPorCodigo={};
+      for(var k=0;k<CLIENTES_PROFIT.length;k++){ nombreOficialPorCodigo[CLIENTES_PROFIT[k].id]=CLIENTES_PROFIT[k].nombre; }
       for(var i=headerIdx+1;i<rows.length;i++){
         var r=rows[i];
         if(!r || r[numeroCol]===null || r[numeroCol]===undefined || String(r[numeroCol]).trim()===''){ filasVacias++; continue; }
         if(String(r[numeroCol]).trim().toLowerCase().indexOf('total')>=0){ filasTotal++; continue; }
         var saldo=parseFloat(r[col(9)])||0;
         if(saldo<=0.009){ filasSaldoCero++; continue; } // ya cancelado, no es cuenta pendiente
+        var clienteIdExcel=String(r[col(3)]||'').trim();
+        var nombreExcel=String(r[col(4)]||'').trim();
         docs.push({
           numero:String(r[numeroCol]).trim(),
           emision:formatearFechaExcel(r[col(1)]),
           vencimiento:formatearFechaExcel(r[col(2)]),
-          clienteId:String(r[col(3)]||'').trim(),
-          clienteNombre:String(r[col(4)]||'').trim(),
+          clienteId:clienteIdExcel,
+          clienteNombre:nombreOficialPorCodigo[clienteIdExcel]||nombreExcel,
           vendedor:String(r[col(5)]||'').trim(),
           iva:parseFloat(r[col(6)])||0,
           otros:parseFloat(r[col(7)])||0,
@@ -11265,9 +11793,76 @@ function guardarHistorialCargaCxC(detalle){
   }).catch(function(){ console.log('No se pudo leer el historial de cargas'); });
 }
 
+// Busca un numero de documento en TODAS las cargas guardadas en el
+// historial (no solo la que se este viendo), revisando cada categoria
+// (nuevo, actualizado, cruzado, descartado, mantenido, protegido,
+// liberado) para saber exactamente que le paso a ese documento y cuando.
+function buscarDocumentoEnHistorialCargas(){
+  var termino=(document.getElementById('buscarDocEnHistorial').value||'').trim();
+  var resultadoCont=document.getElementById('resultadoBusquedaDocHistorial');
+  var listaCont=document.getElementById('historialCargasCxCContenido');
+  if(!termino){
+    resultadoCont.innerHTML='';
+    listaCont.style.display='';
+    return;
+  }
+  listaCont.style.display='none';
+  var categorias=[
+    {campo:'nuevosEstaBase', label:'Documento nuevo agregado', color:'var(--verde)'},
+    {campo:'actualizadosEstaBase', label:'Documento actualizado', color:'var(--azul)'},
+    {campo:'coincidenciasList', label:'Cruzado entre Real y Fiscal', color:'var(--verde)'},
+    {campo:'docsDiferenciaList', label:'Documento de diferencia (35%) creado', color:'#5b3fa0'},
+    {campo:'descartadosFiscalList', label:'Fiscal descartado (sin match en Real)', color:'var(--rojo)'},
+    {campo:'mantenidosList', label:'Mantenido por pago ya confirmado', color:'var(--ambar)'},
+    {campo:'liberadosList', label:'Perdio su proteccion en esta carga', color:'var(--rojo)'}
+  ];
+  var encontrados=[];
+  for(var i=0;i<HISTORIAL_CARGAS_CXC_CACHE.length;i++){
+    var h=HISTORIAL_CARGAS_CXC_CACHE[i];
+    for(var c=0;c<categorias.length;c++){
+      var lista=h[categorias[c].campo]||[];
+      for(var j=0;j<lista.length;j++){
+        if(String(lista[j].numero||'').indexOf(termino)>=0){
+          encontrados.push({carga:h, categoria:categorias[c], item:lista[j]});
+        }
+      }
+    }
+    // protegidosPorDesaparicion es un arreglo de numeros planos (texto),
+    // no de objetos como las demas categorias
+    var protegidos=h.protegidosPorDesaparicion||[];
+    for(var j=0;j<protegidos.length;j++){
+      if(String(protegidos[j]).indexOf(termino)>=0){
+        encontrados.push({carga:h, categoria:{label:'Protegido de desaparicion temporal en el cruce', color:'#5b3fa0'}, item:{numero:protegidos[j]}});
+      }
+    }
+  }
+  if(encontrados.length===0){
+    resultadoCont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">No se encontro "'+termino+'" en ninguna de las ultimas 20 cargas guardadas. Puede que la carga donde aparecio ya haya salido del historial (solo se guardan las 20 mas recientes), o que este documento nunca haya llegado por un archivo de Excel.</div>';
+    return;
+  }
+  encontrados.sort(function(a,b){ return a.carga.fecha<b.carga.fecha?1:-1; });
+  var html='<div style="font-weight:600;font-size:13px;color:var(--azul);margin-bottom:8px">Se encontro en '+encontrados.length+' carga(s):</div>';
+  for(var i=0;i<encontrados.length;i++){
+    var e=encontrados[i];
+    html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:10px;margin-bottom:8px">'+
+      '<div style="font-size:12px;color:#888">'+new Date(e.carga.fecha).toLocaleString('es-VE')+' — Base '+e.carga.nombreBase+' ('+(e.carga.modoCarga==='agregar'?'Agregar/actualizar':'Reemplazar todo')+') — '+(e.carga.realizadoPor||'')+'</div>'+
+      '<div style="font-weight:600;color:'+e.categoria.color+';margin-top:4px">Doc. '+e.item.numero+' — '+e.categoria.label+'</div>'+
+      (e.item.clienteNombre?'<div style="font-size:12px;color:#666">'+e.item.clienteNombre+' (Cod: '+(e.item.clienteId||'')+')</div>':'')+
+      (e.item.saldo!==undefined?'<div style="font-size:12px;color:#666">Saldo: $'+formatearNumeroConMiles(e.item.saldo,2)+'</div>':'')+
+      (e.item.saldoAppAntes!==undefined?'<div style="font-size:12px;color:#666">Saldo app: $'+formatearNumeroConMiles(e.item.saldoAppAntes,2)+' → Excel nuevo: $'+formatearNumeroConMiles(e.item.saldoExcelNuevo,2)+'</div>':'')+
+    '</div>';
+  }
+  resultadoCont.innerHTML=html;
+}
+
 // Carga y muestra el historial de cargas guardado en Firebase
 function verHistorialCargasCxC(){
+  var buscador=document.getElementById('buscarDocEnHistorial');
+  if(buscador) buscador.value='';
+  var resultadoBusq=document.getElementById('resultadoBusquedaDocHistorial');
+  if(resultadoBusq) resultadoBusq.innerHTML='';
   var cont=document.getElementById('historialCargasCxCContenido');
+  cont.style.display='';
   cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando...</div>';
   document.getElementById('mHistorialCargasCxC').classList.add('open');
   db.collection('config').doc('historial_cargas_cxc').get().then(function(doc){
@@ -11749,9 +12344,30 @@ function renderListaCxCAdmin(){
       return nombre.indexOf(q)>=0 || rif.toLowerCase().indexOf(q)>=0 || d.clienteId.indexOf(q)>=0 || d.numero.indexOf(q)>=0;
     });
   }
-  docs.sort(function(a,b){ return a.clienteId<b.clienteId?-1:(a.clienteId>b.clienteId?1:0); });
-  if(docs.length>100) docs=docs.slice(0,100);
+  // Funcion auxiliar para poder ordenar por fecha de emision (DD/MM/YYYY)
+  function emisionComparable(emisionStr){
+    if(!emisionStr) return 0;
+    var p=emisionStr.split('/');
+    if(p.length!==3) return 0;
+    return parseInt(p[2],10)*10000+parseInt(p[1],10)*100+parseInt(p[0],10);
+  }
+  if(q){
+    // Buscando algo especifico: alfabetico por cliente, para ubicarlo facil
+    docs.sort(function(a,b){ return a.clienteId<b.clienteId?-1:(a.clienteId>b.clienteId?1:0); });
+  } else {
+    // Sin busqueda (navegando la lista completa): lo mas RECIENTE primero,
+    // para que un documento que se acabe de cargar siempre aparezca
+    // arriba, sin importar cuantos documentos haya en total.
+    docs.sort(function(a,b){ return emisionComparable(b.emision)-emisionComparable(a.emision); });
+  }
+  var totalAntesDeCorte=docs.length;
+  var LIMITE_LISTA_CXC=150;
+  var seCorto=docs.length>LIMITE_LISTA_CXC;
+  if(seCorto) docs=docs.slice(0,LIMITE_LISTA_CXC);
   var html='';
+  if(seCorto){
+    html+='<div style="font-size:11px;color:var(--ambar);padding:6px 4px;background:#FFF9E6;border-radius:6px;margin-bottom:6px">Mostrando los '+LIMITE_LISTA_CXC+' mas recientes de '+totalAntesDeCorte+' documentos pendientes en total. Usa el buscador de arriba para encontrar uno especifico.</div>';
+  }
   if(docs.length===0){
     html='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin resultados</div>';
   } else {
@@ -12051,6 +12667,7 @@ function renderDocsPendientesCliente(clienteId, preservarSeleccion){
   var fechaHoyC=ahoraC.getFullYear()+'-'+String(ahoraC.getMonth()+1).padStart(2,'0')+'-'+String(ahoraC.getDate()).padStart(2,'0');
   document.getElementById('cobroFecha').value=fechaHoyC;
   document.getElementById('cobroDescuento').value='0';
+  document.getElementById('cobroRetencionIVA').checked=false;
   cobroComprobantesData=[];
   document.getElementById('cobroComprobantes').value='';
   document.getElementById('cobroComprobantesPrev').innerHTML='';
@@ -12076,6 +12693,7 @@ function editarPagoRechazado(pagoId){
   renderDocsPendientesCliente(pago.clienteId, true);
   document.getElementById('cobroFecha').value=pago.fecha;
   document.getElementById('cobroDescuento').value=pago.descuentoPct||0;
+  document.getElementById('cobroRetencionIVA').checked=!!pago.retencionIVA;
   cobroDepositos=(pago.depositos||[]).map(function(d){ var c={}; for(var k in d) c[k]=d[k]; if(!c.fecha) c.fecha=pago.fecha; return c; });
   if(cobroDepositos.length===0) cobroDepositos=[{formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:'', fecha:pago.fecha}];
   renderDepositosCobro();
@@ -12327,7 +12945,7 @@ function guardarPagoCobro(){
   var sumaDocs=0;
   for(var i=0;i<cobroDocsSeleccionados.length;i++){
     var d=CUENTAS_COBRAR.find(function(x){return x.numero===cobroDocsSeleccionados[i];});
-    if(d){ docsSeleccionadosInfo.push({numero:d.numero, saldo:d.saldo, vencimiento:d.vencimiento, emision:d.emision}); sumaDocs+=d.saldo; }
+    if(d){ docsSeleccionadosInfo.push({numero:d.numero, saldo:d.saldo, vencimiento:d.vencimiento, emision:d.emision, iva:d.iva||0}); sumaDocs+=d.saldo; }
   }
   var esperado=sumaDocs*(1-descPct/100);
   var cliInfo=obtenerClientesConDeuda().find(function(x){return x.id===cobroClienteSeleccionado;});
@@ -12349,6 +12967,7 @@ function guardarPagoCobro(){
     descuentoPct:descPct,
     montoEsperado:esperado,
     sumaDocsOriginal:sumaDocs,
+    retencionIVA:document.getElementById('cobroRetencionIVA')?document.getElementById('cobroRetencionIVA').checked:false,
     vendedor:(esEdicion && pagoOriginal)?pagoOriginal.vendedor:VEND.codigo,
     vendedorNombre:(esEdicion && pagoOriginal)?pagoOriginal.vendedorNombre:VEND.nombre,
     estado:'pendiente',
@@ -12518,9 +13137,10 @@ function renderPagoCobroCard(p){
       '<button onclick="abrirConfirmarPago(&quot;'+p.id+'&quot;)" style="background:var(--verde-c);color:var(--verde);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Confirmar</button>'+
       '<button onclick="abrirRechazarPago(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Rechazar</button>'+
     '</div>';
-  } else if(p.estado==='confirmado' && (puedeAnularPagoCobranza(p) || puedeBorrarDiferenciaPago(p))){
+  } else if(p.estado==='confirmado' && (puedeAnularPagoCobranza(p) || puedeBorrarDiferenciaPago(p) || puedeEditarRetencionIVA())){
     acciones='<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+
       (puedeBorrarDiferenciaPago(p)?'<button onclick="borrarDiferenciaPago(&quot;'+p.id+'&quot;)" style="background:var(--ambar-c);color:#856404;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Borrar diferencia pendiente</button>':'')+
+      (puedeEditarRetencionIVA()?'<button onclick="abrirEditarRetencionPago(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">'+(p.retencionIVA?'Retencion IVA: SI':'Marcar retencion IVA')+'</button>':'')+
       (puedeAnularPagoCobranza(p)?'<button onclick="confirmarAnularPagoCobranza(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Anular pago</button>':'')+
     '</div>';
   } else if(p.estado==='rechazado' && (p.vendedor===VEND.codigo || puedeAprobar)){
@@ -12850,6 +13470,75 @@ function ejecutarAnularPagoCobranza(){
       });
     });
   }).catch(function(){ toast('Error guardando en Firebase'); });
+}
+
+// ═══ Editar retencion de IVA en un pago YA CONFIRMADO (retroactivo) ═══
+// Solo toca el campo retencionIVA - no reabre el pago ni vuelve a tocar
+// el saldo de CxC, que ya quedo aplicado cuando se confirmo. Sirve para
+// poner al dia comisiones de pagos que se confirmaron antes de que
+// existiera este campo.
+function puedeEditarRetencionIVA(){
+  return VEND && (VEND.codigo==='01'||VEND.codigo==='20');
+}
+var pagoEditandoRetencionId=null;
+function abrirEditarRetencionPago(pagoId){
+  if(!puedeEditarRetencionIVA()) return;
+  var pago=PAGOS_COBRANZA_TODOS.find(function(x){ return x.id===pagoId; });
+  if(!pago){ toast('No se encontro el pago'); return; }
+  pagoEditandoRetencionId=pagoId;
+  document.getElementById('editarRetencionInfo').innerHTML=pago.clienteNombre+' — $'+formatearNumeroConMiles(pago.montoUSD,2)+' — '+pago.fecha;
+  document.getElementById('editarRetencionCheckbox').checked=!!pago.retencionIVA;
+  document.getElementById('mEditarRetencionPago').classList.add('open');
+}
+function guardarRetencionPago(){
+  if(!puedeEditarRetencionIVA()) return;
+  var pago=PAGOS_COBRANZA_TODOS.find(function(x){ return x.id===pagoEditandoRetencionId; });
+  if(!pago){ cerrarModal('mEditarRetencionPago'); return; }
+  pago.retencionIVA=document.getElementById('editarRetencionCheckbox').checked;
+  guardarPagoCobranzaEnDocVendedor(pago, function(){
+    toast('Retencion de IVA actualizada');
+    cerrarModal('mEditarRetencionPago');
+    renderHistorialCobros();
+  });
+}
+
+// ═══ Posibles candidatos a retencion de IVA (pista, no confirmacion) ═══
+// Documentos que originalmente traian IVA (>0) y cuyo saldo pendiente
+// ACTUAL se parece al 75% de ese IVA - puede ser una señal de que hubo
+// retencion y el saldo residual nunca se termino de cerrar, pero tambien
+// podria ser cualquier otra cosa. Se muestra como ayuda para saber por
+// donde empezar a revisar, nunca como un hecho confirmado.
+function verCandidatosRetencionIVA(){
+  var cont=document.getElementById('candidatosRetencionIVAContenido');
+  var candidatos=[];
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){
+    var d=CUENTAS_COBRAR[i];
+    if(!d.iva || d.iva<=0.009) continue; // solo documentos que ORIGINALMENTE tenian IVA
+    if(d.saldo<=0.009) continue; // sin saldo pendiente, no aplica
+    var setentaYCinco=d.iva*0.75;
+    var diferencia=Math.abs(d.saldo-setentaYCinco);
+    var tolerancia=Math.max(0.5, setentaYCinco*0.05);
+    if(diferencia<=tolerancia){
+      candidatos.push({doc:d, ivaEsperado75:Math.round(setentaYCinco*100)/100});
+    }
+  }
+  if(candidatos.length===0){
+    cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">No se encontraron documentos cuyo saldo pendiente se parezca al 75% de su IVA original.</div>';
+    document.getElementById('mCandidatosRetencionIVA').classList.add('open');
+    return;
+  }
+  candidatos.sort(function(a,b){ return b.doc.saldo-a.doc.saldo; });
+  var html='<div style="font-weight:600;font-size:13px;color:var(--azul);margin-bottom:8px">'+candidatos.length+' documento(s) encontrados</div>';
+  for(var i=0;i<candidatos.length;i++){
+    var c=candidatos[i];
+    html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:10px;margin-bottom:8px">'+
+      '<strong style="font-size:13px">Doc. '+c.doc.numero+' — '+c.doc.clienteNombre+'</strong>'+
+      '<div style="font-size:12px;color:#666;margin-top:3px">IVA original del documento: $'+formatearNumeroConMiles(c.doc.iva,2)+' (75% seria $'+formatearNumeroConMiles(c.ivaEsperado75,2)+')</div>'+
+      '<div style="font-size:12px;color:var(--ambar);margin-top:2px">Saldo pendiente actual: <strong>$'+formatearNumeroConMiles(c.doc.saldo,2)+'</strong></div>'+
+    '</div>';
+  }
+  cont.innerHTML=html;
+  document.getElementById('mCandidatosRetencionIVA').classList.add('open');
 }
 
 // Guarda un pago actualizado (confirmado o rechazado) dentro del documento
