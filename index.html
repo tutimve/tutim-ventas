@@ -741,6 +741,24 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <p style="font-size:12px;color:#666;margin-bottom:8px">Acepta el archivo <strong>vendedor.DBF</strong> exportado de Profit directamente, o CSV con columnas: CO_VEN, VEN_DES, CEDULA</p>
         <input type="file" id="csvVendedores" accept=".csv,.dbf,.DBF" onchange="cargarCSVVendedores(this)">
       </div>
+      <div class="card" id="adminRespaldosCard" style="display:none;background:#FFF3E0;border:2px solid var(--ambar)">
+        <div class="card-title" style="color:#856404">Respaldos de seguridad</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Se crea un respaldo completo automaticamente antes de cargar la base de clientes o de Cuentas por Cobrar, y una vez al dia. Se guardan los ultimos 10.</p>
+        <button class="btn btn-s btn-sm" onclick="verRespaldos()">Ver respaldos guardados</button>
+        <button class="btn btn-s btn-sm" onclick="crearRespaldoManual()">Crear respaldo ahora</button>
+      </div>
+    </div>
+
+    <!-- MODAL: gestion de respaldos -->
+    <div class="modal-bg" id="mRespaldos">
+      <div class="modal" style="max-width:600px">
+        <h3>Respaldos guardados</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:10px">Se guardan los ultimos 10 respaldos. Restaurar uno sobreescribe TODOS los datos actuales (clientes, cuentas por cobrar, pedidos, cobros de todos los vendedores, etc.) con lo que habia en ese momento. Antes de restaurar, se crea automaticamente un respaldo del estado actual, por si acaso.</p>
+        <div id="respaldosContenido" style="max-height:60vh;overflow-y:auto"></div>
+        <div style="margin-top:16px">
+          <button class="btn btn-s" onclick="cerrarModal('mRespaldos')">Cerrar</button>
+        </div>
+      </div>
     </div>
 
     <!-- TAB CLIENTES -->
@@ -886,6 +904,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <div class="field">
           <input type="text" id="cxcBusqDoc" placeholder="Buscar por cliente, codigo o RIF..." oninput="renderListaCxCAdmin()">
         </div>
+        <button class="btn btn-s btn-sm" style="margin-bottom:10px" onclick="descargarExcelCxCActual()">Descargar CxC actual (Excel)</button>
         <div id="cxcListaCompleta"></div>
       </div>
       <div class="card" id="cxcVerificadorCard" style="display:none">
@@ -2729,6 +2748,7 @@ function mostrarApp(){
             actualizarMetricas();
             renderStockHome();
             renderInv();
+            verificarRespaldoAutomaticoDiario();
           }, alcanceApp);
         });
       });
@@ -7687,6 +7707,8 @@ function adminTab(tab){
     var cardSup=document.getElementById('adminSupervisoresCard');
     if(cardSup) cardSup.style.display=esAdminCompleto()?'block':'none';
     if(esAdminCompleto()) renderAdminSupervisores();
+    var cardResp=document.getElementById('adminRespaldosCard');
+    if(cardResp) cardResp.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'block':'none';
   }
   if(tab==='clientes'){
     document.getElementById('adminCliList').innerHTML='<div style="color:#aaa;text-align:center;padding:12px">Cargando clientes...</div>';
@@ -10933,6 +10955,167 @@ function vincularArchivosHuerfanosACliente(idx, clienteId){
   }).catch(function(){ toast('Error guardando en Firebase, intenta de nuevo'); });
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SISTEMA DE RESPALDOS DE LA BASE DE DATOS
+// ═══════════════════════════════════════════════════════════════════
+// Guarda una copia completa de todo lo importante (todos los documentos
+// de config/ y todos los documentos de vendedores/) en una coleccion
+// aparte "backups/{id}", ANTES de cualquier operacion que reemplace
+// documentos completos (carga de clientes, etc.) y tambien de forma
+// periodica. Se guardan los ultimos 10 respaldos, borrando
+// automaticamente los mas viejos.
+var CONFIG_DOCS_RESPALDABLES=['catalogo_productos','clientes','comisiones_registros','compras_registradas','cuentas_cobrar','cuentas_cobrar_fiscal','cuentas_cobrar_real','historial_agotado','historial_cargas_cxc','historial_inventario','inventario','limite_deuda','precios','promo_display','promociones_custom','reposicion','reposicion_historial','stock_estimado','storage_huerfanos_descartados','vendedores'];
+var MAX_RESPALDOS_GUARDADOS=10;
+
+// Crea un respaldo completo. "tipo" es solo informativo (ej:
+// 'pre-carga-clientes', 'manual', 'automatico-diario'). El callback
+// recibe (exito, backupId).
+function crearRespaldoCompleto(tipo, callback){
+  var backupId='B'+Date.now();
+  var lecturasConfig=CONFIG_DOCS_RESPALDABLES.map(function(nombre){
+    return db.collection('config').doc(nombre).get().then(function(doc){
+      return {nombre:nombre, existe:doc.exists, data:doc.exists?doc.data():null};
+    }).catch(function(){ return {nombre:nombre, existe:false, data:null}; });
+  });
+  Promise.all(lecturasConfig).then(function(resultadosConfig){
+    db.collection('vendedores').get().then(function(snap){
+      var escrituras=[];
+      var metaConfig=resultadosConfig.filter(function(r){ return r.existe; });
+      escrituras.push(db.collection('backups').doc(backupId).set({
+        fecha:new Date().toISOString(), tipo:tipo,
+        cantidadConfig:metaConfig.length, cantidadVendedores:snap.docs.length
+      }));
+      metaConfig.forEach(function(r){
+        escrituras.push(db.collection('backups').doc(backupId).collection('config').doc(r.nombre).set(r.data));
+      });
+      snap.docs.forEach(function(doc){
+        escrituras.push(db.collection('backups').doc(backupId).collection('vendedores').doc(doc.id).set(doc.data()));
+      });
+      Promise.all(escrituras).then(function(){
+        limpiarRespaldosViejos(function(){ if(callback) callback(true, backupId); });
+      }).catch(function(e){ console.log('Error creando respaldo:', e); if(callback) callback(false); });
+    }).catch(function(){ if(callback) callback(false); });
+  }).catch(function(){ if(callback) callback(false); });
+}
+
+// Elimina un respaldo completo (metadata + sus 2 subcolecciones)
+function borrarRespaldoCompleto(backupId){
+  return Promise.all([
+    db.collection('backups').doc(backupId).collection('config').get().then(function(snap){
+      return Promise.all(snap.docs.map(function(d){ return d.ref.delete(); }));
+    }),
+    db.collection('backups').doc(backupId).collection('vendedores').get().then(function(snap){
+      return Promise.all(snap.docs.map(function(d){ return d.ref.delete(); }));
+    })
+  ]).then(function(){
+    return db.collection('backups').doc(backupId).delete();
+  });
+}
+
+// Mantiene solo los MAX_RESPALDOS_GUARDADOS mas recientes
+function limpiarRespaldosViejos(callback){
+  db.collection('backups').orderBy('fecha','desc').get().then(function(snap){
+    var docs=snap.docs;
+    if(docs.length<=MAX_RESPALDOS_GUARDADOS){ if(callback) callback(); return; }
+    var aBorrar=docs.slice(MAX_RESPALDOS_GUARDADOS);
+    Promise.all(aBorrar.map(function(doc){ return borrarRespaldoCompleto(doc.id); })).then(function(){
+      if(callback) callback();
+    }).catch(function(){ if(callback) callback(); });
+  }).catch(function(){ if(callback) callback(); });
+}
+
+// Revisa si el ultimo respaldo tiene mas de 24 horas (o si no hay
+// ninguno) y, de ser asi, crea uno automatico. Pensado para llamarse una
+// vez al abrir la app (solo para 01/20, para no generar respaldos desde
+// sesiones de vendedores normales).
+function verificarRespaldoAutomaticoDiario(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  db.collection('backups').orderBy('fecha','desc').limit(1).get().then(function(snap){
+    var necesitaRespaldo=true;
+    if(!snap.empty){
+      var ultimo=snap.docs[0].data();
+      var horasDesdeUltimo=(Date.now()-new Date(ultimo.fecha).getTime())/(1000*60*60);
+      necesitaRespaldo=horasDesdeUltimo>=24;
+    }
+    if(necesitaRespaldo) crearRespaldoCompleto('automatico-diario', function(){});
+  }).catch(function(){});
+}
+
+// Restaura TODO desde un respaldo especifico - sobreescribe el estado
+// actual de config/ y vendedores/. Antes de restaurar, crea un respaldo
+// del estado ACTUAL (por si el restaurar tambien fue un error). Solo
+// 01/20 pueden hacerlo, dado lo delicado de la accion.
+function restaurarRespaldo(backupId, callback){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))){ toast('Solo 01/20 pueden restaurar un respaldo'); return; }
+  crearRespaldoCompleto('pre-restauracion', function(){
+    db.collection('backups').doc(backupId).collection('config').get().then(function(configSnap){
+      db.collection('backups').doc(backupId).collection('vendedores').get().then(function(vendSnap){
+        var escrituras=[];
+        configSnap.docs.forEach(function(d){ escrituras.push(db.collection('config').doc(d.id).set(d.data())); });
+        vendSnap.docs.forEach(function(d){ escrituras.push(db.collection('vendedores').doc(d.id).set(d.data())); });
+        Promise.all(escrituras).then(function(){
+          if(callback) callback(true);
+        }).catch(function(){ if(callback) callback(false); });
+      }).catch(function(){ if(callback) callback(false); });
+    }).catch(function(){ if(callback) callback(false); });
+  });
+}
+
+// ═══ UI de gestion de respaldos ═══
+function verRespaldos(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  var cont=document.getElementById('respaldosContenido');
+  cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando respaldos...</div>';
+  document.getElementById('mRespaldos').classList.add('open');
+  db.collection('backups').orderBy('fecha','desc').get().then(function(snap){
+    if(snap.empty){
+      cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Aun no hay respaldos guardados</div>';
+      return;
+    }
+    var html='';
+    snap.docs.forEach(function(doc){
+      var d=doc.data();
+      var fechaTxt=new Date(d.fecha).toLocaleString('es-VE');
+      var tipoTxt={'pre-carga-clientes':'Antes de cargar clientes','pre-carga-cxc':'Antes de cargar CxC','automatico-diario':'Automatico (diario)','manual':'Manual','pre-restauracion':'Antes de una restauracion'}[d.tipo]||d.tipo;
+      html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:10px;margin-bottom:8px">'+
+        '<div style="font-weight:600;font-size:13px">'+fechaTxt+'</div>'+
+        '<div style="font-size:11px;color:#888">'+tipoTxt+' — '+(d.cantidadVendedores||0)+' vendedores, '+(d.cantidadConfig||0)+' documentos de configuracion</div>'+
+        '<button class="btn btn-s btn-sm" style="margin-top:6px;color:var(--rojo);border-color:var(--rojo)" onclick="confirmarRestaurarRespaldo(\''+doc.id+'\',\''+fechaTxt.replace(/'/g,"")+'\')">Restaurar este respaldo</button>'+
+      '</div>';
+    });
+    cont.innerHTML=html;
+  }).catch(function(){
+    cont.innerHTML='<div style="color:var(--rojo);font-size:13px;text-align:center;padding:12px">Error cargando respaldos</div>';
+  });
+}
+
+function crearRespaldoManual(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  toast('Creando respaldo, puede tardar un momento...');
+  crearRespaldoCompleto('manual', function(exito){
+    if(exito) toast('Respaldo creado correctamente');
+    else toast('Error creando el respaldo, intenta de nuevo');
+  });
+}
+
+// Pide confirmacion escrita antes de restaurar, dado lo delicado de la
+// accion (sobreescribe TODO lo actual con lo que habia en el respaldo)
+function confirmarRestaurarRespaldo(backupId, fechaTxt){
+  var texto=prompt('Vas a RESTAURAR el respaldo del '+fechaTxt+'.\n\nEsto sobreescribe TODOS los datos actuales (clientes, cuentas por cobrar, pedidos, cobros de todos los vendedores) con lo que habia en ese momento. Se crea un respaldo del estado actual antes de hacerlo, por si acaso.\n\nEscribe RESTAURAR (en mayusculas) para confirmar:');
+  if(texto!=='RESTAURAR'){ toast('Restauracion cancelada'); return; }
+  var cont=document.getElementById('respaldosContenido');
+  cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Restaurando, no cierres esta ventana...</div>';
+  restaurarRespaldo(backupId, function(exito){
+    if(exito){
+      toast('Respaldo restaurado. Recarga la app para ver los datos actualizados.');
+      cont.innerHTML='<div style="color:var(--verde);font-weight:600;font-size:13px;text-align:center;padding:12px">✓ Respaldo restaurado correctamente. Cierra y vuelve a abrir la app para ver los datos.</div>';
+    } else {
+      toast('Error restaurando el respaldo');
+      verRespaldos();
+    }
+  });
+}
+
 function verClientesProvisionales(){
   var cont=document.getElementById('clientesProvisionalesContenido');
   cargarClientesNuevosFirebase(function(cns){
@@ -11010,8 +11193,9 @@ function vincularClienteManualmente(idx, oficialId){
       pedidos: JSON.stringify(peds),
       visitas: data.visitas||'[]',
       clientesNuevos: JSON.stringify(cns),
+      pagosCobranza: data.pagosCobranza||'[]',
       ultimaActualizacion: new Date().toISOString()
-    }).then(function(){
+    }, {merge:true}).then(function(){
       db.collection('config').doc('clientes').set({
         data: JSON.stringify(CLIENTES_PROFIT),
         actualizado: new Date().toISOString()
@@ -11025,7 +11209,19 @@ function vincularClienteManualmente(idx, oficialId){
   }).catch(function(){ toast('Error accediendo a Firebase'); });
 }
 
+// Envoltorio: antes de tocar la base de clientes (una operacion que en
+// el pasado causo perdida de datos por escrituras sin merge), se crea un
+// respaldo completo primero. Si el respaldo falla por algun motivo, se
+// continua igual (para no bloquear el trabajo), pero se avisa.
 function guardarClientesBase(nuevaBase){
+  var estadoElPre=document.getElementById('estadoCargaClientes');
+  if(estadoElPre) estadoElPre.innerHTML='<span style="color:#aaa">Creando respaldo de seguridad antes de continuar...</span>';
+  crearRespaldoCompleto('pre-carga-clientes', function(exito){
+    if(!exito) toast('No se pudo crear el respaldo previo, continuando de todas formas');
+    _guardarClientesBaseInterno(nuevaBase);
+  });
+}
+function _guardarClientesBaseInterno(nuevaBase){
   if(nuevaBase.length===0){toast('No se encontraron clientes validos');return;}
   var estadoEl=document.getElementById('estadoCargaClientes');
   if(estadoEl) estadoEl.innerHTML='<span style="color:#aaa">Vinculando clientes nuevos por RIF...</span>';
@@ -11197,8 +11393,9 @@ function vincularClientesNuevosPorRif(nuevaBase, callback){
           pedidos: JSON.stringify(peds),
           visitas: data.visitas||'[]',
           clientesNuevos: JSON.stringify(cnsRestantes),
+          pagosCobranza: data.pagosCobranza||'[]',
           ultimaActualizacion: new Date().toISOString()
-        }).then(function(){
+        }, {merge:true}).then(function(){
           pendientes--;
           if(pendientes<=0) callback(totalVinculados, vinculadosDetalle);
         }).catch(function(){
@@ -11243,8 +11440,9 @@ function actualizarNombresEnPedidos(cliMap, callback){
           pedidos:JSON.stringify(peds),
           visitas:data.visitas||'[]',
           clientesNuevos:data.clientesNuevos||'[]',
+          pagosCobranza:data.pagosCobranza||'[]',
           ultimaActualizacion:new Date().toISOString()
-        }).then(function(){
+        }, {merge:true}).then(function(){
           pendientes--;
           if(pendientes<=0) callback(totalActualizados);
         }).catch(function(){
@@ -11945,8 +12143,17 @@ function verDetalleCargaCxC(detalleOverride){
   document.getElementById('mDetalleCargaCxC').classList.add('open');
 }
 
+// Envoltorio: respaldo de seguridad antes de tocar la base de CxC
 function cargarExcelCxC(input, tipo){
   var file=input.files[0]; if(!file) return;
+  var estadoElPre=document.getElementById('cxcEstadoCarga');
+  if(estadoElPre) estadoElPre.innerHTML='<span style="color:#aaa">Creando respaldo de seguridad antes de continuar...</span>';
+  crearRespaldoCompleto('pre-carga-cxc', function(exito){
+    if(!exito) toast('No se pudo crear el respaldo previo, continuando de todas formas');
+    _cargarExcelCxCInterno(file, tipo, input);
+  });
+}
+function _cargarExcelCxCInterno(file, tipo, input){
   var nombreBase=(tipo==='real'?'REAL':'FISCAL');
   var modoCarga=document.getElementById('cxcModoCarga')?document.getElementById('cxcModoCarga').value:'reemplazar';
   var estadoEl=document.getElementById('cxcEstadoCarga');
@@ -12329,6 +12536,32 @@ function ejecutarReaplicarAbono(){
 // Listado completo y buscable de TODAS las cuentas por cobrar, para que el
 // administrador pueda ver la deuda de cualquier cliente sin tener que pasar
 // por el flujo de reportar un pago.
+// Descarga TODA la base actual de Cuentas por Cobrar en Excel, con el
+// mismo orden de columnas que usa la carga desde Profit (NUMERO, EMISION,
+// VENCIMIENTO, CODIGO, CLIENTE, VENDEDOR, IVA, OTROS, NETO, SALDO), mas
+// un par de columnas extra al final con detalle propio de la app (origen
+// del documento y si tuvo un ajuste manual de saldo).
+function descargarExcelCxCActual(){
+  if(!CUENTAS_COBRAR || CUENTAS_COBRAR.length===0){ toast('No hay cuentas por cobrar cargadas'); return; }
+  var filas=[['NUMERO','EMISION','VENCIMIENTO','CODIGO','CLIENTE','VENDEDOR','IVA','OTROS','NETO','SALDO','ORIGEN','AJUSTADO']];
+  var docsOrdenados=CUENTAS_COBRAR.slice().sort(function(a,b){ return (a.numero||'').localeCompare(b.numero||'', undefined, {numeric:true}); });
+  for(var i=0;i<docsOrdenados.length;i++){
+    var d=docsOrdenados[i];
+    var origenTxt=d.origenBase==='fiscal'?'Fiscal':(d.origenBase==='diferencia'?'Diferencia 35%':'Real');
+    filas.push([
+      d.numero||'', d.emision||'', d.vencimiento||'', d.clienteId||'', d.clienteNombre||'', d.vendedor||'',
+      d.iva||0, d.otros||0, d.neto||0, d.saldo||0, origenTxt, d.ajusteManual?'Si':''
+    ]);
+  }
+  var ws=XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols']=[{wch:12},{wch:12},{wch:12},{wch:10},{wch:35},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:10}];
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'CxC');
+  var fechaHoy=new Date().toISOString().substring(0,10);
+  XLSX.writeFile(wb, 'cuentas_por_cobrar_'+fechaHoy+'.xlsx');
+  toast('Excel generado con '+docsOrdenados.length+' documentos');
+}
+
 function renderListaCxCAdmin(){
   var el=document.getElementById('cxcListaCompleta');
   if(!el) return;
