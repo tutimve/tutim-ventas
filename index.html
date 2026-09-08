@@ -1584,6 +1584,41 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
+<!-- MODAL DESACTIVAR VENDEDOR -->
+<div class="modal-bg" id="mDesactivarVend">
+  <div class="modal">
+    <h3>Desactivar vendedor</h3>
+    <p style="font-size:13px;color:#555;margin-bottom:14px" id="desactivarVendInfo"></p>
+    <p style="font-size:12px;color:#888;margin-bottom:10px">Al desactivarlo, ya no podra entrar a la app. Todo su historial de pedidos y cobros se conserva intacto, sin importar la opcion que elijas abajo.</p>
+    <div class="field">
+      <label>¿Que hacer con sus clientes asignados?</label>
+      <select id="desactivarVendOpcion" onchange="toggleReasignarVendedorWrap()">
+        <option value="dejar">Dejar sus clientes como estan (le siguen apareciendo a el)</option>
+        <option value="reasignar">Reasignar sus clientes a otro vendedor activo</option>
+      </select>
+    </div>
+    <div class="field hidden" id="reasignarVendedorWrap">
+      <label>Reasignar clientes a</label>
+      <select id="desactivarVendDestino"></select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p" onclick="ejecutarDesactivarVendedor()">Confirmar desactivacion</button>
+      <button class="btn btn-s" onclick="cerrarModal('mDesactivarVend')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ELIMINAR VENDEDOR -->
+<div class="modal-bg" id="mEliminarVend">
+  <div class="modal">
+    <h3>Eliminar vendedor</h3>
+    <div id="eliminarVendContenido"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-s" onclick="cerrarModal('mEliminarVend')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL EDITAR CLIENTE -->
 <div class="modal-bg" id="mEditarCli">
   <div class="modal">
@@ -2841,6 +2876,7 @@ function onSelVend(){
   }
   pinActual='';
   actualizarPinDots();
+  document.getElementById('loginError').textContent='Codigo o clave incorrectos';
   document.getElementById('loginError').style.display='none';
 }
 
@@ -2873,6 +2909,11 @@ function verificarLogin(){
     pinActual=''; actualizarPinDots(); return;
   }
   if(pinActual===v.clave){
+    if(v.inactivo){
+      document.getElementById('loginError').textContent='Este usuario esta desactivado. Contacta a un administrador.';
+      document.getElementById('loginError').style.display='block';
+      pinActual=''; actualizarPinDots(); return;
+    }
     // Si hay otro vendedor logueado antes en este navegador, limpiar sus datos
     var vendAnterior=lsGet('tutim_vend',null);
     if(vendAnterior && vendAnterior.codigo !== cod){
@@ -10385,12 +10426,22 @@ function renderAdminVend(){
   for(var i=0;i<listaV.length;i++){
     var v=listaV[i];
     var supTag=v.esSupervisor?' <span class="tag tag-a" style="font-size:10px;background:var(--azul);color:#fff">Supervisor</span>':'';
-    html+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borde)">' +
-      '<div style="flex:1">' +
-        '<div style="font-weight:600;font-size:13px">VEND '+v.id+' — '+v.nombre+supTag+'</div>' +
-        '<div style="font-size:11px;color:#888">Clave: '+v.clave+(v.zona?' | '+v.zona:'')+'</div>' +
+    var inactivoTag=v.inactivo?' <span class="tag" style="font-size:10px;background:var(--rojo-c);color:var(--rojo)">Inactivo</span>':'';
+    html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde)'+(v.inactivo?';opacity:.6':'')+'">' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        '<div style="flex:1">' +
+          '<div style="font-weight:600;font-size:13px">VEND '+v.id+' — '+v.nombre+supTag+inactivoTag+'</div>' +
+          '<div style="font-size:11px;color:#888">Clave: '+v.clave+(v.zona?' | '+v.zona:'')+'</div>' +
+        '</div>' +
+        '<button onclick="editarVendedor(&quot;'+v.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Editar</button>' +
       '</div>' +
-      '<button onclick="editarVendedor(&quot;'+v.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Editar</button>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">' +
+        (v.inactivo
+          ?'<button onclick="reactivarVendedor(&quot;'+v.id+'&quot;)" style="background:var(--verde-c);color:var(--verde);border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer">Reactivar</button>'
+          :'<button onclick="abrirDesactivarVendedor(&quot;'+v.id+'&quot;)" style="background:var(--ambar-c);color:#856404;border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer">Desactivar</button>'
+        ) +
+        '<button onclick="abrirEliminarVendedor(&quot;'+v.id+'&quot;)" style="background:none;color:var(--rojo);border:1px solid var(--rojo);border-radius:6px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer">Eliminar</button>' +
+      '</div>' +
     '</div>';
   }
   document.getElementById('adminVendList').innerHTML=html;
@@ -10457,6 +10508,160 @@ function guardarVendedoresFirebase(){
     actualizado: new Date().toISOString()
   }).then(function(){ toast('Guardado'); })
   .catch(function(){ toast('Error guardando en Firebase'); });
+}
+
+// ═══ Desactivar / Reactivar vendedor ═══
+var vendDesactivandoId=null;
+
+function abrirDesactivarVendedor(id){
+  var v=VENDEDORES.find(function(x){return x.id===id;});
+  if(!v) return;
+  vendDesactivandoId=id;
+  document.getElementById('desactivarVendInfo').innerHTML='<strong>VEND '+v.id+' - '+v.nombre+'</strong>';
+  document.getElementById('desactivarVendOpcion').value='dejar';
+  document.getElementById('reasignarVendedorWrap').classList.add('hidden');
+  var destino=document.getElementById('desactivarVendDestino');
+  var otros=VENDEDORES.filter(function(x){ return x.id!==id && !x.inactivo; }).sort(function(a,b){ return parseInt(a.id,10)-parseInt(b.id,10); });
+  destino.innerHTML=otros.map(function(x){ return '<option value="'+x.id+'">VEND '+x.id+' - '+x.nombre+'</option>'; }).join('');
+  document.getElementById('mDesactivarVend').classList.add('open');
+}
+
+function toggleReasignarVendedorWrap(){
+  var val=document.getElementById('desactivarVendOpcion').value;
+  var wrap=document.getElementById('reasignarVendedorWrap');
+  if(val==='reasignar') wrap.classList.remove('hidden');
+  else wrap.classList.add('hidden');
+}
+
+function ejecutarDesactivarVendedor(){
+  var v=VENDEDORES.find(function(x){return x.id===vendDesactivandoId;});
+  if(!v) return;
+  var opcion=document.getElementById('desactivarVendOpcion').value;
+  v.inactivo=true;
+  if(opcion==='reasignar'){
+    var destinoId=document.getElementById('desactivarVendDestino').value;
+    if(!destinoId){ toast('Selecciona a quien reasignar los clientes'); return; }
+    var destino=VENDEDORES.find(function(x){return x.id===destinoId;});
+    var reasignados=0;
+    for(var i=0;i<CLIENTES_PROFIT.length;i++){
+      if(CLIENTES_PROFIT[i].vendedor===vendDesactivandoId){
+        CLIENTES_PROFIT[i].vendedor=destinoId;
+        reasignados++;
+      }
+    }
+    db.collection('config').doc('clientes').set({
+      data: JSON.stringify(CLIENTES_PROFIT),
+      actualizado: new Date().toISOString()
+    }).then(function(){
+      guardarVendedoresFirebaseSilencioso(function(){
+        cerrarModal('mDesactivarVend');
+        toast('Vendedor desactivado, '+reasignados+' cliente(s) reasignados a VEND '+destinoId);
+        renderAdminVend();
+      });
+    }).catch(function(){ toast('Error guardando los clientes reasignados'); });
+  } else {
+    guardarVendedoresFirebaseSilencioso(function(){
+      cerrarModal('mDesactivarVend');
+      toast('Vendedor desactivado');
+      renderAdminVend();
+    });
+  }
+}
+
+function reactivarVendedor(id){
+  var v=VENDEDORES.find(function(x){return x.id===id;});
+  if(!v) return;
+  v.inactivo=false;
+  guardarVendedoresFirebaseSilencioso(function(){
+    toast('Vendedor reactivado');
+    renderAdminVend();
+  });
+}
+
+// Version de guardarVendedoresFirebase() que no muestra su propio toast,
+// para poder mostrar un mensaje mas especifico en cada accion
+function guardarVendedoresFirebaseSilencioso(callback){
+  db.collection('config').doc('vendedores').set({
+    data: JSON.stringify(VENDEDORES),
+    actualizado: new Date().toISOString()
+  }).then(function(){ if(callback) callback(); })
+  .catch(function(){ toast('Error guardando en Firebase'); });
+}
+
+// ═══ Eliminar vendedor (solo si nunca tuvo actividad) ═══
+function abrirEliminarVendedor(id){
+  var v=VENDEDORES.find(function(x){return x.id===id;});
+  if(!v) return;
+  var cont=document.getElementById('eliminarVendContenido');
+  cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Revisando si tiene actividad registrada...</div>';
+  document.getElementById('mEliminarVend').classList.add('open');
+
+  var clientesAsignados=CLIENTES_PROFIT.filter(function(c){ return c.vendedor===id; }).length;
+
+  db.collection('vendedores').doc(id).get().then(function(doc){
+    var tieneActividad=false;
+    var detalle=[];
+    if(clientesAsignados>0){ tieneActividad=true; detalle.push(clientesAsignados+' cliente(s) asignados'); }
+    if(doc.exists){
+      var data=doc.data();
+      var peds=[]; try{ peds=JSON.parse(data.pedidos||'[]'); }catch(e){}
+      var viss=[]; try{ viss=JSON.parse(data.visitas||'[]'); }catch(e){}
+      var pags=[]; try{ pags=JSON.parse(data.pagosCobranza||'[]'); }catch(e){}
+      var cns=[]; try{ cns=JSON.parse(data.clientesNuevos||'[]'); }catch(e){}
+      if(peds.length>0){ tieneActividad=true; detalle.push(peds.length+' pedido(s)'); }
+      if(viss.length>0){ tieneActividad=true; detalle.push(viss.length+' visita(s)'); }
+      if(pags.length>0){ tieneActividad=true; detalle.push(pags.length+' cobro(s) reportados'); }
+      if(cns.length>0){ tieneActividad=true; detalle.push(cns.length+' cliente(s) nuevo(s) creados'); }
+    }
+    if(tieneActividad){
+      cont.innerHTML='<div style="color:var(--rojo);font-size:13px;padding:8px 0"><strong>No se puede eliminar a VEND '+v.id+' - '+v.nombre+'.</strong></div>'+
+        '<div style="font-size:13px;color:#555;margin-top:6px">Tiene actividad registrada: '+detalle.join(', ')+'.</div>'+
+        '<div style="font-size:12px;color:#888;margin-top:10px">Eliminar borraria ese historial sin dejar rastro. Si ya no trabaja con la empresa, usa "Desactivar" en vez de eliminar.</div>';
+    } else {
+      cont.innerHTML='<div style="font-size:13px;color:#555">VEND '+v.id+' - '+v.nombre+' no tiene ningun pedido, visita, cobro ni cliente asignado.</div>'+
+        '<div style="font-size:13px;color:var(--rojo);margin-top:10px;font-weight:600">Esto no se puede deshacer. ¿Confirmas que quieres eliminarlo por completo?</div>'+
+        '<button class="btn btn-p" style="background:var(--rojo);margin-top:10px" onclick="ejecutarEliminarVendedor(&quot;'+v.id+'&quot;)">Si, eliminar definitivamente</button>';
+    }
+  }).catch(function(){
+    cont.innerHTML='<div style="color:var(--rojo);font-size:13px">Error revisando la actividad del vendedor, intenta de nuevo.</div>';
+  });
+}
+
+function ejecutarEliminarVendedor(id){
+  // Verificacion de seguridad propia (no depender solo de que el boton
+  // de confirmar este oculto en la UI) - se vuelve a revisar actividad
+  // antes de borrar de verdad.
+  var clientesAsignados=CLIENTES_PROFIT.filter(function(c){ return c.vendedor===id; }).length;
+  if(clientesAsignados>0){ toast('No se puede eliminar: tiene '+clientesAsignados+' cliente(s) asignados'); return; }
+  db.collection('vendedores').doc(id).get().then(function(doc){
+    if(doc.exists){
+      var data=doc.data();
+      var peds=[]; try{ peds=JSON.parse(data.pedidos||'[]'); }catch(e){}
+      var viss=[]; try{ viss=JSON.parse(data.visitas||'[]'); }catch(e){}
+      var pags=[]; try{ pags=JSON.parse(data.pagosCobranza||'[]'); }catch(e){}
+      var cns=[]; try{ cns=JSON.parse(data.clientesNuevos||'[]'); }catch(e){}
+      if(peds.length>0||viss.length>0||pags.length>0||cns.length>0){
+        toast('No se puede eliminar: tiene actividad registrada');
+        abrirEliminarVendedor(id);
+        return;
+      }
+    }
+    VENDEDORES=VENDEDORES.filter(function(x){return x.id!==id;});
+    db.collection('config').doc('vendedores').set({
+      data: JSON.stringify(VENDEDORES),
+      actualizado: new Date().toISOString()
+    }).then(function(){
+      return db.collection('vendedores').doc(id).delete();
+    }).then(function(){
+      cerrarModal('mEliminarVend');
+      toast('Vendedor eliminado');
+      renderAdminVend();
+    }).catch(function(){
+      toast('Error eliminando el vendedor');
+    });
+  }).catch(function(){
+    toast('Error verificando actividad, intenta de nuevo');
+  });
 }
 
 function abrirModalNuevoVend(){
