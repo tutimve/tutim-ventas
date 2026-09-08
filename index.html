@@ -609,10 +609,12 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <option value="15">15%</option>
         </select>
       </div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:10px;cursor:pointer">
-        <input type="checkbox" id="cobroRetencionIVA" style="width:16px;height:16px">
-        Hubo retencion de IVA en este pago (75% retenido, solo entra 25% del IVA en dinero)
-      </label>
+      <div id="cobroRetencionWrap" class="hidden">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="cobroRetencionIVA" style="width:16px;height:16px">
+          Hubo retencion de IVA en este pago (75% retenido, solo entra 25% del IVA en dinero)
+        </label>
+      </div>
       <div id="cobroValidacion" style="margin-bottom:10px"></div>
       <div class="field">
         <label>Foto(s) del comprobante</label>
@@ -783,6 +785,19 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--borde)">
           <button class="btn btn-s btn-sm" onclick="verClientesProvisionales()">Ver clientes con codigo provisional</button>
           <button class="btn btn-s btn-sm" onclick="analizarStorageClientesHuerfanos()">Buscar documentos huerfanos en Storage</button>
+          <button class="btn btn-s btn-sm" onclick="verRifsDuplicados()">Buscar RIFs duplicados</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: RIFs duplicados entre clientes oficiales -->
+    <div class="modal-bg" id="mRifsDuplicados">
+      <div class="modal" style="max-width:600px">
+        <h3>RIFs duplicados</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:10px">Un RIF identifica una sola empresa - si aparece en mas de un codigo de cliente, normalmente es un error de captura en Profit. Esto puede hacer que la deuda de un cliente se le atribuya a otro por error. Corrige el RIF equivocado directamente en Profit y vuelve a cargar la base de clientes.</p>
+        <div id="rifsDuplicadosContenido" style="max-height:60vh;overflow-y:auto"></div>
+        <div style="margin-top:16px">
+          <button class="btn btn-s" onclick="cerrarModal('mRifsDuplicados')">Cerrar</button>
         </div>
       </div>
     </div>
@@ -1454,6 +1469,34 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div class="field hidden" id="ncDirEntregaWrap">
       <label>Direccion de Entrega</label>
       <input type="text" id="ncDirEntrega" placeholder="Direccion de entrega...">
+    </div>
+
+    <div class="field">
+      <label>¿Este cliente tiene una sucursal (mismo RIF, otra direccion/contacto)?</label>
+      <select id="ncTieneSucursal" onchange="toggleSucursalNuevoCli()">
+        <option value="no">No</option>
+        <option value="si">Si, tambien registrar la sucursal</option>
+      </select>
+    </div>
+    <div class="hidden" id="ncSucursalWrap" style="border:1.5px dashed var(--borde);border-radius:10px;padding:10px;margin-bottom:10px">
+      <div class="card-title" style="font-size:13px">Datos de la sucursal</div>
+      <p style="font-size:11px;color:#888;margin-bottom:8px">Se registra con el mismo nombre y RIF, pero con su propia direccion de envio, contacto y telefono - asi cuando se cruce con Profit, ya vienen los dos codigos listos con su informacion correcta.</p>
+      <div class="field">
+        <label>Nombre de la sucursal (opcional)</label>
+        <input type="text" id="ncSucNombre" placeholder="Ej: Sucursal Este (si lo dejas vacio, usa el mismo nombre)">
+      </div>
+      <div class="field">
+        <label>Direccion de envio de la sucursal</label>
+        <input type="text" id="ncSucDirEntrega" placeholder="Direccion de entrega de la sucursal...">
+      </div>
+      <div class="field">
+        <label>Contacto de la sucursal</label>
+        <input type="text" id="ncSucContacto" placeholder="Nombre de quien recibe en la sucursal">
+      </div>
+      <div class="field">
+        <label>Telefono de la sucursal</label>
+        <input type="text" id="ncSucTel" placeholder="Telefono de la sucursal">
+      </div>
     </div>
 
     <div class="divider" style="margin:14px 0"></div>
@@ -2734,25 +2777,37 @@ function mostrarApp(){
   if(btnCSVModal) btnCSVModal.style.display=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20')?'block':'none';
 
   if(cargarDatosMultiples){
-    cargarTodosFirebase(function(todos){
-      PEDIDOS=todos;
-      cargarTodosVisitasFirebase(function(todasVis){
-        VISITAS = alcanceApp ? todasVis.filter(function(v){return alcanceApp.indexOf(v.vendedor)>=0;}) : todasVis;
-        cargarClientesNuevosFirebase(function(cns){
-          NUEVOS_TODOS_CACHE=cns;
-          CLIENTES=getClientesParaVendedor();
-          cargarTodosPagosCobranzaFirebase(function(pagos){
-            PAGOS_COBRANZA=pagos;
-            PAGOS_COBRANZA_TODOS=pagos;
-            ocultarLoading();
-            actualizarMetricas();
-            renderStockHome();
-            renderInv();
-            verificarRespaldoAutomaticoDiario();
-          }, alcanceApp);
-        });
-      });
-    }, alcanceApp);
+    // IMPORTANTE: las 4 cargas (pedidos, visitas, clientes nuevos, cobros)
+    // son independientes entre si - antes se encadenaban una detras de
+    // otra (el tiempo total era la SUMA de las 4), lo cual se sentia
+    // especialmente lento con conexion inestable. Ahora se disparan las
+    // 4 al mismo tiempo, y el tiempo total pasa a ser el de la mas lenta
+    // de las 4, no la suma.
+    var cargaInicialResultados={};
+    var cargaInicialPendientes=4;
+    function cargaInicialListaUna(){
+      cargaInicialPendientes--;
+      if(cargaInicialPendientes<=0){
+        PEDIDOS=cargaInicialResultados.todos;
+        VISITAS = alcanceApp ? cargaInicialResultados.todasVis.filter(function(v){return alcanceApp.indexOf(v.vendedor)>=0;}) : cargaInicialResultados.todasVis;
+        NUEVOS_TODOS_CACHE=cargaInicialResultados.cns;
+        CLIENTES=getClientesParaVendedor();
+        PAGOS_COBRANZA=cargaInicialResultados.pagos;
+        PAGOS_COBRANZA_TODOS=cargaInicialResultados.pagos;
+        ocultarLoading();
+        actualizarMetricas();
+        renderStockHome();
+        renderInv();
+        // El respaldo automatico diario se deja para unos segundos
+        // despues, para que no compita por ancho de banda justo cuando
+        // el usuario esta esperando ver su pantalla principal.
+        setTimeout(verificarRespaldoAutomaticoDiario, 4000);
+      }
+    }
+    cargarTodosFirebase(function(todos){ cargaInicialResultados.todos=todos; cargaInicialListaUna(); }, alcanceApp);
+    cargarTodosVisitasFirebase(function(todasVis){ cargaInicialResultados.todasVis=todasVis; cargaInicialListaUna(); });
+    cargarClientesNuevosFirebase(function(cns){ cargaInicialResultados.cns=cns; cargaInicialListaUna(); });
+    cargarTodosPagosCobranzaFirebase(function(pagos){ cargaInicialResultados.pagos=pagos; cargaInicialListaUna(); }, alcanceApp);
   } else {
     cargarDesdeFirebase(VEND.codigo, function(peds, viss, clis, pagos){
       PEDIDOS=peds.filter(function(p){ return !p.vendedor||p.vendedor===VEND.codigo; });
@@ -3086,9 +3141,33 @@ function filtrarCli(){
 // ficha real en Cuentas por Cobrar - pero SI comparte el mismo RIF. Sin
 // este cruce adicional, ese cliente podria seguir comprando sin limite
 // aunque ya tenga deuda pendiente bajo su codigo oficial de Profit.
+// Devuelve el codigo "raiz" del grupo matriz/sucursal de un cliente: si
+// tiene el campo MATRIZ lleno (viene de Profit), su raiz es la matriz: si
+// no, el es su propia raiz. Dos clientes son del mismo grupo si su raiz
+// coincide.
+function raizGrupoCliente(codigo){
+  for(var i=0;i<CLIENTES_PROFIT.length;i++){
+    if(CLIENTES_PROFIT[i].id===codigo){
+      return CLIENTES_PROFIT[i].matriz||codigo;
+    }
+  }
+  return codigo;
+}
+
 function calcularDeudaCliente(cli){
   var clienteId=typeof cli==='string'?cli:cli.id;
+  // El cruce por RIF solo debe aplicar cuando puede tratarse de la MISMA
+  // empresa con dos identidades en el sistema (un codigo provisional que
+  // en realidad ya tiene su contraparte oficial). Si dos codigos OFICIALES
+  // comparten un RIF sin estar explicitamente vinculados por el campo
+  // MATRIZ, eso casi siempre es un error de captura en Profit (RIF mal
+  // tipeado), no la misma empresa - cruzarlos ahi terminaria
+  // atribuyendole a un cliente la deuda de otro completamente distinto.
+  // La UNICA forma valida de que dos codigos OFICIALES compartan deuda es
+  // que Profit los tenga explicitamente vinculados como matriz/sucursal.
+  var esClienteProvisional=(typeof cli==='object')?esNuevo(cli):(clienteId.indexOf('NEW-')===0);
   var rifNorm=(typeof cli==='object' && cli.rif)?normalizarRif(cli.rif):'';
+  var raizCliente=raizGrupoCliente(clienteId);
   // Mapa codigo->RIF (normalizado) de toda la base de clientes, para poder
   // cruzar CUENTAS_COBRAR por RIF sin tener que buscar cliente por cliente
   var rifPorCodigo={};
@@ -3098,23 +3177,37 @@ function calcularDeudaCliente(cli){
     }
   }
   var total=0;
+  var detalle=[];
   for(var i=0;i<CUENTAS_COBRAR.length;i++){
     var doc=CUENTAS_COBRAR[i];
     var coincide=(doc.clienteId===clienteId);
-    if(!coincide && rifNorm && rifPorCodigo[doc.clienteId]===rifNorm) coincide=true;
-    if(coincide) total+=doc.saldo;
+    var viaRif=false, viaMatriz=false;
+    var docEsProvisional=(doc.clienteId||'').indexOf('NEW-')===0;
+    if(!coincide && rifNorm && (esClienteProvisional||docEsProvisional) && rifPorCodigo[doc.clienteId]===rifNorm){ coincide=true; viaRif=true; }
+    if(!coincide && raizGrupoCliente(doc.clienteId)===raizCliente){ coincide=true; viaMatriz=true; }
+    if(coincide){
+      total+=doc.saldo;
+      detalle.push({numero:doc.numero, clienteId:doc.clienteId, clienteNombre:doc.clienteNombre, saldo:doc.saldo, viaRif:viaRif, viaMatriz:viaMatriz});
+    }
   }
-  return total;
+  return {total:total, detalle:detalle};
 }
 
 var clienteBloqueadoPorDeuda=null;
 var deudaBloqueadaMonto=0;
 
-function abrirBloqueoDeudaPedido(cli, deuda){
+function abrirBloqueoDeudaPedido(cli, deuda, detalle){
   clienteBloqueadoPorDeuda=cli;
   deudaBloqueadaMonto=deuda;
-  document.getElementById('bloqueoDeudaInfo').innerHTML=
-    '<strong>'+cli.nombre+'</strong> (Cod: '+cli.id+') tiene una deuda pendiente de <strong style="color:var(--rojo)">$'+formatearNumeroConMiles(deuda,2)+'</strong>, superior al limite de <strong>$'+formatearNumeroConMiles(LIMITE_DEUDA_PEDIDOS,2)+'</strong> permitido para crear pedidos nuevos.';
+  var html='<strong>'+cli.nombre+'</strong> (Cod: '+cli.id+') tiene una deuda pendiente de <strong style="color:var(--rojo)">$'+formatearNumeroConMiles(deuda,2)+'</strong>, superior al limite de <strong>$'+formatearNumeroConMiles(LIMITE_DEUDA_PEDIDOS,2)+'</strong> permitido para crear pedidos nuevos.';
+  if(detalle && detalle.length>0){
+    html+='<div style="margin-top:10px;font-size:12px;color:#666"><strong>Detalle de la deuda:</strong>'+
+      detalle.map(function(d){
+        return '<div style="margin-top:4px;padding:6px;background:#f8f9fc;border-radius:6px">Doc. '+d.numero+' — '+d.clienteNombre+' (Cod: '+d.clienteId+')'+(d.viaRif?' <span style="color:var(--ambar)">— cruzado por RIF, no por codigo directo</span>':'')+(d.viaMatriz?' <span style="color:var(--azul)">— mismo grupo (matriz/sucursal)</span>':'')+' — $'+formatearNumeroConMiles(d.saldo,2)+'</div>';
+      }).join('')+
+    '</div>';
+  }
+  document.getElementById('bloqueoDeudaInfo').innerHTML=html;
   var esAprobador=puedeAprobarPagosCobranza();
   var wrapAdmin=document.getElementById('bloqueoDeudaAdminWrap');
   if(esAprobador) wrapAdmin.classList.remove('hidden'); else wrapAdmin.classList.add('hidden');
@@ -3141,9 +3234,34 @@ function selCli(id){
   for(var i=0;i<CLIENTES.length;i++){if(CLIENTES[i].id===id){cli=CLIENTES[i];break;}}
   if(!cli) return;
   if(LIMITE_DEUDA_PEDIDOS>0){
-    var deuda=calcularDeudaCliente(cli);
-    if(deuda>LIMITE_DEUDA_PEDIDOS){
-      abrirBloqueoDeudaPedido(cli, deuda);
+    // IMPORTANTE: se refresca CUENTAS_COBRAR desde Firebase antes de
+    // decidir si bloquear el pedido - si no, una sesion que lleva un
+    // rato abierta puede seguir bloqueando (o dejando pasar) con una
+    // deuda que ya se pago o se ajusto hace rato, porque la memoria del
+    // navegador no se actualiza sola.
+    mostrarLoading('Verificando cuenta del cliente...');
+    Promise.all([
+      db.collection('config').doc('cuentas_cobrar').get(),
+      db.collection('config').doc('clientes').get()
+    ]).then(function(docs){
+      try{ if(docs[0] && docs[0].exists) CUENTAS_COBRAR=JSON.parse(docs[0].data().data||'[]'); }catch(e){}
+      try{ if(docs[1] && docs[1].exists){ var nuevaBase=JSON.parse(docs[1].data().data||'[]'); CLIENTES_PROFIT.length=0; for(var k=0;k<nuevaBase.length;k++) CLIENTES_PROFIT.push(nuevaBase[k]); } }catch(e){}
+      ocultarLoading();
+      continuarSeleccionCliente(cli);
+    }).catch(function(){
+      ocultarLoading();
+      continuarSeleccionCliente(cli);
+    });
+  } else {
+    continuarSeleccionCliente(cli);
+  }
+}
+
+function continuarSeleccionCliente(cli){
+  if(LIMITE_DEUDA_PEDIDOS>0){
+    var deudaInfo=calcularDeudaCliente(cli);
+    if(deudaInfo.total>LIMITE_DEUDA_PEDIDOS){
+      abrirBloqueoDeudaPedido(cli, deudaInfo.total, deudaInfo.detalle);
       return;
     }
   }
@@ -4897,6 +5015,12 @@ function abrirModalNuevoCli(){
   document.getElementById('ncContacto').value='';
   document.getElementById('ncUbicacion').value='';
   document.getElementById('ncRifAviso').innerHTML='';
+  document.getElementById('ncTieneSucursal').value='no';
+  document.getElementById('ncSucursalWrap').classList.add('hidden');
+  document.getElementById('ncSucNombre').value='';
+  document.getElementById('ncSucDirEntrega').value='';
+  document.getElementById('ncSucContacto').value='';
+  document.getElementById('ncSucTel').value='';
   var btnGNC=document.getElementById('btnGuardarNuevoCli');
   if(btnGNC) btnGNC.disabled=false;
   ncDocsData={};
@@ -4907,6 +5031,13 @@ function abrirModalNuevoCli(){
     var el=document.getElementById(id); if(el) el.innerHTML='';
   });
   actualizarChecksDocsNC();
+}
+
+function toggleSucursalNuevoCli(){
+  var val=document.getElementById('ncTieneSucursal').value;
+  var wrap=document.getElementById('ncSucursalWrap');
+  if(val==='si') wrap.classList.remove('hidden');
+  else wrap.classList.add('hidden');
 }
 
 function toggleDirEntrega(){
@@ -5258,6 +5389,28 @@ function guardarNuevoCli(){
     creadoPorNombre:VEND.nombre,esNuevo:true,
     fechaCreacion:new Date().toISOString()};
 
+  // Si el vendedor indico que este cliente tiene una sucursal, se crea un
+  // SEGUNDO registro provisional (mismo RIF, mismo nombre fiscal), pero con
+  // su propia direccion de envio, contacto y telefono - asi cuando se
+  // cruce con Profit mas adelante, ya estan los dos codigos listos con la
+  // informacion correcta de cada uno, en vez de tener que recapturarla.
+  var cliSucursal=null;
+  if(document.getElementById('ncTieneSucursal').value==='si'){
+    var sucNombre=document.getElementById('ncSucNombre').value.trim();
+    var sucClienteId='NEW-'+(Date.now()+1);
+    cliSucursal={id:sucClienteId,nombre:sucNombre||(nom+' - SUCURSAL'),rif:rif,
+      contacto:document.getElementById('ncSucContacto').value.trim(),
+      tel:document.getElementById('ncSucTel').value.trim(),
+      dir:dirFiscal,
+      dirEntrega:document.getElementById('ncSucDirEntrega').value.trim()||dirEntrega,
+      mismaDir:false,
+      vendedor:VEND.codigo,creadoPor:VEND.codigo,
+      creadoPorNombre:VEND.nombre,esNuevo:true,
+      esSucursalDe:clienteId,
+      fechaCreacion:new Date().toISOString()};
+    cli.tieneSucursalId=sucClienteId;
+  }
+
   var btnG=document.getElementById('btnGuardarNuevoCli');
   if(btnG){ btnG.disabled=true; btnG.textContent='Subiendo documentos...'; }
 
@@ -5275,24 +5428,28 @@ function guardarNuevoCli(){
   }
 
   Promise.all(tareas).then(function(){
-    finalizarNuevoCli(cli, true);
+    finalizarNuevoCli(cli, true, cliSucursal);
   }).catch(function(e){
     console.log('Error subiendo documentos:', e);
-    finalizarNuevoCli(cli, false);
+    finalizarNuevoCli(cli, false, cliSucursal);
   });
 }
 
-function finalizarNuevoCli(cli, docsOk){
+function finalizarNuevoCli(cli, docsOk, cliSucursal){
   CLIENTES.unshift(cli);
   // Guardar en el storage propio del vendedor
   var misMisNuevos=lsGet('tc_new_'+VEND.codigo,[]);
   misMisNuevos.unshift(cli);
+  if(cliSucursal){
+    CLIENTES.unshift(cliSucursal);
+    misMisNuevos.unshift(cliSucursal);
+  }
   lsSet('tc_new_'+VEND.codigo,misMisNuevos);
   pedido.cliente=cli;
   var btnG=document.getElementById('btnGuardarNuevoCli');
   if(btnG){ btnG.disabled=false; btnG.textContent='Guardar'; }
   cerrarModal('mNuevoCli');
-  toast(docsOk?'Cliente guardado':'Cliente guardado (algunos documentos no se pudieron subir)');
+  toast(docsOk?('Cliente guardado'+(cliSucursal?' junto con su sucursal':'')):'Cliente guardado (algunos documentos no se pudieron subir)');
   document.getElementById('paso1').classList.add('hidden');
   document.getElementById('paso2').classList.remove('hidden');
   renderProds();
@@ -10666,6 +10823,11 @@ function cargarCSVClientes(){
             // DIR_ENT2 es un campo memo (necesita el .FPT) con la direccion de entrega
             var dirEnt=(rec['DIR_ENT2']||'').trim();
             if(dirEnt) cliente.dirEntrega=dirEnt;
+            // MATRIZ: codigo de la casa matriz, si este cliente es una
+            // sucursal. Hoy en dia este campo puede venir vacio (no se ha
+            // usado en Profit), pero se lee por si en el futuro se llena.
+            var matrizCod=(rec['MATRIZ']||'').trim();
+            if(matrizCod) cliente.matriz=matrizCod;
             nuevaBase.push(cliente);
           }
           guardarClientesBase(nuevaBase);
@@ -10695,12 +10857,13 @@ function cargarCSVClientes(){
       var idxDir=headers.indexOf('CIUDAD');
       var idxZona=headers.indexOf('CO_ZON');
       var idxEmail=headers.indexOf('EMAIL');
+      var idxMatriz=headers.indexOf('MATRIZ');
       if(idxId<0||idxNom<0){toast('CSV debe tener CO_CLI y CLI_DES');return;}
       var nuevaBase=[];
       for(var i=1;i<lines.length;i++){
         var cols=lines[i].split(',').map(function(c){return c.trim().replace(/"/g,'');});
         if(!cols[idxId]||!cols[idxNom]) continue;
-        nuevaBase.push({
+        var clienteCsv={
           id:cols[idxId],nombre:cols[idxNom],
           rif:idxRif>=0?cols[idxRif]:'',
           tel:idxTel>=0?cols[idxTel]:'',
@@ -10709,7 +10872,9 @@ function cargarCSVClientes(){
           zona:idxZona>=0?cols[idxZona]:'',
           email:idxEmail>=0?cols[idxEmail]:'',
           inactivo:false
-        });
+        };
+        if(idxMatriz>=0 && cols[idxMatriz]) clienteCsv.matriz=cols[idxMatriz];
+        nuevaBase.push(clienteCsv);
       }
       guardarClientesBase(nuevaBase);
     };
@@ -11114,6 +11279,39 @@ function confirmarRestaurarRespaldo(backupId, fechaTxt){
       verRespaldos();
     }
   });
+}
+
+// Detecta RIFs duplicados entre clientes OFICIALES distintos - es decir,
+// dos codigos de Profit diferentes que comparten el mismo RIF. En la
+// vida real un RIF identifica una sola empresa, asi que cuando esto
+// aparece casi siempre es un error de tipeo del RIF en alguno de los dos
+// (Profit no valida esto por su cuenta). Este tipo de duplicado puede
+// causar que la deuda de un cliente se le atribuya por error a otro.
+function verRifsDuplicados(){
+  var cont=document.getElementById('rifsDuplicadosContenido');
+  document.getElementById('mRifsDuplicados').classList.add('open');
+  var porRif={};
+  for(var i=0;i<CLIENTES_PROFIT.length;i++){
+    var cli=CLIENTES_PROFIT[i];
+    var rn=normalizarRif(cli.rif);
+    if(!rn) continue;
+    if(!porRif[rn]) porRif[rn]=[];
+    porRif[rn].push(cli);
+  }
+  var duplicados=Object.keys(porRif).filter(function(rn){ return porRif[rn].length>1; }).map(function(rn){ return porRif[rn]; });
+  if(duplicados.length===0){
+    cont.innerHTML='<div style="color:var(--verde);font-size:13px;text-align:center;padding:12px">No se encontraron RIFs duplicados entre clientes oficiales.</div>';
+    return;
+  }
+  var html='<div style="font-weight:600;font-size:13px;color:var(--rojo);margin-bottom:8px">'+duplicados.length+' RIF(s) usados por mas de un cliente</div>';
+  for(var i=0;i<duplicados.length;i++){
+    var grupo=duplicados[i];
+    html+='<div style="border:1px solid var(--rojo);border-radius:8px;padding:10px;margin-bottom:8px">'+
+      '<div style="font-size:11px;color:#888;margin-bottom:4px">RIF: '+grupo[0].rif+'</div>'+
+      grupo.map(function(c){ return '<div style="font-size:13px;padding:3px 0">Cod. <strong>'+c.id+'</strong> — '+c.nombre+'</div>'; }).join('')+
+    '</div>';
+  }
+  cont.innerHTML=html;
 }
 
 function verClientesProvisionales(){
@@ -13085,6 +13283,17 @@ function calcularMontoUSDDeposito(d){
 function calcularValidacionCobro(){
   var el=document.getElementById('cobroValidacion');
   if(!el) return;
+  // El checkbox de retencion de IVA solo tiene sentido si al menos uno de
+  // los documentos seleccionados viene de la base FISCAL
+  var wrapRet=document.getElementById('cobroRetencionWrap');
+  if(wrapRet){
+    var hayFiscal=cobroDocsSeleccionados.some(function(numero){
+      var d=CUENTAS_COBRAR.find(function(x){return x.numero===numero;});
+      return d && d.origenBase==='fiscal';
+    });
+    if(hayFiscal) wrapRet.classList.remove('hidden');
+    else { wrapRet.classList.add('hidden'); document.getElementById('cobroRetencionIVA').checked=false; }
+  }
   var descPct=parseFloat(document.getElementById('cobroDescuento').value)||0;
   var faltaTasa=false;
   var montoUSD=0;
@@ -13370,10 +13579,10 @@ function renderPagoCobroCard(p){
       '<button onclick="abrirConfirmarPago(&quot;'+p.id+'&quot;)" style="background:var(--verde-c);color:var(--verde);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Confirmar</button>'+
       '<button onclick="abrirRechazarPago(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Rechazar</button>'+
     '</div>';
-  } else if(p.estado==='confirmado' && (puedeAnularPagoCobranza(p) || puedeBorrarDiferenciaPago(p) || puedeEditarRetencionIVA())){
+  } else if(p.estado==='confirmado' && (puedeAnularPagoCobranza(p) || puedeBorrarDiferenciaPago(p) || (puedeEditarRetencionIVA() && pagoTieneDocumentoFiscal(p)))){
     acciones='<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+
       (puedeBorrarDiferenciaPago(p)?'<button onclick="borrarDiferenciaPago(&quot;'+p.id+'&quot;)" style="background:var(--ambar-c);color:#856404;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Borrar diferencia pendiente</button>':'')+
-      (puedeEditarRetencionIVA()?'<button onclick="abrirEditarRetencionPago(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">'+(p.retencionIVA?'Retencion IVA: SI':'Marcar retencion IVA')+'</button>':'')+
+      ((puedeEditarRetencionIVA() && pagoTieneDocumentoFiscal(p))?'<button onclick="abrirEditarRetencionPago(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">'+(p.retencionIVA?'Retencion IVA: SI':'Marcar retencion IVA')+'</button>':'')+
       (puedeAnularPagoCobranza(p)?'<button onclick="confirmarAnularPagoCobranza(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Anular pago</button>':'')+
     '</div>';
   } else if(p.estado==='rechazado' && (p.vendedor===VEND.codigo || puedeAprobar)){
@@ -13710,6 +13919,18 @@ function ejecutarAnularPagoCobranza(){
 // el saldo de CxC, que ya quedo aplicado cuando se confirmo. Sirve para
 // poner al dia comisiones de pagos que se confirmaron antes de que
 // existiera este campo.
+// La retencion de IVA solo tiene sentido para documentos que vienen de la
+// base FISCAL (documentos "de nota"/Real no tienen ese concepto). Se
+// revisa si AL MENOS UNO de los documentos que cubre el pago es fiscal.
+function pagoTieneDocumentoFiscal(p){
+  if(!p.documentos) return false;
+  for(var i=0;i<p.documentos.length;i++){
+    var doc=CUENTAS_COBRAR.find(function(x){ return x.numero===p.documentos[i].numero; });
+    if(doc && doc.origenBase==='fiscal') return true;
+  }
+  return false;
+}
+
 function puedeEditarRetencionIVA(){
   return VEND && (VEND.codigo==='01'||VEND.codigo==='20');
 }
@@ -13718,6 +13939,7 @@ function abrirEditarRetencionPago(pagoId){
   if(!puedeEditarRetencionIVA()) return;
   var pago=PAGOS_COBRANZA_TODOS.find(function(x){ return x.id===pagoId; });
   if(!pago){ toast('No se encontro el pago'); return; }
+  if(!pagoTieneDocumentoFiscal(pago)){ toast('La retencion de IVA solo aplica a documentos fiscales'); return; }
   pagoEditandoRetencionId=pagoId;
   document.getElementById('editarRetencionInfo').innerHTML=pago.clienteNombre+' — $'+formatearNumeroConMiles(pago.montoUSD,2)+' — '+pago.fecha;
   document.getElementById('editarRetencionCheckbox').checked=!!pago.retencionIVA;
@@ -13834,70 +14056,100 @@ function aplicarFormatoNumerico(ws, row, col, formato){
 // para una lista de pagos, con una fila por deposito y una nota aparte
 // cuando se uso un documento con saldo a favor como abono.
 function construirHojaCobros(lista, tituloHoja){
-  var headers=['Fecha','Cod cliente','Cliente','Documento','Vendedor','Monto en Bs','Banco','Ref','Tasa','Monto Pagado Equivalente en $','Descuento','Saldo','Estado'];
-  var rows=[
-    ['PAGOS REPORTADOS'+(tituloHoja?(' - '+tituloHoja):'')],
-    headers
-  ];
-  var notaRowIndices=[];
-  for(var i=0;i<lista.length;i++){
-    var p=lista[i];
-    // Marca con * los documentos que solo vinieron de la base REAL (sin cruce con Fiscal)
-    var docsTxt=p.documentos.map(function(d){
-      var docCxC=CUENTAS_COBRAR.find(function(x){return x.numero===d.numero;});
-      var esReal=docCxC && docCxC.origenBase==='real';
-      return d.numero+(esReal?'*':'');
-    }).join(', ');
-    var saldoPendiente=(p.saldoPendienteAjustado!==undefined && p.saldoPendienteAjustado!==null)
-      ? p.saldoPendienteAjustado
-      : Math.round((p.montoEsperado-p.montoUSD)*100)/100;
-    var deps=(p.depositos && p.depositos.length)?p.depositos:[{formaPago:'',monto:null,banco:null,referencia:'',tasa:null,montoUSD:p.montoUSD}];
-    for(var j=0;j<deps.length;j++){
-      var d=deps[j];
-      var esT=d.formaPago==='transferencia';
-      rows.push([
-        p.fecha, p.clienteId, p.clienteNombre, docsTxt, 'VEND '+p.vendedor+' - '+(p.vendedorNombre||''),
-        esT?(parseFloat(d.monto)||0):null,
-        esT?(BANCOS_COBRO[d.banco]||''):'',
-        esT?(d.referencia||''):'',
-        esT?(parseFloat(d.tasa)||0):null,
-        d.montoUSD||0,
-        (p.descuentoPct||0)/100,
-        saldoPendiente,
-        p.estado
-      ]);
-    }
-    // Si alguno de los documentos de este pago tenia saldo NEGATIVO (un
-    // credito a favor del cliente) al momento de reportarse, se agrega una
-    // fila aclarando que ese credito se aplico como abono en este pago.
+  var headers=['Fecha del pago','Fecha de registro','Cod cliente','Cliente','Documento','Vendedor','Monto en Bs','Banco','Ref','Tasa','Monto Pagado Equivalente en $','Descuento','Retencion IVA','Saldo','Estado','Nro Comp'];
+  var rows=[['PAGOS REPORTADOS'+(tituloHoja?(' - '+tituloHoja):'')]];
+  var notaRowIndices=[]; // filas de "nota de credito aplicado" (verde)
+  var tituloTablaRowIndices=[]; // filas de titulo de cada tabla (Nota / Fiscal)
+  var encabezadoRowIndices=[]; // filas de encabezado de columnas de cada tabla
+  var dataRowIndices=[]; // filas de datos reales (para aplicarles formato numerico)
+
+  // Un pago se considera "Fiscal" si AL MENOS UNO de sus documentos viene
+  // de la base Fiscal - de lo contrario, va en la tabla de "Nota" (todos
+  // sus documentos son de la base Real/nota, sin cruce fiscal).
+  function esPagoFiscal(p){
     for(var k=0;k<p.documentos.length;k++){
-      if(p.documentos[k].saldo<0){
-        notaRowIndices.push(rows.length);
-        rows.push(['↳ Nota: el documento '+p.documentos[k].numero+' tenia un saldo a favor de $'+Math.abs(p.documentos[k].saldo).toFixed(2)+' y fue aplicado como abono en este pago.']);
+      var docCxC=CUENTAS_COBRAR.find(function(x){return x.numero===p.documentos[k].numero;});
+      if(docCxC && docCxC.origenBase==='fiscal') return true;
+    }
+    return false;
+  }
+
+  function agregarBloqueTabla(nombreTabla, pagosDelBloque){
+    if(pagosDelBloque.length===0) return;
+    rows.push([]);
+    tituloTablaRowIndices.push(rows.length);
+    rows.push([nombreTabla]);
+    encabezadoRowIndices.push(rows.length);
+    rows.push(headers.slice());
+    for(var i=0;i<pagosDelBloque.length;i++){
+      var p=pagosDelBloque[i];
+      var docsTxt=p.documentos.map(function(d){ return d.numero; }).join(', ');
+      var saldoPendiente=(p.saldoPendienteAjustado!==undefined && p.saldoPendienteAjustado!==null)
+        ? p.saldoPendienteAjustado
+        : Math.round((p.montoEsperado-p.montoUSD)*100)/100;
+      var deps=(p.depositos && p.depositos.length)?p.depositos:[{formaPago:'',monto:null,banco:null,referencia:'',tasa:null,montoUSD:p.montoUSD}];
+      for(var j=0;j<deps.length;j++){
+        var d=deps[j];
+        var esT=d.formaPago==='transferencia';
+        dataRowIndices.push(rows.length);
+        rows.push([
+          p.fecha, p.fechaRegistroISO||'', p.clienteId, p.clienteNombre, docsTxt, 'VEND '+p.vendedor+' - '+(p.vendedorNombre||''),
+          esT?(parseFloat(d.monto)||0):null,
+          esT?(BANCOS_COBRO[d.banco]||''):'',
+          esT?(d.referencia||''):'',
+          esT?(parseFloat(d.tasa)||0):null,
+          d.montoUSD||0,
+          (p.descuentoPct||0)/100,
+          p.retencionIVA?'Si':'No',
+          saldoPendiente,
+          p.estado,
+          '' // Nro Comp: vacio, para control interno
+        ]);
+      }
+      // Si alguno de los documentos de este pago tenia saldo NEGATIVO (un
+      // credito a favor del cliente) al momento de reportarse, se agrega
+      // una fila aclarando que ese credito se aplico como abono.
+      for(var k=0;k<p.documentos.length;k++){
+        if(p.documentos[k].saldo<0){
+          notaRowIndices.push(rows.length);
+          rows.push(['↳ Nota: el documento '+p.documentos[k].numero+' tenia un saldo a favor de $'+Math.abs(p.documentos[k].saldo).toFixed(2)+' y fue aplicado como abono en este pago.']);
+        }
       }
     }
   }
-  var ws=XLSX.utils.aoa_to_sheet(rows);
-  var range=XLSX.utils.decode_range(ws['!ref']);
 
-  // Fusionar y dar estilo al titulo (fila 0)
+  agregarBloqueTabla('DOCUMENTOS TIPO NOTA (sin cruce fiscal)', lista.filter(function(p){ return !esPagoFiscal(p); }));
+  agregarBloqueTabla('DOCUMENTOS FISCALES', lista.filter(esPagoFiscal));
+
+  var ws=XLSX.utils.aoa_to_sheet(rows);
   ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:headers.length-1}}];
   var tituloAddr=XLSX.utils.encode_cell({r:0,c:0});
   if(ws[tituloAddr]) ws[tituloAddr].s={font:{bold:true,sz:14,color:{rgb:'1B2A6B'}}};
 
-  // Encabezados con fondo azul y texto blanco en negrita (fila 1)
-  for(var c=0;c<headers.length;c++){
-    var addrH=XLSX.utils.encode_cell({r:1,c:c});
-    if(ws[addrH]) ws[addrH].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'1B2A6B'}}};
+  // Titulo de cada tabla (Nota / Fiscal): fusionado y resaltado
+  for(var t=0;t<tituloTablaRowIndices.length;t++){
+    var rt=tituloTablaRowIndices[t];
+    ws['!merges'].push({s:{r:rt,c:0},e:{r:rt,c:headers.length-1}});
+    var addrT=XLSX.utils.encode_cell({r:rt,c:0});
+    if(ws[addrT]) ws[addrT].s={font:{bold:true,sz:12,color:{rgb:'1B2A6B'}},fill:{fgColor:{rgb:'E8ECF7'}}};
   }
 
-  // Formato numerico real en las columnas de dinero (los datos empiezan en la fila 2)
-  for(var r=2;r<=range.e.r;r++){
-    aplicarFormatoNumerico(ws, r, 5, '#,##0.00');
-    aplicarFormatoNumerico(ws, r, 8, '#,##0.00');
-    aplicarFormatoNumerico(ws, r, 9, '#,##0.00');
-    aplicarFormatoNumerico(ws, r, 10, '0.0%');
-    aplicarFormatoNumerico(ws, r, 11, '#,##0.00_);(#,##0.00)');
+  // Encabezados de columnas de cada tabla: fondo azul, texto blanco
+  for(var e=0;e<encabezadoRowIndices.length;e++){
+    for(var c=0;c<headers.length;c++){
+      var addrH=XLSX.utils.encode_cell({r:encabezadoRowIndices[e],c:c});
+      if(ws[addrH]) ws[addrH].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'1B2A6B'}}};
+    }
+  }
+
+  // Formato numerico real en las columnas de dinero, solo en filas de datos
+  for(var d=0;d<dataRowIndices.length;d++){
+    var rd=dataRowIndices[d];
+    aplicarFormatoNumerico(ws, rd, 6, '#,##0.00');
+    aplicarFormatoNumerico(ws, rd, 9, '#,##0.00');
+    aplicarFormatoNumerico(ws, rd, 10, '#,##0.00');
+    aplicarFormatoNumerico(ws, rd, 11, '0.0%');
+    aplicarFormatoNumerico(ws, rd, 13, '#,##0.00_);(#,##0.00)');
   }
 
   // Resaltar en verde las filas de nota de credito aplicado
@@ -13907,7 +14159,7 @@ function construirHojaCobros(lista, tituloHoja){
     if(ws[addrNota]) ws[addrNota].s={font:{italic:true,color:{rgb:'1A7A4C'}},fill:{fgColor:{rgb:'F0FBF6'}}};
   }
 
-  ws['!cols']=[{wch:11},{wch:10},{wch:26},{wch:14},{wch:22},{wch:13},{wch:12},{wch:10},{wch:11},{wch:16},{wch:10},{wch:13},{wch:12}];
+  ws['!cols']=[{wch:11},{wch:13},{wch:10},{wch:26},{wch:14},{wch:22},{wch:13},{wch:12},{wch:10},{wch:9},{wch:16},{wch:10},{wch:12},{wch:13},{wch:12},{wch:10}];
   return ws;
 }
 
@@ -13974,19 +14226,25 @@ function ejecutarExportarCobrosExcelEstilo(){
   });
   if(lista.length===0){ toast('No hay pagos para exportar con estos filtros'); return; }
 
+  // Un pago se considera "Fiscal" si AL MENOS UNO de sus documentos viene
+  // de la base Fiscal - de lo contrario, va en la tabla de "Nota".
+  function esPagoFiscal(p){
+    for(var k=0;k<p.documentos.length;k++){
+      var docCxC=CUENTAS_COBRAR.find(function(x){return x.numero===p.documentos[k].numero;});
+      if(docCxC && docCxC.origenBase==='fiscal') return true;
+    }
+    return false;
+  }
+
   function construirTablaHTML(sublista, tituloSeccion){
     var html='';
     if(tituloSeccion) html+='<h3 style="color:#1B2A6B;margin-top:24px">'+tituloSeccion+'</h3>';
     html+='<table style="width:100%;border-collapse:collapse"><tr>'+
-      '<th>Fecha</th><th>Cod cliente</th><th>Cliente</th><th>Documento</th><th>Monto en Bs</th><th>Banco</th><th>Ref</th><th>Tasa</th><th>Monto Pagado Equivalente en $</th><th>Descuento</th><th>Saldo</th><th>Estado</th>'+
+      '<th>Fecha del pago</th><th>Fecha de registro</th><th>Cod cliente</th><th>Cliente</th><th>Documento</th><th>Monto en Bs</th><th>Banco</th><th>Ref</th><th>Tasa</th><th>Monto Pagado Equivalente en $</th><th>Descuento</th><th>Retencion IVA</th><th>Saldo</th><th>Estado</th><th>Nro Comp</th>'+
     '</tr>';
     for(var i=0;i<sublista.length;i++){
       var p=sublista[i];
-      var docsTxt=p.documentos.map(function(d){
-        var docCxC=CUENTAS_COBRAR.find(function(x){return x.numero===d.numero;});
-        var esReal=docCxC && docCxC.origenBase==='real';
-        return d.numero+(esReal?'*':'');
-      }).join(', ');
+      var docsTxt=p.documentos.map(function(d){ return d.numero; }).join(', ');
       var saldoPendiente=(p.saldoPendienteAjustado!==undefined && p.saldoPendienteAjustado!==null)
         ? p.saldoPendienteAjustado
         : Math.round((p.montoEsperado-p.montoUSD)*100)/100;
@@ -13997,6 +14255,7 @@ function ejecutarExportarCobrosExcelEstilo(){
         var esT=d.formaPago==='transferencia';
         html+='<tr>'+
           '<td>'+p.fecha+'</td>'+
+          '<td>'+(p.fechaRegistroISO||'')+'</td>'+
           '<td>'+p.clienteId+'</td>'+
           '<td>'+p.clienteNombre+'</td>'+
           '<td>'+docsTxt+'</td>'+
@@ -14006,19 +14265,33 @@ function ejecutarExportarCobrosExcelEstilo(){
           '<td>'+(esT?formatearNumeroConMiles(d.tasa,2):'')+'</td>'+
           '<td>'+formatearNumeroConMiles(d.montoUSD||0,2)+'</td>'+
           '<td>'+p.descuentoPct+'%</td>'+
+          '<td>'+(p.retencionIVA?'Si':'No')+'</td>'+
           '<td>'+saldoTxt+'</td>'+
           '<td>'+p.estado+'</td>'+
+          '<td></td>'+
         '</tr>';
       }
       for(var k=0;k<p.documentos.length;k++){
         if(p.documentos[k].saldo<0){
-          html+='<tr><td colspan="12" style="background:#F0FBF6;color:#1a7a4c;font-style:italic">'+
+          html+='<tr><td colspan="15" style="background:#F0FBF6;color:#1a7a4c;font-style:italic">'+
             '↳ Nota: el documento '+p.documentos[k].numero+' tenia un saldo a favor de $'+Math.abs(p.documentos[k].saldo).toFixed(2)+' y fue aplicado como abono en este pago.'+
           '</td></tr>';
         }
       }
     }
     html+='</table>';
+    return html;
+  }
+
+  // Construye ambas tablas (Nota y Fiscal) para un grupo de pagos dado,
+  // con un titulo de grupo opcional (ej: por vendedor)
+  function construirBloqueCompleto(sublista, tituloGrupo){
+    var html='';
+    if(tituloGrupo) html+='<h2 style="color:#1B2A6B;margin-top:28px;border-top:2px solid #1B2A6B;padding-top:14px">'+tituloGrupo+'</h2>';
+    var nota=sublista.filter(function(p){ return !esPagoFiscal(p); });
+    var fiscal=sublista.filter(esPagoFiscal);
+    if(nota.length>0) html+=construirTablaHTML(nota, 'DOCUMENTOS TIPO NOTA (sin cruce fiscal)');
+    if(fiscal.length>0) html+=construirTablaHTML(fiscal, 'DOCUMENTOS FISCALES');
     return html;
   }
 
@@ -14035,10 +14308,10 @@ function ejecutarExportarCobrosExcelEstilo(){
     }
     var vids=Object.keys(porVend).sort();
     for(var v=0;v<vids.length;v++){
-      contenido+=construirTablaHTML(porVend[vids[v]], 'VEND '+vids[v]+' - '+(porVend[vids[v]][0].vendedorNombre||''));
+      contenido+=construirBloqueCompleto(porVend[vids[v]], 'VEND '+vids[v]+' - '+(porVend[vids[v]][0].vendedorNombre||''));
     }
   } else {
-    contenido+=construirTablaHTML(lista, null);
+    contenido+=construirBloqueCompleto(lista, null);
   }
 
   contenido+='</body></html>';
