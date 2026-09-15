@@ -312,7 +312,13 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div id="ultimosCobros"><div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Sin pagos hoy</div></div>
     </div>
     <div class="card" style="background:#FFF3CD">
-      <div class="card-title" style="color:#856404">Cobrar Hoy</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <div class="card-title" style="color:#856404;margin-bottom:0">Cobrar Hoy</div>
+        <select id="cxcCobrarHoyModo" class="hidden" onchange="renderCxCHomeReminders()" style="font-size:11px;padding:3px 6px;border-radius:6px;border:1px solid #856404;color:#856404;background:#fff">
+          <option value="todos">Todos</option>
+          <option value="interno">Interno (00/01/20)</option>
+        </select>
+      </div>
       <div id="cxcCobrarHoyList"><div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Cargando...</div></div>
     </div>
     <div class="card" style="background:#EAF2FF">
@@ -5761,12 +5767,21 @@ function renderCxCHomeReminders(){
   var elHoy=document.getElementById('cxcCobrarHoyList');
   var elManana=document.getElementById('cxcPorVencerMananaList');
   if(!elHoy || !elManana) return;
+  var selModo=document.getElementById('cxcCobrarHoyModo');
+  // El selector Todos/Interno solo aplica (y solo se muestra) para 01/20
+  var esAdmin0120=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'));
+  if(selModo){
+    if(esAdmin0120) selModo.classList.remove('hidden');
+    else { selModo.classList.add('hidden'); selModo.value='todos'; }
+  }
+  var modoInterno=esAdmin0120 && selModo && selModo.value==='interno';
   var alcanceCxC=alcanceVendedoresVisibles(); // null=sin restriccion, o array de codigos
   var cobrarHoy=[], porVencerManana=[];
   for(var i=0;i<CUENTAS_COBRAR.length;i++){
     var d=CUENTAS_COBRAR[i];
     if(d.saldo<=0.009) continue;
     if(alcanceCxC && alcanceCxC.indexOf(d.vendedor)<0) continue;
+    if(modoInterno && ['00','01','20'].indexOf(d.vendedor)<0) continue;
     var dias=diasDesdeEmision(d.emision);
     if(dias===null) continue;
     if(dias>=7) cobrarHoy.push(d);
@@ -5785,25 +5800,41 @@ function renderCxCHomeReminders(){
   // Los mas vencidos primero
   cobrarHoy.sort(function(a,b){ return diasVencidoDesdeEmision(b.emision)-diasVencidoDesdeEmision(a.emision); });
   porVencerManana.sort(function(a,b){ return diasVencidoDesdeEmision(b.emision)-diasVencidoDesdeEmision(a.emision); });
-  function renderLista(el, lista, vacio){
+  function itemHtml(d){
+    return '<div onclick="irACobrarCliente(&quot;'+d.clienteId+'&quot;)" style="border-bottom:1px solid rgba(0,0,0,.08);padding:6px 0;cursor:pointer">'+
+      '<div style="display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:600">'+nombreClienteR(d)+'</span><strong style="font-size:13px">$'+formatearNumeroConMiles(d.saldo,2)+'</strong></div>'+
+      '<div style="font-size:11px;color:#666">Cod: '+d.clienteId+' | Doc.'+d.numero+' | Emision: '+d.emision+'</div>'+
+      '<div style="font-size:11px;color:var(--azul);font-weight:600">'+nombreVendedorR(d)+'</div>'+
+      '<div style="font-size:11px;margin-top:2px">'+etiquetaDiasVencido(diasVencidoDesdeEmision(d.emision))+'</div>'+
+    '</div>';
+  }
+  function renderLista(el, lista, vacio, separarPorVendedor){
     if(lista.length===0){
       el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">'+vacio+'</div>';
       return;
     }
     var html='';
-    for(var i=0;i<lista.length;i++){
-      var d=lista[i];
-      html+='<div onclick="irACobrarCliente(&quot;'+d.clienteId+'&quot;)" style="border-bottom:1px solid rgba(0,0,0,.08);padding:6px 0;cursor:pointer">'+
-        '<div style="display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:600">'+nombreClienteR(d)+'</span><strong style="font-size:13px">$'+formatearNumeroConMiles(d.saldo,2)+'</strong></div>'+
-        '<div style="font-size:11px;color:#666">Cod: '+d.clienteId+' | Doc.'+d.numero+' | Emision: '+d.emision+'</div>'+
-        '<div style="font-size:11px;color:var(--azul);font-weight:600">'+nombreVendedorR(d)+'</div>'+
-        '<div style="font-size:11px;margin-top:2px">'+etiquetaDiasVencido(diasVencidoDesdeEmision(d.emision))+'</div>'+
-      '</div>';
+    if(separarPorVendedor){
+      var porVend={};
+      for(var i=0;i<lista.length;i++){
+        var vid=lista[i].vendedor||'??';
+        if(!porVend[vid]) porVend[vid]=[];
+        porVend[vid].push(lista[i]);
+      }
+      var vids=Object.keys(porVend).sort();
+      for(var vi=0;vi<vids.length;vi++){
+        var vObj=null;
+        for(var j=0;j<VENDEDORES.length;j++){ if(VENDEDORES[j].id===vids[vi]){ vObj=VENDEDORES[j]; break; } }
+        html+='<div style="font-weight:600;font-size:12px;color:#856404;margin:8px 0 4px;padding-top:6px;border-top:1.5px solid #856404">VEND '+vids[vi]+(vObj?' - '+vObj.nombre:'')+'</div>';
+        for(var k=0;k<porVend[vids[vi]].length;k++) html+=itemHtml(porVend[vids[vi]][k]);
+      }
+    } else {
+      for(var i=0;i<lista.length;i++) html+=itemHtml(lista[i]);
     }
     el.innerHTML=html;
   }
-  renderLista(elHoy, cobrarHoy, 'Nada por cobrar hoy');
-  renderLista(elManana, porVencerManana, 'Nada por vencer mañana');
+  renderLista(elHoy, cobrarHoy, 'Nada por cobrar hoy', modoInterno);
+  renderLista(elManana, porVencerManana, 'Nada por vencer mañana', false);
 }
 
 function irACobrarCliente(clienteId){
