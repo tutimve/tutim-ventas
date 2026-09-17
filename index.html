@@ -617,7 +617,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
       <div id="cobroRetencionWrap" class="hidden">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:10px;cursor:pointer">
-          <input type="checkbox" id="cobroRetencionIVA" style="width:16px;height:16px">
+          <input type="checkbox" id="cobroRetencionIVA" style="width:16px;height:16px" onchange="calcularValidacionCobro()">
           Hubo retencion de IVA en este pago (75% retenido, solo entra 25% del IVA en dinero)
         </label>
       </div>
@@ -13539,20 +13539,34 @@ function calcularValidacionCobro(){
     montoUSD+=calcularMontoUSDDeposito(d);
   }
   if(faltaTasa){ el.innerHTML='<div style="font-size:12px;color:#aaa;padding:8px 0">Ingresa la tasa BCV en cada deposito por transferencia para calcular el equivalente en $</div>'; return; }
-  var sumaDocs=0;
+  var sumaDocs=0, ivaTotal=0;
   for(var i=0;i<cobroDocsSeleccionados.length;i++){
     var d=CUENTAS_COBRAR.find(function(x){return x.numero===cobroDocsSeleccionados[i];});
-    if(d) sumaDocs+=d.saldo;
+    if(d){ sumaDocs+=d.saldo; ivaTotal+=(d.iva||0); }
   }
-  var esperado=sumaDocs*(1-descPct/100);
+  var hayRetencion=wrapRet && !wrapRet.classList.contains('hidden') && document.getElementById('cobroRetencionIVA').checked;
+  // Si hay retencion, el 75% del IVA de los documentos seleccionados
+  // NUNCA entra como dinero (se cubre con un comprobante de retencion) -
+  // eso se resta directamente del monto esperado a depositar, para que
+  // el documento SI quede saldado en su totalidad al depositar solo el
+  // 25% del IVA restante, sin dejar una diferencia pendiente que alguien
+  // tenga que "perdonar" despues a mano.
+  var ivaRetenidoEsperado=hayRetencion?Math.round(ivaTotal*0.75*100)/100:0;
+  var esperado=Math.round((sumaDocs*(1-descPct/100)-ivaRetenidoEsperado)*100)/100;
   var diferencia=montoUSD-esperado;
   var html='<div style="background:#f7f8fb;border-radius:10px;padding:14px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#666;margin-bottom:6px">'+
       '<span>'+(cobroDepositos.length>1?('Total de '+cobroDepositos.length+' depositos'):'Monto pagado')+'</span>'+
       '<strong style="font-size:18px;color:var(--azul)">$'+formatearNumeroConMiles(montoUSD,2)+'</strong>'+
-    '</div>'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#666;padding-bottom:10px;border-bottom:1px solid var(--borde)">'+
-      '<span>Esperado (con descuento)</span>'+
+    '</div>';
+  if(hayRetencion && ivaRetenidoEsperado>0){
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--ambar);padding-bottom:6px">'+
+      '<span>IVA retenido (75%, no entra en dinero)</span>'+
+      '<strong>-$'+formatearNumeroConMiles(ivaRetenidoEsperado,2)+'</strong>'+
+    '</div>';
+  }
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#666;padding-bottom:10px;border-bottom:1px solid var(--borde)">'+
+      '<span>Esperado en dinero'+(hayRetencion?' (ya sin la retencion)':' (con descuento)')+'</span>'+
       '<strong style="font-size:18px">$'+formatearNumeroConMiles(esperado,2)+'</strong>'+
     '</div>';
   if(cobroDocsSeleccionados.length===0){
@@ -13619,13 +13633,19 @@ function guardarPagoCobro(){
   }
 
   var descPct=parseFloat(document.getElementById('cobroDescuento').value)||0;
+  var retencionMarcada=document.getElementById('cobroRetencionIVA')?document.getElementById('cobroRetencionIVA').checked:false;
   var docsSeleccionadosInfo=[];
-  var sumaDocs=0;
+  var sumaDocs=0, ivaTotalDocs=0;
   for(var i=0;i<cobroDocsSeleccionados.length;i++){
     var d=CUENTAS_COBRAR.find(function(x){return x.numero===cobroDocsSeleccionados[i];});
-    if(d){ docsSeleccionadosInfo.push({numero:d.numero, saldo:d.saldo, vencimiento:d.vencimiento, emision:d.emision, iva:d.iva||0}); sumaDocs+=d.saldo; }
+    if(d){ docsSeleccionadosInfo.push({numero:d.numero, saldo:d.saldo, vencimiento:d.vencimiento, emision:d.emision, iva:d.iva||0}); sumaDocs+=d.saldo; ivaTotalDocs+=(d.iva||0); }
   }
-  var esperado=sumaDocs*(1-descPct/100);
+  // Si hay retencion, el 75% del IVA de los documentos nunca entra en
+  // dinero (se cubre con un comprobante de retencion) - se resta del
+  // monto esperado para que el documento SI quede saldado completo al
+  // confirmar, sin dejar una diferencia manual pendiente por "perdonar".
+  var ivaRetenidoDelPago=retencionMarcada?Math.round(ivaTotalDocs*0.75*100)/100:0;
+  var esperado=Math.round((sumaDocs*(1-descPct/100)-ivaRetenidoDelPago)*100)/100;
   var cliInfo=obtenerClientesConDeuda().find(function(x){return x.id===cobroClienteSeleccionado;});
 
   var esEdicion=!!pagoEditandoId;
@@ -13645,7 +13665,7 @@ function guardarPagoCobro(){
     descuentoPct:descPct,
     montoEsperado:esperado,
     sumaDocsOriginal:sumaDocs,
-    retencionIVA:document.getElementById('cobroRetencionIVA')?document.getElementById('cobroRetencionIVA').checked:false,
+    retencionIVA:retencionMarcada,
     vendedor:(esEdicion && pagoOriginal)?pagoOriginal.vendedor:VEND.codigo,
     vendedorNombre:(esEdicion && pagoOriginal)?pagoOriginal.vendedorNombre:VEND.nombre,
     estado:'pendiente',
