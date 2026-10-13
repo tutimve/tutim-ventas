@@ -647,6 +647,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <button class="btn btn-s btn-sm" style="margin-top:22px" onclick="filtroCobroHoy()">Hoy</button>
         <button class="btn btn-s btn-sm" style="margin-top:22px" onclick="filtroCobroTodo()">Todo</button>
       </div>
+      <div style="font-size:11px;color:#888;margin:0 0 8px">El rango filtra por la fecha en que se REGISTRO cada pago en el sistema (no por la fecha que puso el vendedor al reportarlo).</div>
       <div style="display:flex;flex-wrap:wrap;gap:12px">
         <div class="field" style="flex:1;min-width:130px">
           <label>Estado</label>
@@ -697,6 +698,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-historico" onclick="adminTab('historico')">Historico</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-reposicion" onclick="adminTab('reposicion')">Reposicion</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-comisiones" onclick="adminTab('comisiones')">Comisiones</button>
+      <button class="btn btn-s btn-sm admin-tab-btn" id="atab-tasas" onclick="adminTab('tasas')">Tasas BCV</button>
     </div>
 
     <!-- TAB INVENTARIO -->
@@ -874,6 +876,13 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
             <option value="completo">Solo completos</option>
             <option value="incompleto">Solo incompletos</option>
           </select>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--borde)">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:12px;color:#444;font-weight:600">
+            <input type="checkbox" id="docsIncluirAntiguos" onchange="renderControlDocs()" style="width:15px;height:15px">
+            Incluir clientes antiguos (anteriores al control de documentacion)
+          </label>
+          <input type="text" id="docsFiltroBusq" oninput="renderControlDocs()" placeholder="Buscar por nombre, RIF o codigo..." style="margin-top:8px;padding:8px;font-size:13px;width:100%;box-sizing:border-box">
         </div>
       </div>
       <div class="metrics" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
@@ -1070,6 +1079,37 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
     </div>
 
+    <!-- TAB TASAS BCV -->
+    <div id="adminTab-tasas" style="display:none">
+      <div class="card">
+        <div class="card-title">Historial de Tasas BCV</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Al registrar un pago por transferencia, la app coloca la tasa de la fecha del deposito (redondeada a 2 decimales; el campo sigue siendo editable). Si esa fecha es fin de semana o feriado y no tiene tasa propia, se usa la del dia habil SIGUIENTE.</p>
+        <div id="tasasBCVResumen"></div>
+        <div id="tasasBCVWebWrap" style="margin-bottom:10px">
+          <div style="font-size:11px;color:#888;margin-bottom:6px">La app consulta sola la tasa publicada en rates.dolarvzla.com (con ve.dolarapi.com de respaldo) al abrir Cobranza y esta pestana. Agrega la fecha vigente y la anterior si aun no estan cargadas (nunca cambia una tasa ya cargada).</div>
+          <button class="btn btn-s btn-sm" onclick="botonActualizarTasaWeb()">Actualizar desde la web ahora</button>
+          <div id="tasasBCVWebRes" style="margin-top:6px"></div>
+        </div>
+        <div id="tasasBCVSoloLectura" style="display:none;font-size:12px;color:#856404;background:#FFF3CD;border-radius:6px;padding:6px 8px;margin-bottom:10px">Solo los usuarios 00, 01 y 20 pueden cargar o editar tasas. Aqui puedes consultar el historial.</div>
+        <div id="tasasBCVEditWrap" style="display:none">
+          <div class="field"><label>Fecha de la tasa</label><input type="date" id="tasaBCVFecha"></div>
+          <div class="field"><label>Tasa BCV (hasta 4 decimales)</label><input type="text" inputmode="decimal" id="tasaBCVValor" placeholder="Ej: 875,6505"></div>
+          <div id="tasaBCVAviso"></div>
+          <button class="btn btn-p btn-sm" onclick="guardarTasaBCVManual()">Guardar tasa</button>
+          <details style="margin-top:12px">
+            <summary style="font-size:12px;color:var(--azul);cursor:pointer">Pegar varias tasas desde Excel</summary>
+            <p style="font-size:11px;color:#888;margin:6px 0">Una por linea: fecha y tasa separadas por tabulador o espacio (ej: 13/10/2026 &nbsp; 875,65). Las fechas con barras se leen como dia/mes/ano. Si la fecha ya existe, se reemplaza.</p>
+            <textarea id="tasasBCVPegar" rows="5" style="width:100%;font-size:12px;border:1.5px solid var(--borde);border-radius:6px;padding:6px"></textarea>
+            <button class="btn btn-s btn-sm" style="margin-top:6px" onclick="importarTasasBCVPegadas()">Importar tasas</button>
+            <div id="tasasBCVPegarRes" style="margin-top:6px"></div>
+          </details>
+        </div>
+        <div class="field" style="margin-top:14px"><label>Consultar que tasa aplica a una fecha</label><input type="date" id="tasaBCVConsFecha" onchange="consultarTasaBCV()"></div>
+        <div id="tasaBCVConsRes"></div>
+        <div id="tasasBCVLista"></div>
+      </div>
+    </div>
+
     <!-- TAB COMISIONES -->
     <div id="adminTab-comisiones" style="display:none">
       <div class="card">
@@ -1225,6 +1265,21 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
     </div>
 
+    <!-- Recompra y rotacion de clientes -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div onclick="toggleRptCard('rptCardRecompra')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        <span class="card-title" style="margin:0">Recompra y Rotacion de Clientes</span>
+        <span id="rptCardRecompra-arrow" style="color:#aaa;font-size:11px">▲</span>
+      </div>
+      <div id="rptCardRecompra-body" style="padding:0 16px 16px">
+        <p style="font-size:11px;color:#888;margin:0 0 10px">Separa lo vendido a clientes nuevos (su primera compra fue en este periodo) de lo vendido a clientes que ya compraban, y lo compara contra el periodo inmediatamente anterior de igual duracion. Respeta los filtros de vendedor y cliente de arriba.</p>
+        <div id="rptRecompra"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo con fecha Desde</div></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-g btn-sm" onclick="descargarExcelRecompra()">Excel detalle por cliente</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Por Vendedor -->
     <div class="card" style="padding:0;overflow:hidden">
       <div onclick="toggleRptCard('rptCardVendedor')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
@@ -1263,6 +1318,24 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <input type="checkbox" id="rptSoloConMovimiento" checked onchange="renderReportes()" style="width:16px;height:16px">
           Solo clientes que han tenido movimiento alguna vez en la app (oculta los que son solo data historica importada, nunca activos)
         </label>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <label style="font-size:12px;color:#666;text-transform:none;letter-spacing:0;margin:0">Contar los dias hasta:</label>
+          <select id="rptSinCompraDiasHasta" onchange="renderReportes()" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--borde);border-radius:6px">
+            <option value="hoy">Hoy (para saber a quien llamar ya)</option>
+            <option value="cierre">Cierre del periodo (para analizar ese periodo)</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <label style="font-size:12px;color:#666;text-transform:none;letter-spacing:0;margin:0">Mostrar:</label>
+          <select id="rptSinCompraMinDias" onchange="renderReportes()" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--borde);border-radius:6px">
+            <option value="0">Todos los que no compraron en el periodo</option>
+            <option value="30">Solo los de mas de 30 dias sin comprar</option>
+            <option value="60">Solo los de mas de 60 dias (2 meses)</option>
+            <option value="90">Solo los de mas de 90 dias (3 meses)</option>
+            <option value="120">Solo los de mas de 120 dias (4 meses)</option>
+            <option value="180">Solo los de mas de 180 dias (6 meses)</option>
+          </select>
+        </div>
         <div id="rptSinCompraVendedor"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button class="btn btn-g btn-sm" onclick="descargarExcelSinCompra()">Excel</button>
@@ -2131,6 +2204,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 <div class="modal-bg" id="mExportarCobrosExcel">
   <div class="modal">
     <h3>Exportar a Excel</h3>
+    <div style="font-size:11px;color:#888;margin-bottom:8px">El rango filtra por la fecha de registro del pago en el sistema.</div>
     <div style="display:flex;gap:8px">
       <div class="field" style="flex:1"><label>Desde</label><input type="date" id="excelCobrosDesde"></div>
       <div class="field" style="flex:1"><label>Hasta</label><input type="date" id="excelCobrosHasta"></div>
@@ -2815,10 +2889,10 @@ function verDetalleComisionVendedor(id){
     '<div style="margin-bottom:8px"><strong>Periodo:</strong> '+r.desde+' al '+r.hasta+'</div>'+
     '<div style="margin-bottom:8px"><strong>Monto cobrado (base):</strong> '+montoTxt(r.montoCobradoUSD, r.montoCobradoBS)+'</div>'+
     '<div style="margin-bottom:8px"><strong>% de comision:</strong> '+r.pctPropio+'%</div>'+
-    '<div style="margin-bottom:8px"><strong>Comision propia:</strong> '+(verUSD?'$'+formatearNumeroConMiles(r.comisionPropiaUSD,2):'Bs '+formatearNumeroConMiles(Math.round(r.comisionPropiaUSD*r.tasaPromedio*100)/100,2))+'</div>';
+    '<div style="margin-bottom:8px"><strong>Comision propia:</strong> '+montoTxt(r.comisionPropiaUSD, Math.round(r.comisionPropiaUSD*r.tasaPromedio*100)/100)+'</div>';
   if(r.esSupervisor && r.detalleSupervisados && r.detalleSupervisados.length>0){
-    html+='<div style="margin-bottom:8px"><strong>Comision por equipo ('+r.pctSupervisor+'%):</strong> '+(verUSD?'$'+formatearNumeroConMiles(r.comisionSupervisorUSD,2):'Bs '+formatearNumeroConMiles(Math.round(r.comisionSupervisorUSD*r.tasaPromedio*100)/100,2))+
-      '<div style="font-size:12px;color:#666;margin-top:4px">'+r.detalleSupervisados.map(function(s){ return 'VEND '+s.id+' - '+s.nombre+': $'+formatearNumeroConMiles(s.montoUSD,2); }).join('<br>')+'</div></div>';
+    html+='<div style="margin-bottom:8px"><strong>Comision por equipo ('+r.pctSupervisor+'%):</strong> '+montoTxt(r.comisionSupervisorUSD, comisionSupervisorBSComision(r))+
+      '<div style="font-size:12px;color:#666;margin-top:4px">'+detalleSupervisadosTexto(r, verUSD, verBS, '<br>')+'</div></div>';
   }
   html+='<div style="margin-bottom:8px;padding-top:8px;border-top:1px solid var(--borde)"><strong style="font-size:15px;color:var(--verde)">Total: '+montoTxt(r.comisionTotalUSD, r.comisionTotalBS)+'</strong></div>';
   if(r.detallePagos && r.detallePagos.length>0){
@@ -2865,6 +2939,7 @@ function mostrarApp(){
   var cargarDatosMultiples=esVistaMultiVendedor(); // admin completo, o supervisor con equipo vinculado
   // Limpiar datos anteriores en pantalla primero
   PEDIDOS=[]; VISITAS=[]; CLIENTES=[]; PAGOS_COBRANZA=[];
+  INICIO_ULTIMO_REFRESCO=Date.now(); // esta carga inicial ya trae todo: no repetirla
   goScreen('inicio');
   document.getElementById('histList').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Cargando...</div>';
   document.getElementById('ultimosPed').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:8px">Cargando...</div>';
@@ -3041,7 +3116,13 @@ function goScreen(name){
   for(var i=0;i<btns.length;i++) btns[i].classList.remove('active');
   document.getElementById('s-'+name).classList.add('active');
   document.getElementById('n-'+name).classList.add('active');
-  if(name==='pedido') resetPedido();
+  if(name==='pedido'){
+    resetPedido();
+    // Inventario fresco al empezar un pedido
+    refrescarInventarioFirebase(function(c){ if(c.length){ try{ renderStockHome(); renderInv(); }catch(e){} } });
+  }
+  if(name==='inicio') refrescarInicio();
+  if(name==='inventario') refrescarInventarioFirebase(function(){ try{ renderInv(); renderStockHome(); }catch(e){} });
   if(name==='admin'){
     adminTab('inventario');
   }
@@ -3141,6 +3222,17 @@ function goScreen(name){
     }
   }
   if(name==='cobros'){
+    // Historial de tasas BCV: se actualiza desde Firebase y, si cambio algo,
+    // se vuelven a rellenar los depositos y las tarjetas de pagos
+    var refrescarPorTasas=function(){
+      if(tasaAutoRellenarDepositos()) { renderDepositosCobro(); }
+      if(typeof renderHistorialCobros==='function' && PAGOS_COBRANZA) renderHistorialCobros();
+    };
+    cargarTasasBCV(function(cambio){
+      if(cambio) refrescarPorTasas();
+      // Luego consulta la web por si ya hay una tasa nueva que agregar
+      actualizarTasaBCVDesdeWeb({}, function(r){ if(r.estado==='agregada') refrescarPorTasas(); });
+    });
     // Igual que en Admin -> Cuentas x Cobrar: se refresca desde Firebase
     // antes de renderizar, para no mostrar una foto vieja si la carga de
     // un Excel se hizo en otra sesion o dispositivo.
@@ -3341,9 +3433,7 @@ function continuarPedidoConDeuda(){
   pedido.bloqueoDeudaOmitido=true;
   pedido.observacionBloqueoDeuda=obs;
   pedido.deudaAlMomento=deudaBloqueadaMonto;
-  document.getElementById('paso1').classList.add('hidden');
-  document.getElementById('paso2').classList.remove('hidden');
-  renderProds();
+  mostrarPaso2ConInventarioFresco();
 }
 
 function selCli(id){
@@ -3383,9 +3473,19 @@ function continuarSeleccionCliente(cli){
     }
   }
   pedido.cliente=cli;
-  document.getElementById('paso1').classList.add('hidden');
-  document.getElementById('paso2').classList.remove('hidden');
-  renderProds();
+  mostrarPaso2ConInventarioFresco();
+}
+
+// Muestra la lista de productos (paso 2) despues de releer el inventario,
+// para que el vendedor vea el stock real del momento
+function mostrarPaso2ConInventarioFresco(){
+  mostrarLoading('Verificando inventario...');
+  refrescarInventarioFirebase(function(){
+    ocultarLoading();
+    document.getElementById('paso1').classList.add('hidden');
+    document.getElementById('paso2').classList.remove('hidden');
+    renderProds();
+  });
 }
 
 function getPrecio(p,lp,formaPago,totalDisplays,mapaManual){
@@ -3625,7 +3725,37 @@ function volverPaso2(){
 
 function esNuevo(cli){return cli&&(cli.esNuevo||(cli.id&&cli.id.toString().indexOf('NEW-')===0));}
 
+// Ultima verificacion antes de confirmar: se relee el inventario y, si algun
+// producto del pedido se agoto mientras se armaba, se quita del pedido (en
+// pantalla estaria bloqueado y el vendedor no podria quitarlo a mano), se
+// avisa y se vuelve a la lista de productos.
 function abrirConfirmar(){
+  mostrarLoading('Verificando inventario...');
+  refrescarInventarioFirebase(function(){
+    ocultarLoading();
+    var quitados=[];
+    Object.keys(pedido.items).forEach(function(id){
+      var prod=null;
+      for(var i=0;i<PRODUCTOS.length;i++){ if(PRODUCTOS[i].id===id){ prod=PRODUCTOS[i]; break; } }
+      if(prod && prod.stock===0){
+        quitados.push(prod.nombre);
+        delete pedido.items[id];
+        delete DESCUENTOS_ITEM[id];
+        delete PRECIOS_MANUALES_PEDIDO[id];
+      }
+    });
+    if(quitados.length){
+      document.getElementById('paso3').classList.add('hidden');
+      document.getElementById('paso2').classList.remove('hidden');
+      renderProds();
+      toast('Se agoto y se quito del pedido: '+quitados.join(', ')+'. Revisa el pedido y continua.');
+      return;
+    }
+    abrirConfirmarInterno();
+  });
+}
+
+function abrirConfirmarInterno(){
   _pedidoYaGuardado=false; // permitir un nuevo guardado para este pedido
   var lp=parseInt(document.getElementById('listaPrecio').value)||1;
   var fp=document.getElementById('fPago').value;
@@ -5121,6 +5251,108 @@ function renderStockHome(){
   document.getElementById('stockHome').innerHTML=html;
 }
 
+// ═══ Refresco del inventario desde Firebase ═══
+// La app solo leia el inventario al abrirse / iniciar sesion, asi que un
+// vendedor con la app abierta seguia viendo el stock viejo despues de que
+// Admin lo actualizaba. Esta funcion relee SOLO el documento de inventario
+// (una lectura liviana) y aplica el stock a PRODUCTOS. Si Firebase tarda
+// mas de 6 segundos o falla, sigue con lo que ya hay en pantalla.
+// cb recibe la lista de productos cuyo stock cambio: [{id,nombre,antes,despues}]
+function refrescarInventarioFirebase(cb){
+  var terminado=false;
+  function fin(cambios){ if(terminado) return; terminado=true; if(cb) cb(cambios||[]); }
+  var timer=setTimeout(function(){ fin([]); }, 6000);
+  function aplicar(doc){
+    var cambios=[];
+    if(!doc || !doc.exists) return cambios;
+    var items=[];
+    try{ items=JSON.parse(doc.data().data||'[]'); }catch(e){ return cambios; }
+    for(var i=0;i<items.length;i++){
+      for(var j=0;j<PRODUCTOS.length;j++){
+        if(PRODUCTOS[j].id!==items[i].id) continue;
+        var antes=PRODUCTOS[j].stock;
+        if(items[i].stock!==undefined) PRODUCTOS[j].stock=parseInt(items[i].stock)||0;
+        if(items[i].stock_und!==undefined) PRODUCTOS[j].stock_und=parseInt(items[i].stock_und)||0;
+        if(antes!==PRODUCTOS[j].stock) cambios.push({id:PRODUCTOS[j].id, nombre:PRODUCTOS[j].nombre, antes:antes, despues:PRODUCTOS[j].stock});
+        break;
+      }
+    }
+    var fAct=doc.data().actualizado;
+    if(fAct){
+      var fEl=document.getElementById('invFecha');
+      if(fEl) fEl.textContent=new Date(fAct).toLocaleDateString('es-VE');
+    }
+    return cambios;
+  }
+  try{
+    db.collection('config').doc('inventario').get().then(function(doc){
+      clearTimeout(timer);
+      var cambios=aplicar(doc);
+      // Si la respuesta llego tarde (ya se continuo sin ella), igual se
+      // actualizan las pantallas que muestran stock
+      if(terminado && cambios.length){ try{ renderStockHome(); renderInv(); }catch(e){} }
+      fin(cambios);
+    }, function(){ clearTimeout(timer); fin([]); });
+  }catch(e){ clearTimeout(timer); fin([]); }
+}
+
+// Pantalla de Inicio: cada vez que se entra, se relee el inventario (siempre,
+// es liviano) y, como maximo una vez por minuto, tambien pedidos / visitas /
+// cobros para que los contadores del dia esten al dia. Se muestra primero lo
+// que ya hay y luego se actualiza, sin pantalla de carga.
+var INICIO_ULTIMO_REFRESCO=0;
+var INICIO_REFRESCANDO=false;
+function conservarPedidosLocalesRecientes(nuevos, actuales){
+  // Un pedido o visita recien creado aqui puede no haberse confirmado aun en
+  // Firebase: se conserva (10 min) para no perderlo ni volver a guardar la
+  // lista sin el
+  var ids={};
+  for(var i=0;i<nuevos.length;i++) ids[nuevos[i].id]=true;
+  var limite=Date.now()-600000;
+  for(var j=0;j<actuales.length;j++){
+    var a=actuales[j];
+    if(a && typeof a.id==='number' && a.id>limite && !ids[a.id] && (!a.vendedor || a.vendedor===VEND.codigo)) nuevos.unshift(a);
+  }
+  return nuevos;
+}
+function refrescarInicio(){
+  if(!VEND) return;
+  refrescarInventarioFirebase(function(){ try{ renderStockHome(); renderInv(); }catch(e){} });
+  if(INICIO_REFRESCANDO || (Date.now()-INICIO_ULTIMO_REFRESCO)<60000) return;
+  INICIO_REFRESCANDO=true; INICIO_ULTIMO_REFRESCO=Date.now();
+  var alcance=alcanceVendedoresVisibles();
+  var terminar=function(){ INICIO_REFRESCANDO=false; try{ actualizarMetricas(); }catch(e){} };
+  try{
+    if(esVistaMultiVendedor()){
+      var res={}, pend=4;
+      var una=function(){
+        pend--;
+        if(pend>0) return;
+        PEDIDOS=conservarPedidosLocalesRecientes(res.todos||[], PEDIDOS);
+        var visNuevas=alcance?(res.todasVis||[]).filter(function(v){return alcance.indexOf(v.vendedor)>=0;}):(res.todasVis||[]);
+        VISITAS=conservarPedidosLocalesRecientes(visNuevas, VISITAS);
+        NUEVOS_TODOS_CACHE=res.cns||NUEVOS_TODOS_CACHE;
+        CLIENTES=getClientesParaVendedor();
+        PAGOS_COBRANZA=res.pagos||PAGOS_COBRANZA;
+        PAGOS_COBRANZA_TODOS=res.pagos||PAGOS_COBRANZA_TODOS;
+        terminar();
+      };
+      cargarTodosFirebase(function(t){ res.todos=t; una(); }, alcance);
+      cargarTodosVisitasFirebase(function(v){ res.todasVis=v; una(); });
+      cargarClientesNuevosFirebase(function(c){ res.cns=c; una(); });
+      cargarTodosPagosCobranzaFirebase(function(p){ res.pagos=p; una(); }, alcance);
+    } else {
+      cargarDesdeFirebase(VEND.codigo, function(peds, viss, clis, pagos){
+        PEDIDOS=conservarPedidosLocalesRecientes(peds.filter(function(p){ return !p.vendedor||p.vendedor===VEND.codigo; }), PEDIDOS);
+        VISITAS=conservarPedidosLocalesRecientes(viss, VISITAS);
+        CLIENTES=getClientesParaVendedor();
+        PAGOS_COBRANZA=pagos.filter(function(p){ return !p.vendedor||p.vendedor===VEND.codigo; });
+        terminar();
+      });
+    }
+  }catch(e){ INICIO_REFRESCANDO=false; }
+}
+
 var ncDocsData = {};
 
 function abrirModalNuevoCli(){
@@ -5317,21 +5549,52 @@ function renderControlDocs(){
   var desde=document.getElementById('docsFiltroDesde').value;
   var hasta=document.getElementById('docsFiltroHasta').value;
   var estadoF=document.getElementById('docsFiltroEstado').value;
+  var incAntEl=document.getElementById('docsIncluirAntiguos');
+  var busqEl=document.getElementById('docsFiltroBusq');
+  var incluirAntiguos=!!(incAntEl && incAntEl.checked);
+  var busq=busqEl?busqEl.value.trim().toLowerCase():'';
   var todosCli=CLIENTES_PROFIT.concat(NUEVOS_TODOS_CACHE);
   var lista=[];
+  var antiguosOcultos=0;
+  var LIMITE_ANTIGUOS=80;
   for(var i=0;i<todosCli.length;i++){
     var c=todosCli[i];
+    if(busq){
+      var textoCli=((c.nombre||'')+' '+(c.rif||'')+' '+(c.id||'')).toLowerCase();
+      if(textoCli.indexOf(busq)<0) continue;
+    }
     var fCreacion=obtenerFechaCreacionCliente(c);
-    if(!fCreacion) continue; // cliente antiguo de Profit sin fecha conocida: no aplica a este control
-    var fISO=fCreacion.getFullYear()+'-'+String(fCreacion.getMonth()+1).padStart(2,'0')+'-'+String(fCreacion.getDate()).padStart(2,'0');
-    if(desde && fISO<desde) continue;
-    if(hasta && fISO>hasta) continue;
+    var fISO='';
+    if(fCreacion){
+      fISO=fCreacion.getFullYear()+'-'+String(fCreacion.getMonth()+1).padStart(2,'0')+'-'+String(fCreacion.getDate()).padStart(2,'0');
+      if(desde && fISO<desde) continue;
+      if(hasta && fISO>hasta) continue;
+    } else {
+      // Cliente antiguo (sin fecha de creacion conocida): solo se lista si
+      // se pidio incluirlos; el rango de fechas no aplica a ellos
+      if(!incluirAntiguos || c.inactivo) continue;
+    }
     var completo=clienteDocsCompletos(c);
     if(estadoF==='completo' && !completo) continue;
     if(estadoF==='incompleto' && completo) continue;
-    lista.push({c:c, fISO:fISO, completo:completo});
+    lista.push({c:c, fISO:fISO, completo:completo, antiguo:!fCreacion});
   }
-  lista.sort(function(a,b){ return a.fISO<b.fISO?1:(a.fISO>b.fISO?-1:0); });
+  // Primero los que tienen fecha (mas recientes arriba), luego los antiguos por nombre
+  lista.sort(function(a,b){
+    if(a.antiguo!==b.antiguo) return a.antiguo?1:-1;
+    if(a.antiguo) return (a.c.nombre||'')<(b.c.nombre||'')?-1:1;
+    return a.fISO<b.fISO?1:(a.fISO>b.fISO?-1:0);
+  });
+  // Los antiguos pueden ser miles: se muestran los primeros y se invita a buscar
+  var contAnt=0, listaRec=[];
+  for(var i=0;i<lista.length;i++){
+    if(lista[i].antiguo){
+      contAnt++;
+      if(contAnt>LIMITE_ANTIGUOS){ antiguosOcultos++; continue; }
+    }
+    listaRec.push(lista[i]);
+  }
+  lista=listaRec;
 
   var total=lista.length, completos=0;
   for(var i=0;i<lista.length;i++){ if(lista[i].completo) completos++; }
@@ -5353,7 +5616,7 @@ function renderControlDocs(){
             '<strong style="font-size:14px">'+c.nombre+'</strong>'+
             (c.esNuevo?' <span class="tag tag-rosa" style="font-size:10px">NUEVO</span>':'')+
             '<div style="font-size:11px;color:var(--azul);font-weight:600">Cod: '+c.id+(c.rif?' | '+c.rif:'')+'</div>'+
-            '<div style="font-size:11px;color:#888">Creado: '+item.fISO+quienCreo+'</div>'+
+            '<div style="font-size:11px;color:#888">'+(item.antiguo?('Cliente antiguo'+(c.vendedorNombre?(' | VEND '+c.vendedor+' - '+c.vendedorNombre):'')):('Creado: '+item.fISO+quienCreo))+'</div>'+
           '</div>'+
           (item.completo
             ?'<span class="tag tag-v" style="font-size:11px;white-space:nowrap">✓ Completo</span>'
@@ -5365,6 +5628,9 @@ function renderControlDocs(){
         '</div>'+
       '</div>';
     }
+  }
+  if(antiguosOcultos>0){
+    html+='<div style="font-size:12px;color:#888;text-align:center;padding:10px">Hay '+antiguosOcultos+' cliente'+(antiguosOcultos>1?'s':'')+' antiguo'+(antiguosOcultos>1?'s':'')+' mas — usa el buscador para encontrar uno especifico</div>';
   }
   document.getElementById('docsControlList').innerHTML=html;
 }
@@ -5753,6 +6019,9 @@ function finalizarGuardadoDocsCliente(c, esNuevoCli, docsOk){
   }
   cerrarModal('mDocsCliente');
   filtrarCli();
+  // Si se guardo desde el Control de documentacion, refrescar su lista
+  var tabDocsEl=document.getElementById('adminTab-docs');
+  if(tabDocsEl && tabDocsEl.style.display!=='none') renderControlDocs();
 }
 
 // Devuelve un tamano de fuente mas chico mientras mas largo sea el texto,
@@ -6613,6 +6882,291 @@ function toggleFiltroExtra(tipo){
   renderHistorial();
 }
 
+// ═══ REPORTE: RECOMPRA Y ROTACION DE CLIENTES ═══
+function rptDiasEntreISO(a, b){
+  var pa=a.split('-'), pb=b.split('-');
+  var ta=Date.UTC(+pa[0], +pa[1]-1, +pa[2]);
+  var tb=Date.UTC(+pb[0], +pb[1]-1, +pb[2]);
+  return Math.round((tb-ta)/86400000);
+}
+function rptSumarDiasISO(iso, n){
+  var p=iso.split('-');
+  var d=new Date(Date.UTC(+p[0], +p[1]-1, +p[2]+n));
+  return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+}
+
+// Calculo puro (sin tocar el DOM). Clasifica a cada cliente que compro en
+// [desde, hasta] y lo compara contra el periodo anterior de igual duracion:
+//  - nuevo:      su PRIMERA compra registrada cae dentro del periodo
+//  - retenido:   ya compraba antes Y tambien compro en el periodo anterior
+//  - reactivado: ya compraba antes pero NO compro en el periodo anterior
+//  - perdido:    compro en el periodo anterior y no en este
+// Cada cliente cae en una sola categoria, asi que la diferencia de venta
+// contra el periodo anterior se reparte exacta entre ellas.
+// o: {desde, hasta (ya resuelta, no vacia), vendSel, cliSel}
+function calcularRecompraRpt(pedidos, o){
+  if(!o.desde) return {sinPeriodo:true};
+  var desde=o.desde, hasta=o.hasta;
+  var vendSel=o.vendSel||'todos', cliSel=o.cliSel||'todos';
+  var nDias=rptDiasEntreISO(desde, hasta)+1;
+  var prevHasta=rptSumarDiasISO(desde, -1);
+  var prevDesde=rptSumarDiasISO(desde, -nDias);
+
+  var byCli={};
+  for(var i=0;i<pedidos.length;i++){
+    var p=pedidos[i];
+    if(p.anulado || !p.cliente) continue;
+    var cid=p.cliente.id;
+    if(cliSel!=='todos' && cid!==cliSel) continue;
+    if(!byCli[cid]) byCli[cid]={id:cid, nombre:p.cliente.nombre, ords:[]};
+    byCli[cid].ords.push({iso:fechaToISO(p.fecha), monto:p.monto||0, bultos:p.bultos||0, vend:p.vendedor||'??'});
+  }
+  function vacio(){ return {n:0, monto:0, bultos:0, pedidos:0, montoPrev:0}; }
+  var cat={nuevo:vacio(), retenido:vacio(), reactivado:vacio(), perdido:vacio()};
+  var detalle=[], diasLista=[], montosPorCliente=[], conRepeticion=0;
+
+  for(var cid in byCli){
+    var c=byCli[cid];
+    c.ords.sort(function(a,b){ return a.iso<b.iso?-1:(a.iso>b.iso?1:0); });
+    // Con filtro de vendedor, el periodo y el anterior cuentan solo sus
+    // pedidos; la historia ("ya compraba antes") se mira completa
+    var propios=vendSel==='todos'?c.ords:c.ords.filter(function(x){ return x.vend===vendSel; });
+    var per=propios.filter(function(x){ return x.iso>=desde && x.iso<=hasta; });
+    var prev=propios.filter(function(x){ return x.iso>=prevDesde && x.iso<=prevHasta; });
+    var antes=c.ords.filter(function(x){ return x.iso<desde; });
+    var montoPrev=prev.reduce(function(s,x){ return s+x.monto; },0);
+    if(per.length>0){
+      var montoPer=per.reduce(function(s,x){ return s+x.monto; },0);
+      var bultPer=per.reduce(function(s,x){ return s+x.bultos; },0);
+      var tipo=antes.length===0?'nuevo':(prev.length>0?'retenido':'reactivado');
+      var k=cat[tipo];
+      k.n++; k.monto+=montoPer; k.bultos+=bultPer; k.pedidos+=per.length; k.montoPrev+=montoPrev;
+      var dias=null, ultimaAntes='';
+      if(antes.length>0){
+        ultimaAntes=antes[antes.length-1].iso;
+        dias=rptDiasEntreISO(ultimaAntes, per[0].iso);
+        diasLista.push(dias);
+      }
+      if(per.length>1) conRepeticion++;
+      montosPorCliente.push(montoPer);
+      detalle.push({id:c.id, nombre:c.nombre, vendedor:per[per.length-1].vend, tipo:tipo, pedidos:per.length,
+        bultos:bultPer, monto:Math.round(montoPer*100)/100, montoPrev:Math.round(montoPrev*100)/100,
+        primeraCompraPeriodo:per[0].iso, compraAnterior:ultimaAntes, diasDesdeAnterior:dias});
+    } else if(prev.length>0){
+      cat.perdido.n++; cat.perdido.montoPrev+=montoPrev;
+      detalle.push({id:c.id, nombre:c.nombre, vendedor:prev[prev.length-1].vend, tipo:'perdido', pedidos:0, bultos:0,
+        monto:0, montoPrev:Math.round(montoPrev*100)/100, primeraCompraPeriodo:'',
+        compraAnterior:prev[prev.length-1].iso, diasDesdeAnterior:null});
+    }
+  }
+
+  var clientesCompraron=cat.nuevo.n+cat.retenido.n+cat.reactivado.n;
+  var montoTotal=cat.nuevo.monto+cat.retenido.monto+cat.reactivado.monto;
+  var montoPrevTotal=cat.retenido.montoPrev+cat.perdido.montoPrev;
+  var pedidosTotal=cat.nuevo.pedidos+cat.retenido.pedidos+cat.reactivado.pedidos;
+  var clientesPrev=cat.retenido.n+cat.perdido.n;
+
+  var diasOrd=diasLista.slice().sort(function(a,b){ return a-b; });
+  var mediana=null, promedio=null;
+  if(diasOrd.length>0){
+    var m=Math.floor(diasOrd.length/2);
+    mediana=diasOrd.length%2?diasOrd[m]:(diasOrd[m-1]+diasOrd[m])/2;
+    promedio=diasOrd.reduce(function(s,x){ return s+x; },0)/diasOrd.length;
+  }
+  var rangos=[{lbl:'0 a 7 dias',min:0,max:7},{lbl:'8 a 15 dias',min:8,max:15},{lbl:'16 a 30 dias',min:16,max:30},
+    {lbl:'31 a 60 dias',min:31,max:60},{lbl:'61 a 90 dias',min:61,max:90},{lbl:'Mas de 90 dias',min:91,max:1e9}];
+  rangos.forEach(function(r){ r.n=diasLista.filter(function(d){ return d>=r.min && d<=r.max; }).length; });
+
+  montosPorCliente.sort(function(a,b){ return b-a; });
+  var top10=montosPorCliente.slice(0,10).reduce(function(s,x){ return s+x; },0);
+
+  return {
+    desde:desde, hasta:hasta, prevDesde:prevDesde, prevHasta:prevHasta, nDias:nDias,
+    cat:cat, clientesCompraron:clientesCompraron, montoTotal:montoTotal, montoPrevTotal:montoPrevTotal,
+    pedidosTotal:pedidosTotal, clientesPrev:clientesPrev,
+    retencionPct:clientesPrev>0?cat.retenido.n/clientesPrev*100:null,
+    puente:{
+      nuevos:cat.nuevo.monto,
+      reactivados:cat.reactivado.monto,
+      retenidos:cat.retenido.monto-cat.retenido.montoPrev,
+      perdidos:-cat.perdido.montoPrev,
+      total:montoTotal-montoPrevTotal
+    },
+    dias:{n:diasLista.length, promedio:promedio, mediana:mediana, rangos:rangos},
+    conRepeticion:conRepeticion,
+    top10Pct:montoTotal>0?top10/montoTotal*100:null,
+    detalle:detalle
+  };
+}
+
+var ULTIMO_RECOMPRA_RPT=null;
+
+function renderRecompraRpt(todosPedidos, vendSel, cliSel, desde, hasta, cobertura){
+  var cont=document.getElementById('rptRecompra');
+  if(!cont) return;
+  if(!desde){
+    ULTIMO_RECOMPRA_RPT=null;
+    cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Elige una fecha Desde (o un boton como "Este mes") para comparar contra el periodo anterior. Con "Todo" no hay un periodo anterior con el cual medir.</div>';
+    return;
+  }
+  var hastaEf=hasta||fechaHoyISO();
+  var R=calcularRecompraRpt(todosPedidos, {desde:desde, hasta:hastaEf, vendSel:vendSel, cliSel:cliSel});
+  ULTIMO_RECOMPRA_RPT=R;
+  function $(n){ return '$'+formatearNumeroConMiles(n,2); }
+  function $s(n){ return (n>0?'+':(n<0?'-':''))+'$'+formatearNumeroConMiles(Math.abs(n),2); }
+  function pct(a,b){ return b>0?(Math.round(a/b*1000)/10)+'%':'-'; }
+  function colorDe(n){ return n>0?'var(--verde)':(n<0?'var(--rojo)':'#888'); }
+  var existentes=R.cat.retenido.n+R.cat.reactivado.n;
+  var montoExist=R.cat.retenido.monto+R.cat.reactivado.monto;
+  var pedExist=R.cat.retenido.pedidos+R.cat.reactivado.pedidos;
+
+  var html='<div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:8px">'+
+    '<div class="metric"><div class="num" style="font-size:22px">'+R.clientesCompraron+'</div><div class="lbl">Clientes que compraron</div></div>'+
+    '<div class="metric"><div class="num" style="font-size:22px;color:var(--verde)">'+R.cat.nuevo.n+'</div><div class="lbl">Nuevos (1a compra en el periodo)</div><div style="font-size:11px;color:#888;margin-top:3px">'+pct(R.cat.nuevo.monto,R.montoTotal)+' de la venta</div></div>'+
+    '<div class="metric"><div class="num" style="font-size:22px;color:var(--azul)">'+existentes+'</div><div class="lbl">Ya eran clientes</div><div style="font-size:11px;color:#888;margin-top:3px">'+pct(montoExist,R.montoTotal)+' de la venta</div></div>'+
+    '<div class="metric"><div class="num" style="font-size:22px;color:var(--ambar)">'+R.cat.reactivado.n+'</div><div class="lbl">Reactivados</div><div style="font-size:11px;color:#888;margin-top:3px">no compraron el periodo anterior</div></div>'+
+    '</div>';
+
+  // Dias desde la compra anterior
+  html+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--borde)">'+
+    '<div style="font-weight:700;font-size:13px;margin-bottom:2px">Dias desde su compra anterior</div>'+
+    '<div style="font-size:11px;color:#888;margin-bottom:8px">De los '+existentes+' clientes que ya compraban: cuantos dias habian pasado entre su ultima compra antes del periodo y su primera compra dentro del periodo.</div>';
+  if(R.dias.n===0){
+    html+='<div style="color:#aaa;font-size:13px">Ningun cliente existente compro en este periodo</div>';
+  } else {
+    html+='<div style="display:flex;gap:16px;font-size:13px;margin-bottom:8px">'+
+      '<span>Promedio: <strong>'+Math.round(R.dias.promedio)+' dias</strong></span>'+
+      '<span>Mediana: <strong>'+Math.round(R.dias.mediana)+' dias</strong></span></div>';
+    R.dias.rangos.forEach(function(r){
+      var pr=R.dias.n>0?Math.round(r.n/R.dias.n*100):0;
+      html+='<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0">'+
+        '<span style="width:92px;color:#666">'+r.lbl+'</span>'+
+        '<div style="flex:1;background:#eef0f6;border-radius:4px;height:10px;overflow:hidden"><div style="width:'+pr+'%;background:var(--azul);height:100%"></div></div>'+
+        '<span style="width:70px;text-align:right"><strong>'+r.n+'</strong> <span style="color:#888">('+pr+'%)</span></span></div>';
+    });
+  }
+  html+='</div>';
+
+  // Composicion del crecimiento
+  var P=R.puente;
+  html+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--borde)">'+
+    '<div style="font-weight:700;font-size:13px;margin-bottom:2px">De donde viene la variacion de venta</div>'+
+    '<div style="font-size:11px;color:#888;margin-bottom:8px">Periodo anterior ('+R.prevDesde+' al '+R.prevHasta+'): <strong>'+$(R.montoPrevTotal)+'</strong> &rarr; este periodo: <strong>'+$(R.montoTotal)+'</strong></div>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+      '<tr><td style="padding:5px 0;border-bottom:1px solid var(--borde)">Clientes nuevos <span style="color:#888">('+R.cat.nuevo.n+')</span></td><td style="text-align:right;border-bottom:1px solid var(--borde);color:'+colorDe(P.nuevos)+'"><strong>'+$s(P.nuevos)+'</strong></td></tr>'+
+      '<tr><td style="padding:5px 0;border-bottom:1px solid var(--borde)">Clientes reactivados <span style="color:#888">('+R.cat.reactivado.n+')</span></td><td style="text-align:right;border-bottom:1px solid var(--borde);color:'+colorDe(P.reactivados)+'"><strong>'+$s(P.reactivados)+'</strong></td></tr>'+
+      '<tr><td style="padding:5px 0;border-bottom:1px solid var(--borde)">Clientes que repitieron <span style="color:#888">('+R.cat.retenido.n+') compraron mas o menos que antes</span></td><td style="text-align:right;border-bottom:1px solid var(--borde);color:'+colorDe(P.retenidos)+'"><strong>'+$s(P.retenidos)+'</strong></td></tr>'+
+      '<tr><td style="padding:5px 0;border-bottom:1px solid var(--borde)">Clientes perdidos <span style="color:#888">('+R.cat.perdido.n+') compraron antes y no en este periodo</span></td><td style="text-align:right;border-bottom:1px solid var(--borde);color:'+colorDe(P.perdidos)+'"><strong>'+$s(P.perdidos)+'</strong></td></tr>'+
+      '<tr><td style="padding:6px 0;font-weight:700">Variacion total</td><td style="text-align:right;font-weight:700;color:'+colorDe(P.total)+'">'+$s(P.total)+'</td></tr>'+
+    '</table>';
+  if(P.total>0){
+    var mantenimiento=P.retenidos+P.perdidos;
+    html+='<div style="font-size:12px;color:#444;background:#f7f8fb;border-radius:8px;padding:8px 10px;margin-top:8px">El aumento de '+$(P.total)+' = '+
+      '<strong>'+$s(P.nuevos)+'</strong> por captacion (clientes nuevos) + '+
+      '<strong>'+$s(P.reactivados)+'</strong> por recuperacion (reactivados) + '+
+      '<strong>'+$s(mantenimiento)+'</strong> por la cartera que ya compraba (lo que variaron los que repitieron, menos lo que dejaron de comprar los perdidos).</div>';
+  } else if(P.total<0) {
+    html+='<div style="font-size:12px;color:#444;background:#fdf3f3;border-radius:8px;padding:8px 10px;margin-top:8px">La venta bajo '+$(Math.abs(P.total))+' contra el periodo anterior.</div>';
+  }
+  html+='</div>';
+
+  // Indices de apoyo
+  var tickNuevo=R.cat.nuevo.pedidos>0?R.cat.nuevo.monto/R.cat.nuevo.pedidos:0;
+  var tickExist=pedExist>0?montoExist/pedExist:0;
+  html+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--borde)">'+
+    '<div style="font-weight:700;font-size:13px;margin-bottom:8px">Indices de control</div>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+    fila('Retencion (compraron el periodo anterior y volvieron a comprar)', R.retencionPct===null?'-':(Math.round(R.retencionPct*10)/10)+'%  ('+R.cat.retenido.n+' de '+R.clientesPrev+')')+
+    fila('Pedidos por cliente que compro', R.clientesCompraron>0?(Math.round(R.pedidosTotal/R.clientesCompraron*100)/100):'-')+
+    fila('Clientes con 2 o mas pedidos en el periodo', R.conRepeticion+' ('+pct(R.conRepeticion,R.clientesCompraron)+')')+
+    fila('Ticket promedio: nuevos / ya clientes', (R.cat.nuevo.pedidos>0?$(tickNuevo):'-')+' / '+(pedExist>0?$(tickExist):'-'))+
+    fila('Los 10 clientes que mas compraron concentran', R.top10Pct===null?'-':(Math.round(R.top10Pct*10)/10)+'% de la venta')+
+    (cobertura?fila('Cobertura de cartera (clientes de la cartera que compraron)', cobertura.total>0?(Math.round((cobertura.total-cobertura.sinCompra)/cobertura.total*1000)/10)+'%  ('+(cobertura.total-cobertura.sinCompra)+' de '+cobertura.total+')':'-'):'')+
+    '</table></div>';
+  function fila(lbl, val){
+    return '<tr><td style="padding:5px 0;border-bottom:1px solid var(--borde);color:#555">'+lbl+'</td><td style="padding:5px 0;border-bottom:1px solid var(--borde);text-align:right"><strong>'+val+'</strong></td></tr>';
+  }
+
+  // Por vendedor (solo cuando se esta viendo a todos)
+  if(vendSel==='todos'){
+    var vids={};
+    todosPedidos.forEach(function(p){
+      if(p.anulado || !p.cliente) return;
+      var f=fechaToISO(p.fecha);
+      if((f>=desde && f<=hastaEf) || (f>=R.prevDesde && f<=R.prevHasta)) vids[p.vendedor||'??']=true;
+    });
+    var listaV=Object.keys(vids).sort();
+    if(listaV.length>1){
+      html+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--borde)">'+
+        '<div style="font-weight:700;font-size:13px;margin-bottom:8px">Por vendedor</div>'+
+        '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:420px">'+
+        '<tr style="background:var(--azul-c);color:var(--azul)"><th style="padding:4px;text-align:left">Vendedor</th><th style="padding:4px;text-align:right">Compraron</th><th style="padding:4px;text-align:right">Nuevos</th><th style="padding:4px;text-align:right">Reactiv.</th><th style="padding:4px;text-align:right">Perdidos</th><th style="padding:4px;text-align:right">Retencion</th><th style="padding:4px;text-align:right">% venta nuevos</th></tr>';
+      listaV.forEach(function(vid){
+        var Rv=calcularRecompraRpt(todosPedidos, {desde:desde, hasta:hastaEf, vendSel:vid, cliSel:cliSel});
+        var vObj=null;
+        for(var vi=0;vi<VENDEDORES.length;vi++){ if(VENDEDORES[vi].id===vid){ vObj=VENDEDORES[vi]; break; } }
+        html+='<tr style="border-bottom:1px solid var(--borde)"><td style="padding:4px">VEND '+vid+(vObj?' - '+vObj.nombre:'')+'</td>'+
+          '<td style="padding:4px;text-align:right">'+Rv.clientesCompraron+'</td>'+
+          '<td style="padding:4px;text-align:right">'+Rv.cat.nuevo.n+'</td>'+
+          '<td style="padding:4px;text-align:right">'+Rv.cat.reactivado.n+'</td>'+
+          '<td style="padding:4px;text-align:right">'+Rv.cat.perdido.n+'</td>'+
+          '<td style="padding:4px;text-align:right">'+(Rv.retencionPct===null?'-':(Math.round(Rv.retencionPct*10)/10)+'%')+'</td>'+
+          '<td style="padding:4px;text-align:right">'+pct(Rv.cat.nuevo.monto,Rv.montoTotal)+'</td></tr>';
+      });
+      html+='</table></div></div>';
+    }
+  }
+  cont.innerHTML=html;
+}
+
+function descargarExcelRecompra(){
+  var R=ULTIMO_RECOMPRA_RPT;
+  if(!R || !R.detalle || R.detalle.length===0){ toast('No hay datos para exportar (elige un periodo con fecha Desde)'); return; }
+  var etiqueta={nuevo:'Nuevo', retenido:'Repitio', reactivado:'Reactivado', perdido:'Perdido (no compro en el periodo)'};
+  var orden={nuevo:0, reactivado:1, retenido:2, perdido:3};
+  var filas=[
+    ['Recompra y rotacion de clientes'],
+    ['Periodo: '+R.desde+' al '+R.hasta+'  |  Periodo anterior: '+R.prevDesde+' al '+R.prevHasta],
+    [],
+    ['Codigo','Cliente','Vendedor','Tipo','Pedidos en el periodo','Bultos','Monto del periodo $','Monto periodo anterior $','Primera compra del periodo','Compra anterior','Dias desde la compra anterior']
+  ];
+  R.detalle.slice().sort(function(a,b){
+    if(orden[a.tipo]!==orden[b.tipo]) return orden[a.tipo]-orden[b.tipo];
+    return b.monto-a.monto;
+  }).forEach(function(d){
+    filas.push([d.id, d.nombre, 'VEND '+d.vendedor, etiqueta[d.tipo], d.pedidos, d.bultos, d.monto, d.montoPrev,
+      d.primeraCompraPeriodo, d.compraAnterior, d.diasDesdeAnterior===null?'':d.diasDesdeAnterior]);
+  });
+  var resumen=[
+    ['Resumen'],[],
+    ['Concepto','Clientes','Monto $'],
+    ['Nuevos', R.cat.nuevo.n, R.cat.nuevo.monto],
+    ['Reactivados', R.cat.reactivado.n, R.cat.reactivado.monto],
+    ['Repitieron (compraron tambien el periodo anterior)', R.cat.retenido.n, R.cat.retenido.monto],
+    ['Total del periodo', R.clientesCompraron, R.montoTotal],
+    [],
+    ['Periodo anterior', R.clientesPrev, R.montoPrevTotal],
+    ['Perdidos (compraron el periodo anterior, no en este)', R.cat.perdido.n, -R.cat.perdido.montoPrev],
+    [],
+    ['Variacion por nuevos', '', R.puente.nuevos],
+    ['Variacion por reactivados', '', R.puente.reactivados],
+    ['Variacion por clientes que repitieron', '', R.puente.retenidos],
+    ['Variacion por clientes perdidos', '', R.puente.perdidos],
+    ['Variacion total', '', R.puente.total],
+    [],
+    ['Retencion %', R.retencionPct===null?'':Math.round(R.retencionPct*10)/10]
+  ];
+  var wb=XLSX.utils.book_new();
+  var wsR=XLSX.utils.aoa_to_sheet(resumen);
+  wsR['!cols']=[{wch:55},{wch:12},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen');
+  var ws=XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols']=[{wch:10},{wch:40},{wch:10},{wch:30},{wch:12},{wch:9},{wch:16},{wch:18},{wch:16},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Detalle por cliente');
+  XLSX.writeFile(wb, 'recompra_clientes_'+R.desde+'_a_'+R.hasta+'.xlsx', {cellStyles:true});
+  toast('Excel generado');
+}
+
 function rptGetPedidosFiltrados(){
   var desde=document.getElementById('rptDesde').value;
   var hasta=document.getElementById('rptHasta').value;
@@ -7470,9 +8024,35 @@ function renderReportes(){
   );
   var clientesConCompraSC={};
   for(var i=0;i<lista.length;i++){ clientesConCompraSC[lista[i].cliente.id]=true; }
+  // Ultimo pedido de cada cliente (en TODA la historia, no solo el periodo)
+  // y dias transcurridos hasta hoy - para ubicar cuanto lleva sin comprar
+  // Dos modos para contar los dias: "hoy" (ultimo pedido de toda la
+  // historia, dias hasta hoy) o "cierre" del periodo filtrado (solo se mira
+  // lo que habia pasado hasta esa fecha, para analizar ese periodo sin que
+  // compras posteriores lo distorsionen)
+  var hoyISOSC=fechaHoyISO();
+  var selDiasHasta=document.getElementById('rptSinCompraDiasHasta');
+  var modoDiasSC=(selDiasHasta && selDiasHasta.value==='cierre')?'cierre':'hoy';
+  var fechaReferenciaSC=(modoDiasSC==='cierre')?(hasta||hoyISOSC):hoyISOSC;
+  var ultimoPedidoSC={};
+  for(var i=0;i<RPT_PEDIDOS.length;i++){
+    var pU=RPT_PEDIDOS[i];
+    if(pU.anulado || !pU.cliente) continue;
+    var isoU=fechaToISO(pU.fecha);
+    if(modoDiasSC==='cierre' && isoU>fechaReferenciaSC) continue;
+    var actualU=ultimoPedidoSC[pU.cliente.id];
+    if(!actualU || isoU>actualU.iso) ultimoPedidoSC[pU.cliente.id]={iso:isoU, fecha:pU.fecha, monto:pU.monto||0};
+  }
+  var etiquetaDiasSC=(modoDiasSC==='cierre')?('hasta el cierre del periodo, '+fechaReferenciaSC):'hasta hoy';
   var htmlSinCompraVend='';
-  var totalSCGlobal=0, totalClientesSCGlobal=0;
-  var datosSinCompraExport={}; // {vid: {nombre, clientes:[{id,nombre}]}} - para exportar
+  var totalSCGlobal=0, totalClientesSCGlobal=0, totalMostradosSC=0;
+  // Antiguedad de la ultima compra de TODOS los que no compraron en el
+  // periodo (antes de aplicar el filtro de "mas de X dias")
+  var selMinDiasSC=document.getElementById('rptSinCompraMinDias');
+  var minDiasSC=selMinDiasSC?(parseInt(selMinDiasSC.value,10)||0):0;
+  var rangosAgingSC=[{lbl:'0 a 30 dias',n:0},{lbl:'31 a 60 dias',n:0},{lbl:'61 a 90 dias',n:0},{lbl:'91 a 180 dias',n:0},{lbl:'Mas de 180 dias',n:0},{lbl:'Sin pedidos',n:0}];
+  function idxAgingSC(d){ return d===null?5:(d<=30?0:(d<=60?1:(d<=90?2:(d<=180?3:4)))); }
+  var datosSinCompraExport={}; // {vid: {nombre, clientes:[{id,nombre,ultimoPedido,dias,monto}]}} - para exportar
   for(var v=0;v<vendedoresParaSC.length;v++){
     var vidSC=vendedoresParaSC[v];
     var clientesDeVendedorSC=CLIENTES_PROFIT.filter(function(c){
@@ -7488,21 +8068,56 @@ function renderReportes(){
     var vObjSC=null;
     for(var vi=0;vi<VENDEDORES.length;vi++){ if(VENDEDORES[vi].id===vidSC){ vObjSC=VENDEDORES[vi]; break; } }
     var vNombreSC=vObjSC?vObjSC.nombre:('VEND '+vidSC);
-    datosSinCompraExport[vidSC]={nombre:vNombreSC, clientes:sinCompraSC.map(function(c){return {id:c.id,nombre:c.nombre};})};
+    // Se ordenan de mas dias sin comprar a menos; los que nunca han hecho
+    // un pedido en la app van al final
+    var sinCompraDet=sinCompraSC.map(function(c){
+      var u=ultimoPedidoSC[c.id];
+      return {id:c.id, nombre:c.nombre,
+        ultimoPedido:u?u.fecha:'', dias:u?rptDiasEntreISO(u.iso, fechaReferenciaSC):null, monto:u?u.monto:null};
+    }).sort(function(a,b){
+      if(a.dias===null && b.dias===null) return a.nombre<b.nombre?-1:1;
+      if(a.dias===null) return 1;
+      if(b.dias===null) return -1;
+      return b.dias-a.dias;
+    });
+    sinCompraDet.forEach(function(x){ rangosAgingSC[idxAgingSC(x.dias)].n++; });
+    // Filtro "mas de X dias sin comprar": los que nunca han pedido (sin
+    // fecha) solo se muestran cuando no hay filtro
+    var sinCompraVis=minDiasSC>0?sinCompraDet.filter(function(x){ return x.dias!==null && x.dias>minDiasSC; }):sinCompraDet;
+    if(sinCompraVis.length===0) continue;
+    totalMostradosSC+=sinCompraVis.length;
+    datosSinCompraExport[vidSC]={nombre:vNombreSC, clientes:sinCompraVis};
     htmlSinCompraVend+='<div style="margin-bottom:14px">'+
-      '<div style="font-weight:700;font-size:13px;color:var(--azul)">VEND '+vidSC+' - '+vNombreSC+' <span style="color:#888;font-weight:400">('+sinCompraSC.length+' de '+clientesDeVendedorSC.length+' sin compra)</span></div>';
-    for(var c=0;c<sinCompraSC.length;c++){
-      htmlSinCompraVend+='<div style="padding:5px 0 5px 8px;font-size:12px;color:#666;border-bottom:1px solid #f2f2f2">'+sinCompraSC[c].nombre+' <span style="color:#aaa">(Cod: '+sinCompraSC[c].id+')</span></div>';
+      '<div style="font-weight:700;font-size:13px;color:var(--azul)">VEND '+vidSC+' - '+vNombreSC+' <span style="color:#888;font-weight:400">('+(minDiasSC>0?(sinCompraVis.length+' con mas de '+minDiasSC+' dias, '):'')+sinCompraSC.length+' de '+clientesDeVendedorSC.length+' sin compra)</span></div>';
+    for(var c=0;c<sinCompraVis.length;c++){
+      var scd=sinCompraVis[c];
+      htmlSinCompraVend+='<div style="padding:5px 0 5px 8px;font-size:12px;color:#666;border-bottom:1px solid #f2f2f2;display:flex;justify-content:space-between;gap:8px">'+
+        '<span>'+scd.nombre+' <span style="color:#aaa">(Cod: '+scd.id+')</span>'+
+          '<div style="font-size:11px;color:#999">'+(scd.dias===null?'Sin pedidos registrados':('Ultimo pedido: '+scd.ultimoPedido+' - $'+formatearNumeroConMiles(scd.monto,2)))+'</div></span>'+
+        '<strong style="color:'+(scd.dias===null?'#aaa':(scd.dias>60?'var(--rojo)':(scd.dias>30?'var(--ambar)':'#666')))+';white-space:nowrap">'+(scd.dias===null?'-':scd.dias+'d')+'</strong></div>';
     }
     htmlSinCompraVend+='</div>';
   }
+  // Resumen por antiguedad (siempre sobre todos los que no compraron)
+  var htmlAgingSC='';
+  if(totalSCGlobal>0){
+    htmlAgingSC='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+
+      rangosAgingSC.map(function(r){
+        return '<span style="background:'+(r.n>0?'#f7f8fb':'#fafafa')+';border:1px solid var(--borde);border-radius:6px;padding:4px 8px;font-size:11px;color:'+(r.n>0?'#444':'#bbb')+'">'+r.lbl+': <strong>'+r.n+'</strong></span>';
+      }).join('')+'</div>';
+  }
   if(htmlSinCompraVend===''){
-    htmlSinCompraVend='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Todos los clientes tuvieron al menos una compra en este periodo</div>';
+    htmlSinCompraVend=(totalSCGlobal>0?htmlAgingSC:'')+'<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">'+(minDiasSC>0&&totalSCGlobal>0?('Ningun cliente lleva mas de '+minDiasSC+' dias sin comprar'):'Todos los clientes tuvieron al menos una compra en este periodo')+'</div>';
   } else {
-    htmlSinCompraVend='<div style="font-size:12px;color:#888;margin-bottom:10px">'+totalSCGlobal+' de '+totalClientesSCGlobal+' clientes sin compra en el periodo</div>'+htmlSinCompraVend;
+    htmlSinCompraVend='<div style="font-size:12px;color:#888;margin-bottom:6px">'+totalSCGlobal+' de '+totalClientesSCGlobal+' clientes sin compra en el periodo'+(minDiasSC>0?(' &mdash; mostrando '+totalMostradosSC+' con mas de '+minDiasSC+' dias'):'')+' <span style="color:#aaa">(dias contados '+etiquetaDiasSC+')</span></div>'+htmlAgingSC+htmlSinCompraVend;
   }
   document.getElementById('rptSinCompraVendedor').innerHTML=htmlSinCompraVend;
-  ULTIMO_REPORTE_SIN_COMPRA={datos:datosSinCompraExport, periodo:(desde?(desde===hasta?desde:('Del '+desde+' al '+hasta)):'Todo el periodo')};
+  ULTIMO_REPORTE_SIN_COMPRA={datos:datosSinCompraExport, periodo:(desde?(desde===hasta?desde:('Del '+desde+' al '+hasta)):'Todo el periodo'), etiquetaDias:etiquetaDiasSC};
+
+  // Recompra y rotacion: usa TODOS los pedidos (no solo los del periodo)
+  // porque necesita saber desde cuando compraba cada cliente. La cobertura
+  // sale de la misma cartera que usa "sin compra" justo arriba.
+  renderRecompraRpt(RPT_PEDIDOS, vendSel, cliSel, desde, hasta, {total:totalClientesSCGlobal, sinCompra:totalSCGlobal});
 
   // Reporte: Participacion de promociones dentro del periodo filtrado
   var conPromo={pedidos:0, monto:0};
@@ -7812,6 +8427,20 @@ function descargarExcelSinCompra(){
   var vids=Object.keys(ULTIMO_REPORTE_SIN_COMPRA.datos);
   if(vids.length===0){ toast('No hay datos para exportar (todos los clientes compraron, o falta seleccionar un periodo)'); return; }
   var wb=XLSX.utils.book_new();
+  var etiquetaDiasX=ULTIMO_REPORTE_SIN_COMPRA.etiquetaDias||'hasta hoy';
+  var encSC=['Codigo','Cliente','Ultimo pedido','Dias transcurridos ('+etiquetaDiasX+')','Monto ultimo pedido $'];
+  function filaSC(cl){ return [cl.id, cl.nombre, cl.ultimoPedido||'Sin pedidos registrados', cl.dias===null?'':cl.dias, cl.monto===null?'':cl.monto]; }
+  // Hoja con todos los vendedores juntos (para filtrar/ordenar en Excel)
+  if(vids.length>1){
+    var filasTodos=[['Clientes sin compra - todos los vendedores'],[ULTIMO_REPORTE_SIN_COMPRA.periodo],[],['Vendedor'].concat(encSC)];
+    for(var v=0;v<vids.length;v++){
+      var dT=ULTIMO_REPORTE_SIN_COMPRA.datos[vids[v]];
+      for(var c=0;c<dT.clientes.length;c++){ filasTodos.push(['VEND '+vids[v]+' - '+dT.nombre].concat(filaSC(dT.clientes[c]))); }
+    }
+    var wsT=XLSX.utils.aoa_to_sheet(filasTodos);
+    wsT['!cols']=[{wch:28},{wch:12},{wch:44},{wch:14},{wch:16},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, wsT, 'Todos');
+  }
   for(var v=0;v<vids.length;v++){
     var vid=vids[v];
     var d=ULTIMO_REPORTE_SIN_COMPRA.datos[vid];
@@ -7819,12 +8448,12 @@ function descargarExcelSinCompra(){
       ['Clientes sin compra - VEND '+vid+' - '+d.nombre],
       [ULTIMO_REPORTE_SIN_COMPRA.periodo],
       [],
-      ['Codigo','Cliente']
+      encSC
     ];
-    for(var c=0;c<d.clientes.length;c++){ filas.push([d.clientes[c].id, d.clientes[c].nombre]); }
+    for(var c=0;c<d.clientes.length;c++){ filas.push(filaSC(d.clientes[c])); }
     var ws=XLSX.utils.aoa_to_sheet(filas);
-    ws['!cols']=[{wch:12},{wch:50}];
-    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:1}},{s:{r:1,c:0},e:{r:1,c:1}}];
+    ws['!cols']=[{wch:12},{wch:44},{wch:14},{wch:16},{wch:16}];
+    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:4}},{s:{r:1,c:0},e:{r:1,c:4}}];
     var hojaNombre=('VEND '+vid).substring(0,31);
     XLSX.utils.book_append_sheet(wb, ws, hojaNombre);
   }
@@ -7850,14 +8479,15 @@ function descargarPDFSinCompra(){
     '@media print{.vend{page-break-after:always}}'+
     '</style></head><body>'+
     '<h1>Clientes Sin Compra en el Periodo</h1>'+
-    '<div class="periodo">'+ULTIMO_REPORTE_SIN_COMPRA.periodo+'</div>';
+    '<div class="periodo">'+ULTIMO_REPORTE_SIN_COMPRA.periodo+' &mdash; dias contados '+(ULTIMO_REPORTE_SIN_COMPRA.etiquetaDias||'hasta hoy')+'</div>';
   for(var v=0;v<vids.length;v++){
     var vid=vids[v];
     var d=ULTIMO_REPORTE_SIN_COMPRA.datos[vid];
     html+='<div class="vend"><h2>VEND '+vid+' - '+d.nombre+' ('+d.clientes.length+' clientes)</h2>'+
-      '<table><tr><th>Codigo</th><th>Cliente</th></tr>';
+      '<table><tr><th>Codigo</th><th>Cliente</th><th>Ultimo pedido</th><th style="text-align:right">Dias</th><th style="text-align:right">Monto ult. pedido</th></tr>';
     for(var c=0;c<d.clientes.length;c++){
-      html+='<tr><td>'+d.clientes[c].id+'</td><td>'+d.clientes[c].nombre+'</td></tr>';
+      var clP=d.clientes[c];
+      html+='<tr><td>'+clP.id+'</td><td>'+clP.nombre+'</td><td>'+(clP.ultimoPedido||'Sin pedidos registrados')+'</td><td style="text-align:right">'+(clP.dias===null?'-':clP.dias)+'</td><td style="text-align:right">'+(clP.monto===null?'-':'$'+formatearNumeroConMiles(clP.monto,2))+'</td></tr>';
     }
     html+='</table></div>';
   }
@@ -7990,7 +8620,7 @@ function ajustarModoCargaCxC(){
 }
 
 function adminTab(tab){
-  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico','reposicion','comisiones'];
+  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico','reposicion','comisiones','tasas'];
   for(var i=0;i<tabs.length;i++){
     var el=document.getElementById('adminTab-'+tabs[i]);
     if(el) el.style.display=(tabs[i]===tab)?'block':'none';
@@ -8000,6 +8630,13 @@ function adminTab(tab){
     }
   }
   if(tab==='inventario') renderAdminInv();
+  if(tab==='tasas'){
+    renderAdminTasasBCV();
+    cargarTasasBCV(function(){
+      renderAdminTasasBCV();
+      actualizarTasaBCVDesdeWeb({}, function(r){ if(r.estado==='agregada') renderAdminTasasBCV(); });
+    }, true);
+  }
   if(tab==='precios'){ renderAdminProductos(); renderListaPromosCustom(); }
   if(tab==='vendedores'){
     renderAdminVend();
@@ -8605,6 +9242,10 @@ function calcularComisiones(){
       var pctSuper=v.comisionPctSupervisor||0;
       var detalleSupervisados=[];
       var montoSupervisadoTotalUSD=0;
+      // Para pasar la comision de supervision a Bs con la tasa real del
+      // equipo: se suman los Bs y los $ cobrados por transferencia de TODOS
+      // los vendedores supervisados
+      var equipoBS=0, equipoUSDTransf=0;
       if(esSuper && v.supervisados && v.supervisados.length>0){
         for(var s=0;s<v.supervisados.length;s++){
           var sid=v.supervisados[s];
@@ -8612,34 +9253,97 @@ function calcularComisiones(){
           if(datosS && datosS.montoComisionableUSD>0){
             var vObjS=null;
             for(var vi=0;vi<VENDEDORES.length;vi++){ if(VENDEDORES[vi].id===sid){ vObjS=VENDEDORES[vi]; break; } }
-            detalleSupervisados.push({id:sid, nombre:vObjS?vObjS.nombre:sid, montoUSD:Math.round(datosS.montoComisionableUSD*100)/100});
+            var tasaS=datosS.montoUSDTransferencia>0?(datosS.montoBS/datosS.montoUSDTransferencia):0;
+            detalleSupervisados.push({id:sid, nombre:vObjS?vObjS.nombre:sid, montoUSD:Math.round(datosS.montoComisionableUSD*100)/100, tasa:Math.round(tasaS*100)/100, _tasaRaw:tasaS});
             montoSupervisadoTotalUSD+=datosS.montoComisionableUSD;
+            equipoBS+=datosS.montoBS;
+            equipoUSDTransf+=datosS.montoUSDTransferencia;
           }
         }
       }
+      var tasaEquipo=equipoUSDTransf>0?(equipoBS/equipoUSDTransf):0;
+      // Si un supervisado no cobro por transferencia (sin tasa propia), se
+      // le aplica la tasa del equipo para expresar su aporte en Bs
+      var tasaParaBS=tasaEquipo>0?tasaEquipo:tasaProm;
+      var montoSupervisadoBS=0;
+      detalleSupervisados.forEach(function(sd){
+        var tasaUsar=sd._tasaRaw>0?sd._tasaRaw:tasaParaBS;
+        sd.montoBS=Math.round(sd.montoUSD*tasaUsar*100)/100;
+        montoSupervisadoBS+=sd.montoBS;
+        delete sd._tasaRaw;
+      });
       var comisionSupervisorUSD=Math.round(montoSupervisadoTotalUSD*pctSuper/100*100)/100;
       var comisionTotalUSD=Math.round((comisionPropiaUSD+comisionSupervisorUSD)*100)/100;
 
       if(datos.montoUSD<=0 && comisionSupervisorUSD<=0) continue;
 
-      resultado.push({
+      var rNuevo={
         vendedorId:v.id, vendedorNombre:v.nombre,
         montoCobradoUSD:Math.round(datos.montoUSD*100)/100,
         montoComisionableUSD:Math.round(datos.montoComisionableUSD*100)/100,
         montoCobradoBS:Math.round(datos.montoBS*100)/100,
         tasaPromedio:Math.round(tasaProm*100)/100,
+        tasaEquipo:Math.round(tasaEquipo*100)/100,
         pctPropio:pct, comisionPropiaUSD:comisionPropiaUSD,
         esSupervisor:esSuper, pctSupervisor:pctSuper, detalleSupervisados:detalleSupervisados,
         montoSupervisadoUSD:Math.round(montoSupervisadoTotalUSD*100)/100,
+        montoSupervisadoBS:Math.round(montoSupervisadoBS*100)/100,
         comisionSupervisorUSD:comisionSupervisorUSD,
         comisionTotalUSD:comisionTotalUSD,
-        comisionTotalBS:Math.round(comisionTotalUSD*tasaProm*100)/100,
         detallePagos:detallePagos, verDetalle:false
-      });
+      };
+      recalcularTotalesComision(rNuevo);
+      resultado.push(rNuevo);
     }
     ULTIMO_CALCULO_COMISIONES={desde:desde, hasta:hasta, lista:resultado, omitidosPorYaContados:totalOmitidosPorYaContados};
     renderResultadosComisiones();
   });
+}
+
+// ═══ Helpers de moneda para la comision (propia y de supervision) ═══
+// La comision de supervision se calcula en $ (base) y se convierte a Bs con
+// la tasa promedio REAL de lo que cobro el EQUIPO supervisado (no la del
+// propio supervisor, que puede ser 0 si el no cobra por transferencia). Si
+// el equipo no tuvo transferencias (o es un reporte viejo guardado sin este
+// dato), se usa la tasa del propio vendedor, como se hacia antes.
+function tasaEquipoComision(r){
+  return (r.tasaEquipo>0)?r.tasaEquipo:(r.tasaPromedio||0);
+}
+function comisionPropiaBSComision(r){
+  return Math.round((r.comisionPropiaUSD||0)*(r.tasaPromedio||0)*100)/100;
+}
+function comisionSupervisorBSComision(r){
+  // Con el monto del equipo en Bs (cada supervisado a su propia tasa), la
+  // comision en Bs es ese monto x el % - asi cuadra exacto con lo que se
+  // muestra. Reportes viejos sin ese dato: se convierte con una sola tasa.
+  if(r.montoSupervisadoBS!==undefined && r.montoSupervisadoBS!==null){
+    return Math.round(r.montoSupervisadoBS*(r.pctSupervisor||0)/100*100)/100;
+  }
+  return Math.round((r.comisionSupervisorUSD||0)*tasaEquipoComision(r)*100)/100;
+}
+function montoSupervisadoBSComision(r){
+  if(r.montoSupervisadoBS!==undefined && r.montoSupervisadoBS!==null) return r.montoSupervisadoBS;
+  return Math.round((r.montoSupervisadoUSD||0)*tasaEquipoComision(r)*100)/100;
+}
+// Re-arma los totales ($ y Bs) de un vendedor a partir de sus dos partes
+function recalcularTotalesComision(r){
+  r.comisionSupervisorBS=comisionSupervisorBSComision(r);
+  r.comisionTotalUSD=Math.round(((r.comisionPropiaUSD||0)+(r.comisionSupervisorUSD||0))*100)/100;
+  r.comisionTotalBS=Math.round((comisionPropiaBSComision(r)+r.comisionSupervisorBS)*100)/100;
+}
+// Texto "$X" / "Bs Y" / "$X / Bs Y" segun la moneda elegida
+function textoMontoMoneda(usd, bs, verUSD, verBS){
+  var partes=[];
+  if(verUSD) partes.push('$'+formatearNumeroConMiles(usd,2));
+  if(verBS) partes.push('Bs '+formatearNumeroConMiles(bs,2));
+  return partes.join(' / ');
+}
+// Detalle del equipo supervisado en la(s) moneda(s) elegida(s)
+function detalleSupervisadosTexto(r, verUSD, verBS, separador){
+  return (r.detalleSupervisados||[]).map(function(s){
+    var sBS=(s.montoBS!==undefined&&s.montoBS!==null)?s.montoBS:Math.round(s.montoUSD*tasaEquipoComision(r)*100)/100;
+    return 'VEND '+s.id+' - '+s.nombre+': '+textoMontoMoneda(s.montoUSD, sBS, verUSD, verBS);
+  }).join(separador);
 }
 
 function renderResultadosComisiones(){
@@ -8687,8 +9391,8 @@ function renderResultadosComisiones(){
     if(r.esSupervisor){
       var pctSupHtml='<input type="number" min="0" max="100" step="0.01" value="'+r.pctSupervisor+'" onchange="actualizarPctSupervisorComision('+i+',this.value)" style="width:44px;text-align:right;padding:2px 4px;border:1px solid var(--borde);border-radius:4px;font-size:11px">%';
       html+='<tr style="background:#f8f9fc"><td colspan="'+(3+(verUSD?2:0)+(verBS?2:0))+'" style="padding:5px 5px 5px 20px;font-size:11px;color:#666">'+
-        'Comision por equipo ('+pctSupHtml+' de $'+formatearNumeroConMiles(r.montoSupervisadoUSD,2)+' cobrado por su equipo) = $'+formatearNumeroConMiles(r.comisionSupervisorUSD,2)+
-        (r.detalleSupervisados.length>0?'<div style="margin-top:3px">'+r.detalleSupervisados.map(function(s){ return 'VEND '+s.id+' - '+s.nombre+': $'+formatearNumeroConMiles(s.montoUSD,2); }).join(' | ')+'</div>':'<div style="margin-top:3px;color:#aaa">Su equipo no tuvo cobros en este periodo</div>')+
+        'Comision por equipo ('+pctSupHtml+' de '+textoMontoMoneda(r.montoSupervisadoUSD, montoSupervisadoBSComision(r), verUSD, verBS)+' cobrado por su equipo) = <strong>'+textoMontoMoneda(r.comisionSupervisorUSD, comisionSupervisorBSComision(r), verUSD, verBS)+'</strong>'+
+        (r.detalleSupervisados.length>0?'<div style="margin-top:3px">'+detalleSupervisadosTexto(r, verUSD, verBS, ' | ')+'</div>':'<div style="margin-top:3px;color:#aaa">Su equipo no tuvo cobros en este periodo</div>')+
       '</td></tr>';
     }
     if(r.verDetalle){
@@ -8750,8 +9454,7 @@ function actualizarPctComisionDetalle(vendIdx, pagoIdx, nuevoValor){
   // El "% Propio" de arriba pasa a reflejar el promedio ponderado real
   // (sobre el monto comisionable, ya sin la retencion de IVA)
   r.pctPropio=r.montoComisionableUSD>0?Math.round(r.comisionPropiaUSD/r.montoComisionableUSD*10000)/100:0;
-  r.comisionTotalUSD=Math.round((r.comisionPropiaUSD+r.comisionSupervisorUSD)*100)/100;
-  r.comisionTotalBS=Math.round(r.comisionTotalUSD*r.tasaPromedio*100)/100;
+  recalcularTotalesComision(r);
   renderResultadosComisiones();
 }
 
@@ -8761,8 +9464,7 @@ function actualizarPctComisionVendedor(idx, nuevoValor){
   var r=ULTIMO_CALCULO_COMISIONES.lista[idx];
   r.pctPropio=pct;
   r.comisionPropiaUSD=Math.round(r.montoComisionableUSD*pct/100*100)/100;
-  r.comisionTotalUSD=Math.round((r.comisionPropiaUSD+r.comisionSupervisorUSD)*100)/100;
-  r.comisionTotalBS=Math.round(r.comisionTotalUSD*r.tasaPromedio*100)/100;
+  recalcularTotalesComision(r);
   for(var k=0;k<r.detallePagos.length;k++){
     var pg=r.detallePagos[k];
     pg.pctAplicado=pct;
@@ -8779,8 +9481,7 @@ function actualizarPctSupervisorComision(idx, nuevoValor){
   var r=ULTIMO_CALCULO_COMISIONES.lista[idx];
   r.pctSupervisor=pct;
   r.comisionSupervisorUSD=Math.round(r.montoSupervisadoUSD*pct/100*100)/100;
-  r.comisionTotalUSD=Math.round((r.comisionPropiaUSD+r.comisionSupervisorUSD)*100)/100;
-  r.comisionTotalBS=Math.round(r.comisionTotalUSD*r.tasaPromedio*100)/100;
+  recalcularTotalesComision(r);
   renderResultadosComisiones();
 }
 
@@ -8812,6 +9513,7 @@ function guardarReporteComisiones(){
     existente.esSupervisor=r.esSupervisor; existente.pctSupervisor=r.pctSupervisor;
     existente.detalleSupervisados=r.detalleSupervisados; existente.montoSupervisadoUSD=r.montoSupervisadoUSD;
     existente.comisionSupervisorUSD=r.comisionSupervisorUSD;
+    existente.tasaEquipo=r.tasaEquipo; existente.montoSupervisadoBS=r.montoSupervisadoBS; existente.comisionSupervisorBS=r.comisionSupervisorBS;
     existente.comisionTotalUSD=r.comisionTotalUSD; existente.comisionTotalBS=r.comisionTotalBS;
     existente.detallePagos=r.detallePagos;
     existente.moneda=monedaActual;
@@ -8833,6 +9535,7 @@ function guardarReporteComisiones(){
       esSupervisor:r.esSupervisor, pctSupervisor:r.pctSupervisor,
       detalleSupervisados:r.detalleSupervisados, montoSupervisadoUSD:r.montoSupervisadoUSD,
       comisionSupervisorUSD:r.comisionSupervisorUSD,
+      tasaEquipo:r.tasaEquipo, montoSupervisadoBS:r.montoSupervisadoBS, comisionSupervisorBS:r.comisionSupervisorBS,
       comisionTotalUSD:r.comisionTotalUSD, comisionTotalBS:r.comisionTotalBS,
       detallePagos:r.detallePagos,
       moneda:monedaActual,
@@ -8891,6 +9594,7 @@ function construirCalculoDesdeGuardado(id){
     pctPropio:r.pctPropio, comisionPropiaUSD:r.comisionPropiaUSD,
     esSupervisor:r.esSupervisor, pctSupervisor:r.pctSupervisor, detalleSupervisados:r.detalleSupervisados||[],
     montoSupervisadoUSD:r.montoSupervisadoUSD, comisionSupervisorUSD:r.comisionSupervisorUSD,
+    tasaEquipo:r.tasaEquipo, montoSupervisadoBS:r.montoSupervisadoBS, comisionSupervisorBS:r.comisionSupervisorBS,
     comisionTotalUSD:r.comisionTotalUSD, comisionTotalBS:r.comisionTotalBS,
     detallePagos:r.detallePagos||[], verDetalle:true
   }]};
@@ -9015,7 +9719,9 @@ function descargarExcelComisiones(){
   var encabezado=['Vendedor','% Propio'];
   if(verUSD) encabezado.push('Cobrado $','Comision Propia $');
   if(verBS) encabezado.push('Cobrado Bs','Comision Propia Bs');
-  encabezado.push('% Supervisor','Cobrado por Equipo $');
+  encabezado.push('% Supervisor');
+  if(verUSD) encabezado.push('Cobrado por Equipo $');
+  if(verBS) encabezado.push('Cobrado por Equipo Bs');
   if(verUSD) encabezado.push('Comision Supervisor $');
   if(verBS) encabezado.push('Comision Supervisor Bs');
   if(verUSD) encabezado.push('Comision Total $');
@@ -9028,9 +9734,11 @@ function descargarExcelComisiones(){
     var fila=['VEND '+r.vendedorId+' - '+r.vendedorNombre, r.pctPropio+'%'];
     if(verUSD) fila.push(r.montoCobradoUSD, r.comisionPropiaUSD);
     if(verBS) fila.push(r.montoCobradoBS, Math.round(r.comisionPropiaUSD*r.tasaPromedio*100)/100);
-    fila.push(r.esSupervisor?(r.pctSupervisor+'%'):'', r.esSupervisor?r.montoSupervisadoUSD:'');
+    fila.push(r.esSupervisor?(r.pctSupervisor+'%'):'');
+    if(verUSD) fila.push(r.esSupervisor?r.montoSupervisadoUSD:'');
+    if(verBS) fila.push(r.esSupervisor?montoSupervisadoBSComision(r):'');
     if(verUSD) fila.push(r.esSupervisor?r.comisionSupervisorUSD:'');
-    if(verBS) fila.push(r.esSupervisor?Math.round(r.comisionSupervisorUSD*r.tasaPromedio*100)/100:'');
+    if(verBS) fila.push(r.esSupervisor?comisionSupervisorBSComision(r):'');
     if(verUSD) fila.push(r.comisionTotalUSD);
     if(verBS) fila.push(r.comisionTotalBS);
     filas.push(fila);
@@ -9039,9 +9747,9 @@ function descargarExcelComisiones(){
   var filaTotal=['TOTAL GENERAL',''];
   if(verUSD) filaTotal.push('','');
   if(verBS) filaTotal.push('','');
-  filaTotal.push('','');
-  if(verUSD) filaTotal.push('');
-  if(verBS) filaTotal.push('');
+  filaTotal.push(''); // % Supervisor
+  if(verUSD) filaTotal.push('','');  // Cobrado por Equipo $ y Comision Supervisor $
+  if(verBS) filaTotal.push('','');   // Cobrado por Equipo Bs y Comision Supervisor Bs
   if(verUSD) filaTotal.push(Math.round(totalUSD*100)/100);
   if(verBS) filaTotal.push(Math.round(totalBS*100)/100);
   filas.push(filaTotal);
@@ -9149,7 +9857,7 @@ function descargarPDFComisiones(){
       (verBS?'<td class="num"><strong>Bs '+formatearNumeroConMiles(r.comisionTotalBS,2)+'</strong></td>':'')+
     '</tr>';
     if(r.esSupervisor){
-      html+='<tr><td colspan="'+numCols+'" class="wrap" style="font-size:10.5px;color:#666">Comision por equipo ('+r.pctSupervisor+'% de $'+formatearNumeroConMiles(r.montoSupervisadoUSD,2)+') = $'+formatearNumeroConMiles(r.comisionSupervisorUSD,2)+(r.detalleSupervisados.length>0?' — '+r.detalleSupervisados.map(function(s){return 'VEND '+s.id+': $'+formatearNumeroConMiles(s.montoUSD,2);}).join(', '):'')+'</td></tr>';
+      html+='<tr><td colspan="'+numCols+'" class="wrap" style="font-size:10.5px;color:#666">Comision por equipo ('+r.pctSupervisor+'% de '+textoMontoMoneda(r.montoSupervisadoUSD, montoSupervisadoBSComision(r), verUSD, verBS)+') = '+textoMontoMoneda(r.comisionSupervisorUSD, comisionSupervisorBSComision(r), verUSD, verBS)+(r.detalleSupervisados.length>0?' — '+detalleSupervisadosTexto(r, verUSD, verBS, ', '):'')+'</td></tr>';
     }
   }
   html+='<tr class="total-row"><td colspan="'+(numCols-(verUSD?1:0)-(verBS?1:0))+'" class="num">TOTAL GENERAL</td>'+
@@ -13464,7 +14172,7 @@ function editarPagoRechazado(pagoId){
   document.getElementById('cobroFecha').value=pago.fecha;
   document.getElementById('cobroDescuento').value=pago.descuentoPct||0;
   document.getElementById('cobroRetencionIVA').checked=!!pago.retencionIVA;
-  cobroDepositos=(pago.depositos||[]).map(function(d){ var c={}; for(var k in d) c[k]=d[k]; if(!c.fecha) c.fecha=pago.fecha; return c; });
+  cobroDepositos=(pago.depositos||[]).map(function(d){ var c={}; for(var k in d) c[k]=d[k]; if(!c.fecha) c.fecha=pago.fecha; if(c.formaPago==='transferencia' && c.tasa) c._tasaEditadaManual=true; return c; });
   if(cobroDepositos.length===0) cobroDepositos=[{formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:'', fecha:pago.fecha}];
   renderDepositosCobro();
   cobroComprobantesData=[];
@@ -13497,6 +14205,488 @@ function toggleDocCobro(numero, checked){
   if(checked && idx===-1) cobroDocsSeleccionados.push(numero);
   else if(!checked && idx>=0) cobroDocsSeleccionados.splice(idx,1);
   calcularValidacionCobro();
+}
+
+// ═══ TASAS BCV: historial de tasas ═══
+// La tasa de cada fecha se toma de este historial (base inicial incluida en
+// la app + lo que se cargue/edite en Admin -> Tasas BCV, guardado en
+// Firebase: config/tasas_bcv). Regla: si la fecha del deposito no tiene
+// tasa propia (fin de semana o feriado) se aplica la del dia habil
+// SIGUIENTE (la primera fecha posterior que tenga tasa), nunca la anterior.
+var TASAS_BCV_SEED='20211230:4.5897,20220103:4.5972,20220104:4.5877,20220105:4.6039,20220106:4.6001,20220107:4.6221,20220111:4.6365,20220112:4.6443,20220113:4.638,20220114:4.6359,20220118:4.6316,20220119:4.6294,20220120:4.6365,20220121:4.6155,20220125:4.588,20220126:4.5911,20220127:4.5837,20220128:4.5756,20220131:4.5492,20220201:4.5376,20220202:4.5275,20220203:4.5248,20220204:4.5263,20220207:4.5219,20220208:4.5068,20220209:4.4942,20220210:4.4907,20220211:4.4652,20220214:4.4637,20220215:4.441,20220216:4.4412,20220217:4.4369,20220218:4.4032,20220221:4.4208,20220222:4.4078,20220223:4.3427,20220224:4.3879,20220225:4.3805,20220302:4.3859,20220303:4.3677,20220304:4.3684,20220307:4.3266,20220308:4.3302,20220309:4.332,20220310:4.3277,20220311:4.3304,20220314:4.2233,20220315:4.2423,20220316:4.2697,20220317:4.2904,20220318:4.295,20220321:4.3088,20220322:4.298,20220323:4.3091,20220324:4.3269,20220325:4.3419,20220328:4.3642,20220329:4.3693,20220330:4.3698,20220331:4.3771,20220401:4.3805,20220404:4.4082,20220405:4.4125,20220406:4.4188,20220407:4.4124,20220408:4.4189,20220411:4.4222,20220412:4.4248,20220413:4.4349,20220418:4.4374,20220420:4.4442,20220421:4.4449,20220422:4.4378,20220425:4.4375,20220426:4.4389,20220427:4.449,20220428:4.4664,20220429:4.4867,20220502:4.4965,20220503:4.5071,20220504:4.5227,20220505:4.5473,20220508:4.5605,20220509:4.5763,20220510:4.5842,20220511:4.6068,20220512:4.6432,20220513:4.718,20220516:4.7705,20220517:4.7848,20220518:4.8048,20220519:4.8317,20220520:4.8952,20220523:4.9453,20220524:4.9368,20220525:4.9585,20220526:5.0128,20220527:5.0277,20220531:5.0668,20220601:5.0649,20220602:5.0906,20220603:5.1208,20220606:5.1513,20220607:5.1539,20220608:5.1611,20220609:5.198,20220610:5.2534,20220614:5.3106,20220615:5.311,20220616:5.3642,20220617:5.4209,20220621:5.4663,20220622:5.4572,20220623:5.4701,20220627:5.5077,20220628:5.4784,20220629:5.5131,20220630:5.5346,20220701:5.5369,20220706:5.5552,20220707:5.55,20220708:5.5746,20220711:5.6122,20220712:5.5999,20220713:5.6194,20220714:5.657,20220715:5.6777,20220718:5.699,20220719:5.6803,20220720:5.7012,20220721:5.7885,20220722:5.7311,20220725:5.7327,20220726:5.721,20220727:5.7456,20220728:5.7712,20220729:5.7836,20220801:5.7934,20220802:5.7769,20220803:5.7973,20220804:5.7908,20220805:5.8407,20220808:5.8662,20220809:8.8518,20220810:5.897,20220811:5.9249,20220812:5.9481,20220816:5.9783,20220817:5.97,20220818:5.976,20220819:6.0942,20220822:6.1801,20220823:6.2416,20220824:6.2817,20220825:7.0147,20220826:7.836,20220829:7.8507,20220830:7.8217,20220831:7.8553,20220901:7.8922,20220902:7.9078,20220905:7.9644,20220906:7.9447,20220907:7.9816,20220908:7.9879,20220909:8.0029,20220912:7.9835,20220913:7.9763,20220914:8.004,20220915:8.0294,20220916:8.0277,20220919:8.0508,20220920:8.0275,20220921:8.0496,20220922:8.0959,20220923:8.114,20220926:8.118,20220927:8.1018,20220928:8.1419,20220929:8.1475,20220930:8.1837,20221003:8.2036,20221004:8.1714,20221005:8.1923,20221006:8.2087,20221007:8.2102,20221010:8.2346,20221011:8.2113,20221013:8.2681,20221014:8.267,20221017:8.3078,20221018:8.2838,20221019:8.3788,20221020:8.372,20221021:8.393,20221025:8.4076,20221026:8.4096,20221027:8.4508,20221028:8.5254,20221101:8.5918,20221102:8.5744,20221103:8.6461,20221104:8.6636,20221107:8.7752,20221108:8.7311,20221109:8.8292,20221110:8.9308,20221111:9.0197,20221114:9.293,20221115:9.3133,20221116:9.4293,20221117:9.5615,20221118:9.7945,20221122:9.9787,20221123:9.9887,20221124:10.2346,20221125:10.4094,20221128:10.7256,20221129:10.8062,20221130:10.9545,20221201:11.789,20221202:11.2548,20221205:11.6918,20221206:11.539,20221207:11.8608,20221208:12.6615,20221209:13.5966,20221213:14.1251,20221214:14.7646,20221215:15.2354,20221216:15.5716,20221219:15.7668,20221220:16.0006,20221221:16.0418,20221222:16.1777,20221223:16.4523,20221226:16.5663,20221227:16.5666,20221228:16.8028,20221229:17.1172,20221230:17.2787,20230102:17.489,20230103:17.5591,20230104:17.8643,20230105:17.9442,20230106:18.3946,20230110:18.6138,20230111:18.8092,20230112:19.0531,20230113:19.2784,20230116:19.452,20230117:19.6638,20230118:19.9725,20230119:19.9845,20230120:20.2948,20230123:20.5272,20230124:20.734,20230125:21.1744,20230126:21.3189,20230127:21.7271,20230130:21.9689,20230131:21.9512,20230201:22.3737,20230202:22.4381,20230203:22.6808,20230206:22.9062,20230207:23.1487,20230208:23.6127,20230209:23.8095,20230210:24.1985,20230213:24.2,20230214:24.2531,20230215:24.3431,20230216:24.3652,20230217:24.3874,20230222:24.4014,20230223:24.3914,20230224:24.3708,20230227:24.4163,20230228:24.3635,20230301:24.3609,20230302:24.3571,20230303:24.357,20230306:24.3168,20230307:24.274,20230308:24.1557,20230309:24.1694,20230310:24.135,20230313:24.1459,20230314:24.1182,20230315:24.0003,20230316:24.0677,20230317:24.1258,20230320:24.2034,20230321:24.2197,20230322:24.2415,20230323:24.2039,20230324:24.3093,20230327:24.4016,20230328:24.3917,20230329:24.4151,20230330:24.4874,20230331:24.4968,20230403:24.5256,20230404:24.4897,20230405:24.4414,20230410:24.4879,20230411:24.3921,20230412:24.4734,20230413:24.4879,20230414:24.5419,20230417:24.5739,20230418:24.5612,20230420:24.5633,20230421:24.5766,20230424:24.6484,20230425:24.6147,20230426:24.6533,20230427:24.632,20230428:24.7304,20230502:24.7503,20230503:24.8156,20230504:24.8725,20230505:25.0299,20230508:25.0577,20230509:25.0395,20230510:25.1236,20230511:25.1791,20230512:25.3484,20230515:25.435,20230516:25.4891,20230517:25.6479,20230518:25.8122,20230519:25.9029,20230523:26.0055,20230524:26.0015,20230525:26.037,20230526:26.1295,20230529:26.2714,20230530:26.2548,20230531:26.1639,20230601:26.267,20230602:26.4672,20230605:26.5963,20230606:26.4625,20230607:26.6329,20230608:26.7038,20230609:26.8571,20230613:27.021,20230614:27.018,20230615:27.1053,20230616:27.1737,20230620:27.278,20230621:27.2543,20230622:27.3,20230623:27.542,20230626:27.6096,20230627:27.6169,20230628:27.7156,20230629:27.8374,20230630:27.8546,20230704:28.0162,20230706:28.1648,20230707:28.2768,20230710:28.3048,20230711:28.2066,20230712:28.3568,20230713:28.3529,20230714:28.4556,20230717:28.6099,20230718:28.6695,20230719:28.8123,20230720:28.8789,20230721:28.9906,20230725:29.0872,20230726:29.1042,20230727:29.314,20230728:29.3052,20230731:29.512,20230801:29.5037,20230802:29.6153,20230803:29.7559,20230804:30.1042,20230807:30.9826,20230808:30.9685,20230809:31.0989,20230810:31.0989,20230811:31.3554,20230815:31.5251,20230816:31.5098,20230817:31.6117,20230818:31.7535,20230821:31.8473,20230822:31.8337,20230823:32.0079,20230824:32.1785,20230825:32.2956,20230828:32.3445,20230829:32.4371,20230830:32.4284,20230831:32.5079,20230901:32.5984,20230904:32.8151,20230905:32.7921,20230906:32.9394,20230907:33.1115,20230908:33.2157,20230912:33.3401,20230913:33.3371,20230914:33.4402,20230915:33.5078,20230918:33.6607,20230919:33.6681,20230920:33.8161,20230921:33.8333,20230922:33.9289,20230925:33.9912,20230926:34.0233,20230927:34.0933,20230928:34.2507,20230929:34.3009,20231002:34.4254,20231003:34.4681,20231004:34.6685,20231005:34.7133,20231006:34.7499,20231009:34.8565,20231010:34.8199,20231011:34.8416,20231013:34.9001,20231016:34.8776,20231017:34.8508,20231018:34.8126,20231019:34.8602,20231020:34.8584,20231023:34.9779,20231024:34.976,20231025:35.0278,20231026:35.0222,20231027:35.0919,20231031:35.1276,20231101:35.0653,20231102:35.1535,20231103:35.1724,20231107:35.236,20231108:35.1541,20231109:35.2458,20231110:35.3342,20231113:35.3706,20231114:35.3148,20231115:35.3819,20231116:35.4108,20231117:35.4298,20231120:35.478,20231121:35.4511,20231122:35.4186,20231123:35.3916,20231124:35.4854,20231127:35.5021,20231128:35.4708,20231129:35.4784,20231130:35.4939,20231201:35.5131,20231204:35.5806,20231205:35.5228,20231206:35.5578,20231207:35.5974,20231208:35.6018,20231212:35.6248,20231213:35.5724,20231214:35.6262,20231215:35.6403,20231218:35.7247,20231219:35.654,20231220:35.7156,20231221:35.732,20231222:35.7874,20231226:35.8134,20231227:35.7827,20231228:35.8348,20231229:35.9305,20240102:35.9593,20240103:35.867,20240104:35.9496,20240105:36.0345,20240108:36.0065,20240109:35.9385,20240110:35.7171,20240111:35.9437,20240112:35.9629,20240115:36.0397,20240116:35.9744,20240117:36.0466,20240118:36.0761,20240119:36.1379,20240122:36.1459,20240123:36.1104,20240124:36.1279,20240125:36.1187,20240126:36.1186,20240129:36.202,20240130:36.1418,20240131:36.2032,20240201:36.2601,20240202:36.2352,20240205:36.2859,20240206:36.2534,20240207:36.2556,20240208:36.2375,20240209:36.2919,20240214:36.3185,20240215:36.2609,20240216:36.2737,20240219:36.3358,20240220:36.2375,20240221:36.2951,20240222:36.2315,20240223:36.2329,20240226:36.0698,20240227:36.0706,20240228:36.0955,20240229:36.1304,20240301:36.1518,20240304:36.0801,20240305:36.0933,20240306:36.1318,20240307:36.1726,20240308:36.1331,20240311:36.1903,20240312:36.2005,20240313:36.2368,20240314:36.2633,20240315:36.276,20240318:36.3167,20240320:36.2653,20240321:36.2861,20240322:36.3217,20240325:36.3555,20240326:36.3006,20240327:36.334,20240401:36.2896,20240402:36.2896,20240403:36.286,20240404:36.2493,20240405:36.2105,20240408:36.2274,20240409:36.1809,20240410:36.2251,20240411:36.1883,20240412:36.4002,20240415:36.2947,20240416:36.2889,20240417:36.2974,20240418:36.3265,20240422:36.3421,20240423:36.3506,20240424:36.3877,20240425:36.4231,20240426:36.4311,20240429:36.4324,20240430:36.4262,20240502:36.473,20240503:36.5099,20240506:36.5849,20240507:36.5763,20240508:36.5621,20240509:36.5828,20240510:36.5865,20240514:36.6101,20240515:36.5949,20240516:36.6042,20240517:36.6265,20240520:36.5717,20240521:36.5703,20240522:36.5589,20240523:36.5464,20240524:36.5219,20240527:36.5129,20240528:36.5119,20240529:36.5103,20240530:36.5114,20240531:36.5372,20240604:36.5344,20240605:36.5408,20240606:36.524,20240607:36.4882,20240610:36.4787,20240611:36.45,20240612:36.4385,20240613:36.4497,20240614:36.4296,20240618:36.4176,20240619:36.3939,20240620:36.3831,20240621:36.3789,20240625:36.3725,20240626:36.3655,20240627:36.3823,20240628:36.4085,20240701:36.4462,20240702:36.4551,20240703:36.4672,20240704:36.4779,20240708:36.5123,20240709:36.4888,20240710:36.5056,20240711:36.5134,20240712:36.5303,20240715:36.5243,20240716:36.5004,20240717:36.506,20240718:36.5407,20240719:36.5724,20240722:36.6066,20240723:36.5314,20240725:36.559,20240726:36.5797,20240729:36.6074,20240730:36.609,20240731:36.6128,20240801:36.6368,20240802:36.6423,20240805:36.6555,20240806:36.6527,20240807:36.6642,20240808:36.6806,20240809:36.6827,20240812:36.6658,20240813:36.6305,20240814:36.6561,20240815:36.6132,20240816:36.6768,20240820:36.6848,20240821:36.683,20240822:36.6484,20240823:36.6967,20240826:36.5888,20240827:36.5633,20240828:36.5883,20240829:36.5919,20240830:36.6259,20240902:36.6454,20240903:36.6386,20240904:36.6391,20240905:36.6436,20240906:36.6846,20240909:36.6958,20240910:36.6854,20240911:36.7062,20240912:36.7323,20240913:36.741,20240916:36.741,20240917:36.7751,20240918:36.7702,20240919:36.7789,20240920:36.8013,20240923:36.823,20240924:36.813,20240925:36.8105,20240926:36.8507,20240927:36.8655,20240930:36.9086,20241001:36.9227,20241002:36.9187,20241003:36.9812,20241004:36.9855,20241007:37.0358,20241008:37.0397,20241009:37.074,20241010:37.5295,20241011:37.6502,20241014:38.8857,20241015:38.888,20241016:38.9179,20241017:39.0116,20241018:39.1344,20241021:39.1699,20241022:39.1813,20241023:39.323,20241024:39.4617,20241025:40.88,20241028:41.0429,20241029:41.7361,20241030:42.2256,20241031:42.5622,20241101:42.7101,20241105:42.8569,20241106:43.4576,20241107:43.7822,20241108:44.1861,20241111:44.7035,20241112:44.7544,20241113:44.9289,20241114:45.053,20241115:45.507,20241119:45.7894,20241120:45.841,20241121:46.0588,20241122:46.3273,20241125:46.6176,20241126:46.6427,20241127:46.7537,20241128:46.8554,20241129:47.3138,20241202:47.6074,20241203:47.7293,20241204:47.8552,20241205:48.1183,20241206:48.3265,20241209:48.7903,20241210:48.8695,20241211:49.1111,20241212:49.4757,20241213:49.9068,20241216:50.3319,20241217:50.371,20241218:50.5419,20241219:50.9545,20241220:51.3504,20241223:51.5398,20241226:51.64,20241227:51.7659,20241230:51.9345,20250102:52.0271,20250103:52.5723,20250107:53.012,20250108:53.0704,20250109:53.2827,20250110:53.8522,20250114:53.8791,20250115:53.9642,20250116:54.3694,20250117:54.76,20250120:54.9113,20250121:54.9852,20250122:55.2999,20250123:55.7611,20250124:56.283,20250127:56.6522,20250128:56.8562,20250129:57.2974,20250130:57.3929,20250131:57.9666,20250203:58.4437,20250204:58.5404,20250205:58.7938,20250206:59.4605,20250207:60.1417,20250210:60.5211,20250211:60.5428,20250212:61.0278,20250213:61.3462,20250214:61.8227,20250217:62.0708,20250218:62.0999,20250219:62.1834,20250220:62.5107,20250221:63.2065,20250224:63.4139,20250225:63.4938,20250226:64.0191,20250227:64.2406,20250228:64.2464,20250305:64.4844,20250306:64.6116,20250307:64.746,20250310:65.2662,20250311:65.4151,20250312:65.6268,20250313:66.2542,20250314:66.4368,20250317:66.5573,20250318:66.788,20250319:66.788,20250320:67.6344,20250321:67.8183,20250324:68.3116,20250325:68.3936,20250326:68.6994,20250327:69.0188,20250328:69.4387,20250331:69.5664,20250401:69.776,20250402:70.0141,20250403:70.2493,20250404:70.5852,20250407:72.1856,20250408:73.3576,20250409:74.2787,20250410:75.8025,20250411:77.2646,20250414:78.3635,20250415:78.5914,20250416:79.7844,20250421:80.9598,20250422:81.7613,20250423:82.3788,20250424:83.4182,20250425:84.4204,20250428:86.1143,20250429:86.6564,20250430:86.8465,20250502:87.5681,20250505:88.6405,20250506:88.7224,20250507:91.2113,20250508:91.9165,20250509:92.831,20250512:93.0495,20250513:93.0623,20250514:93.5796,20250515:94.1557,20250516:94.3241,20250519:94.763,20250520:94.8024,20250521:94.8556,20250522:94.9652,20250523:95.0189,20250526:95.084,20250527:95.2387,20250528:95.8052,20250529:96.5303,20250530:96.8577,20250602:96.8577,20250603:97.3126,20250604:97.4194,20250605:97.9031,20250606:98.5132,20250609:99.0916,20250610:99.1247,20250611:99.6983,20250612:100.3396,20250613:101.0822,20250617:102.157,20250618:102.8083,20250619:103.7355,20250620:104.5434,20250625:105.4527,20250626:106.1685,20250627:106.862,20250630:107.6245,20250701:108.1891,20250702:108.9785,20250703:109.7724,20250704:110.5569,20250707:111.4186,20250708:112.1278,20250709:112.8285,20250710:113.7505,20250711:114.4115,20250714:115.3279,20250715:115.8446,20250716:116.8191,20250717:117.4036,20250718:118.2874,20250721:119.1446,20250722:119.6662,20250723:120.4239,20250725:121.3469,20250728:122.17,20250729:122.8408,20250730:123.8718,20250731:124.5102,20250801:125.4247,20250804:126.2802,20250805:127.1097,20250806:128.2409,20250807:129.0535,20250808:130.0652,20250811:131.1241,20250812:132.3026,20250813:133.5159,20250814:134.4812,20250815:135.6399,20250819:136.8931,20250820:138.1283,20250821:139.4016,20250822:140.66,20250825:141.8843,20250826:143.0381,20250827:144.3732,20250828:145.7453,20250829:147.0825,20250901:148.444,20250902:149.4677,20250903:150.7952,20250904:151.7627,20250905:152.8216,20250908:154.0108,20250909:154.9825,20250910:156.3739,20250911:157.7287,20250912:158.9289,20250916:160.4479,20250917:161.888,20250918:163.6474,20250919:165.4101,20250922:166.5834,20250923:168.4157,20250924:169.9761,20250925:171.8458,20250926:173.7361,20250929:175.6471,20250930:177.6143,20251001:179.4308,20251002:181.3037,20251003:183.1369,20251006:185.3983,20251007:187.2893,20251008:189.2594,20251009:191.3661,20251010:193.2996,20251013:195.2491,20251014:197.2456,20251015:199.1072,20251016:201.4665,20251017:203.742,20251020:205.6754,20251021:207.8938,20251022:210.2825,20251023:212.4837,20251024:214.419,20251027:216.3714,20251028:218.17,20251029:219.8737,20251030:221.7438,20251031:223.6459,20251103:223.9622,20251104:224.3762,20251105:226.1305,20251106:227.5567,20251107:228.4796,20251110:231.0462,20251111:231.0938,20251112:233.0458,20251113:233.5576,20251114:234.8715,20251117:236.4601,20251118:236.8389,20251119:237.7505,20251120:240.3209,20251121:241.578,20251125:243.1105,20251126:243.5727,20251127:244.6504,20251128:245.6697,20251201:247.3003,20251202:247.4071,20251203:249.1989,20251204:251.8867,20251205:254.8705,20251209:257.9287,20251210:262.1036,20251211:265.0662,20251212:267.7499,20251215:270.7893,20251216:273.5861,20251217:276.5769,20251218:279.5629,20251219:282.5128,20251222:285.4024,20251223:288.4494,20251226:291.3524,20251229:294.9699,20251230:298.1431,20260102:301.3709,20260105:304.6796,20260106:308.1546,20260107:311.8814,20260108:321.0323,20260109:325.3894,20260113:330.3751,20260114:336.4596,20260115:339.1495,20260116:341.7425,20260120:344.5071,20260121:347.2631,20260122:349.9272,20260123:352.7063,20260126:355.5528,20260127:358.9247,20260128:361.4906,20260129:363.6623,20260130:367.3069,20260202:370.2544,20260203:372.1057,20260204:375.0825,20260205:378.4582,20260206:381.1074,20260209:382.6318,20260210:385.272,20260211:388.7394,20260212:390.2944,20260213:393.2216,20260218:396.3674,20260219:398.7456,20260220:402.3343,20260223:405.3518,20260224:407.3786,20260225:411.0857,20260226:414.0455,20260227:417.3579,20260302:419.9873,20260303:421.8772,20260304:425.6741,20260305:427.9302,20260306:431.0113,20260309:433.1664,20260310:436.2419,20260311:438.205,20260312:440.9657,20260313:443.2587,20260316:446.8048,20260317:448.3686,20260318:451.5072,20260320:455.2547,20260323:457.0757,20260324:459.4525,20260325:462.6687,20260326:466.6014,20260327:468.5145,20260330:471.7004,20260331:473.8702,20260401:473.9176,20260406:474.0598,20260407:474.5338,20260408:475.0083,20260409:475.9583,20260410:476.4342,20260413:477.1488,20260414:477.6259,20260415:478.5811,20260416:479.7775,20260417:480.2572,20260420:481.2177,20260421:481.6989,20260422:482.7586,20260423:483.3379,20260424:483.8695,20260427:484.7404,20260428:485.2251,20260429:486.1955,20260430:487.1192,20260504:489.5547,20260505:490.0442,20260506:493.3765,20260507:496.8301,20260508:499.8608,20260511:500.4606,20260512:504.9146,20260513:508.6004,20260514:510.7873,20260515:515.18,20260519:517.9619,20260520:520.9142,20260521:523.675,20260522:526.8694,20260525:530.5047,20260526:535.3853,20260527:540.0431,20260528:544.5794,20260529:549.3716,20260601:554.4258,20260602:557.9741,20260603:558.6436,20260604:560.3753,20260605:563.2892,20260609:567.6828,20260610:572.6784,20260611:577.5461,20260612:582.6862,20260615:587.4059,20260616:592.5163,20260617:596.7824,20260618:602.3324,20260619:607.3919,20260622:612.4332,20260623:617.6388,20260625:621.5299,20260626:622.2135,20260630:623.0223,20260701:633.3644,20260702:639.7029,20260703:652.9726,20260706:667.05,20260707:674.9305,20260708:685.9427,20260709:700.2249,20260710:709.6935,20260713:721.3456,20260714:723.999,20260715:725.747,20260716:727.4512,20260717:732.4787,20260720:736.9339,20260721:737.2321,20260722:737.2321,20260723:737.8816,20260727:742.2292,20260728:742.8105,20260729:744.2264,20260730:745.6371,20260731:746.6297,20260803:748.7864,20260804:752.0943,20260805:755.1552,20260806:755.9001,20260807:756.7083,20260810:757.5406,20260811:761.2167,20260812:764.3486,20260813:766.8603,20260814:771.0714,20260817:772.5441,20260818:773.3125,20260819:775.3356,20260820:777.4161,20260821:779.9522,20260824:784.6633,20260825:785.0693,20260826:787.5196,20260827:791.3248,20260828:791.6667,20260831:794.9917,20260901:798.326,20260902:801.1752,20260903:804.8109,20260904:807.3862,20260907:813.7361,20260908:814.6908,20260909:820.1018,20260910:827.7371,20260911:832.4883,20260914:842.2067,20260915:842.2067,20260916:846.5131,20260917:847.4442,20260918:848.5458,20260921:849.564,20260922:852.4168,20260923:853.4993,20260924:854.4637,20260925:855.6625,20260928:857.0058,20260929:857.8876,20260930:859.0629,20261001:860.1753,20261002:866.5612,20261005:871.3689,20261006:872.3927,20261007:873.867,20261008:874.7321,20261009:875.6505';
+var TASAS_BCV={};            // {'YYYY-MM-DD': tasa}
+var TASAS_BCV_FECHAS=[];     // fechas ordenadas
+var TASAS_BCV_FB={};         // tasas cargadas/editadas en Firebase
+var TASAS_BCV_META={};       // {'YYYY-MM-DD': 'quien y cuando'}
+var TASAS_BCV_ULTIMA_CARGA=0;
+var TASAS_BCV_MAX_DIAS=10;   // si la siguiente tasa esta a mas de 10 dias, no se usa
+var TASAS_BCV_PEND_CONFIRMAR=null;
+
+function tasasBCVReconstruir(){
+  var m={};
+  TASAS_BCV_SEED.split(',').forEach(function(par){
+    var p=par.split(':');
+    if(p.length!==2 || p[0].length!==8) return;
+    var iso=p[0].substring(0,4)+'-'+p[0].substring(4,6)+'-'+p[0].substring(6,8);
+    var v=parseFloat(p[1]);
+    if(v>0) m[iso]=v;
+  });
+  for(var k in TASAS_BCV_FB){
+    var v2=parseFloat(TASAS_BCV_FB[k]);
+    if(v2>0) m[k]=v2;
+  }
+  TASAS_BCV=m;
+  TASAS_BCV_FECHAS=Object.keys(m).sort();
+}
+tasasBCVReconstruir();
+
+function redondear2Tasa(x){ return Math.round((x+1e-9)*100)/100; }
+
+function tasaFechaVE(iso){
+  if(!iso || iso.length<10) return iso||'';
+  return iso.substring(8,10)+'/'+iso.substring(5,7)+'/'+iso.substring(0,4);
+}
+
+function tasaDiasEntre(aISO, bISO){
+  var a=Date.UTC(+aISO.substring(0,4), +aISO.substring(5,7)-1, +aISO.substring(8,10));
+  var b=Date.UTC(+bISO.substring(0,4), +bISO.substring(5,7)-1, +bISO.substring(8,10));
+  return Math.round((b-a)/86400000);
+}
+
+function tasaNombreDia(iso){
+  var n=['Dom','Lun','Mar','Mie','Jue','Vie','Sab'];
+  return n[new Date(iso+'T00:00:00').getDay()];
+}
+
+// Devuelve {tasa (2 decimales), tasaExacta (4 dec), fechaTasa, exacta} o null
+function buscarTasaBCV(iso){
+  if(!iso || iso.length<10 || !TASAS_BCV_FECHAS.length) return null;
+  var ex=TASAS_BCV[iso];
+  if(ex>0) return {tasa:redondear2Tasa(ex), tasaExacta:ex, fechaTasa:iso, exacta:true};
+  var a=TASAS_BCV_FECHAS, lo=0, hi=a.length;
+  while(lo<hi){ var mid=(lo+hi)>>1; if(a[mid]<=iso) lo=mid+1; else hi=mid; }
+  if(lo>=a.length) return null;
+  var f=a[lo];
+  if(tasaDiasEntre(iso,f)>TASAS_BCV_MAX_DIAS) return null;
+  return {tasa:redondear2Tasa(TASAS_BCV[f]), tasaExacta:TASAS_BCV[f], fechaTasa:f, exacta:false};
+}
+
+// Compara la tasa usada contra la del historial para esa fecha
+function compararTasaConHistorial(tasaUsada, iso){
+  var ref=buscarTasaBCV(iso);
+  if(!ref || !(tasaUsada>0)) return {ref:ref, difiere:false, difPct:0, mayor1:false};
+  var dif=redondear2Tasa(tasaUsada)-ref.tasa;
+  var difiere=Math.abs(dif)>=0.005;
+  var pct=ref.tasa>0?(dif/ref.tasa*100):0;
+  return {ref:ref, difiere:difiere, difPct:Math.round(pct*100)/100, mayor1:difiere && Math.abs(pct)>1};
+}
+
+function puedeEditarTasasBCV(){
+  return !!(VEND && (VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20'));
+}
+
+// Lee la tasa de Firebase (sin bloquear: si falla, queda la base incluida)
+function cargarTasasBCV(cb, forzar){
+  var ahora=Date.now();
+  if(!forzar && TASAS_BCV_ULTIMA_CARGA && (ahora-TASAS_BCV_ULTIMA_CARGA)<300000){ if(cb) cb(false); return; }
+  try{
+    db.collection('config').doc('tasas_bcv').get().then(function(doc){
+      var fb=(doc && doc.exists && doc.data().tasas)?doc.data().tasas:{};
+      var meta=(doc && doc.exists && doc.data().meta)?doc.data().meta:{};
+      var antes=JSON.stringify(TASAS_BCV_FB);
+      TASAS_BCV_FB=fb; TASAS_BCV_META=meta;
+      TASAS_BCV_ULTIMA_CARGA=Date.now();
+      tasasBCVReconstruir();
+      if(cb) cb(antes!==JSON.stringify(fb));
+    }).catch(function(e){ console.log('No se pudo leer tasas BCV:', e); if(cb) cb(false); });
+  }catch(e){ if(cb) cb(false); }
+}
+
+// Pone la tasa del historial en cada deposito por transferencia que el
+// usuario no haya escrito a mano. Devuelve true si cambio algo.
+function tasaAutoRellenarDepositos(){
+  var cambio=false;
+  var elF=document.getElementById('cobroFecha');
+  var fechaBase=elF?elF.value:'';
+  for(var i=0;i<cobroDepositos.length;i++){
+    var d=cobroDepositos[i];
+    if(d.formaPago!=='transferencia' || d._tasaEditadaManual) continue;
+    var ref=buscarTasaBCV(d.fecha||fechaBase);
+    if(ref){
+      if(d.tasa!==ref.tasa){ d.tasa=ref.tasa; cambio=true; }
+      d._tasaAuto=true;
+    } else if(d._tasaAuto){
+      d.tasa=''; d._tasaAuto=false; cambio=true;
+    }
+  }
+  return cambio;
+}
+
+// Mensaje bajo el campo de tasa de cada deposito
+function htmlInfoTasaDeposito(i){
+  var d=cobroDepositos[i];
+  if(!d || d.formaPago!=='transferencia') return '';
+  var elF=document.getElementById('cobroFecha');
+  var fechaDep=d.fecha||(elF?elF.value:'');
+  if(!fechaDep) return '';
+  var ref=buscarTasaBCV(fechaDep);
+  var usada=parseFloat(String(d.tasa).replace(/,/g,''))||0;
+  if(!ref){
+    return '<div style="font-size:11px;color:#856404;background:#FFF3CD;border-radius:6px;padding:6px 8px;margin-top:4px">'+
+      'No hay tasa BCV cargada en el historial para el '+tasaFechaVE(fechaDep)+' (si es fin de semana o feriado, la tasa del dia habil siguiente aun no esta publicada). Escribela manualmente; la oficina la verificara despues.</div>';
+  }
+  var txt=ref.exacta
+    ?('Tasa BCV del historial para el '+tasaFechaVE(fechaDep)+': <strong>'+formatearNumeroConMiles(ref.tasa,2)+'</strong>')
+    :('El '+tasaFechaVE(fechaDep)+' ('+tasaNombreDia(fechaDep)+') no tiene tasa propia (fin de semana o feriado): aplica la del dia habil siguiente, '+tasaFechaVE(ref.fechaTasa)+' ('+tasaNombreDia(ref.fechaTasa)+'): <strong>'+formatearNumeroConMiles(ref.tasa,2)+'</strong>');
+  var html='<div style="font-size:11px;color:#666;margin-top:4px">'+txt+'</div>';
+  var c=compararTasaConHistorial(usada, fechaDep);
+  if(usada>0 && c.difiere){
+    var signo=c.difPct>0?'+':'';
+    html+='<div style="font-size:12px;border-radius:6px;padding:6px 8px;margin-top:4px;'+(c.mayor1?'color:var(--rojo);background:var(--rojo-c);font-weight:600':'color:#856404;background:#FFF3CD')+'">'+
+      (c.mayor1?'Posible error de digitacion: ':'')+'la tasa escrita ('+formatearNumeroConMiles(usada,2)+') es distinta a la del historial ('+formatearNumeroConMiles(ref.tasa,2)+'), diferencia '+signo+c.difPct.toFixed(2)+'%. '+
+      'Si la guardas asi, el pago quedara marcado con esta diferencia para que la oficina la revise.'+
+      ' <a href="#" onclick="usarTasaHistorialDeposito('+i+');return false" style="color:inherit;text-decoration:underline;white-space:nowrap">Usar la del historial</a></div>';
+  } else if(!(usada>0)){
+    html+='<div style="font-size:12px;margin-top:4px"><a href="#" onclick="usarTasaHistorialDeposito('+i+');return false" style="color:var(--azul)">Usar la del historial</a></div>';
+  }
+  return html;
+}
+
+function actualizarInfoTasaDeposito(i){
+  var el=document.getElementById('tasaInfo_'+i);
+  if(el) el.innerHTML=htmlInfoTasaDeposito(i);
+}
+
+function usarTasaHistorialDeposito(i){
+  var d=cobroDepositos[i];
+  if(!d) return;
+  d._tasaEditadaManual=false;
+  d._tasaAuto=false;
+  d.tasa='';
+  renderDepositosCobro();
+  calcularValidacionCobro();
+}
+
+// Linea de diferencia de tasa para la oficina (tarjeta del pago)
+function infoDiferenciaTasaPago(d, fechaPago){
+  if(!d || d.formaPago!=='transferencia') return null;
+  var fechaDep=d.fecha||fechaPago;
+  var usada=parseFloat(d.tasa)||0;
+  if(!(usada>0)) return null;
+  var refTasa=0, refFecha='', difiere=false, pct=0;
+  var c=compararTasaConHistorial(usada, fechaDep);
+  if(c.ref){ refTasa=c.ref.tasa; refFecha=c.ref.fechaTasa; difiere=c.difiere; pct=c.difPct; }
+  else if(d.tasaReferencia>0){ refTasa=d.tasaReferencia; refFecha=d.tasaReferenciaFecha||''; difiere=!!d.tasaDifiere; pct=d.tasaDifPct||0; }
+  else return null;
+  if(!difiere) return null;
+  var monto=parseFloat(d.monto)||0;
+  return {usada:usada, ref:refTasa, fechaRef:refFecha, pct:pct, mayor1:Math.abs(pct)>1,
+    usdCorrecto:refTasa>0?Math.round(monto/refTasa*100)/100:0, usdRegistrado:d.montoUSD||0};
+}
+
+function htmlDiferenciaTasaPago(d, fechaPago){
+  var inf=infoDiferenciaTasaPago(d, fechaPago);
+  if(!inf) return '';
+  return '<div style="font-size:11px;margin-top:3px;border-radius:5px;padding:4px 6px;'+(inf.mayor1?'color:var(--rojo);background:var(--rojo-c);font-weight:600':'color:#856404;background:#FFF3CD')+'">'+
+    'Diferencia de tasa'+(inf.mayor1?' (mayor a 1%)':'')+': se uso '+formatearNumeroConMiles(inf.usada,2)+' y segun el historial BCV ('+tasaFechaVE(inf.fechaRef)+') deberia ser '+formatearNumeroConMiles(inf.ref,2)+
+    ' ('+(inf.pct>0?'+':'')+inf.pct.toFixed(2)+'%). Con la tasa correcta el deposito equivale a $'+formatearNumeroConMiles(inf.usdCorrecto,2)+' en vez de $'+formatearNumeroConMiles(inf.usdRegistrado,2)+'.</div>';
+}
+
+// ─── Actualizacion automatica desde la web ───
+// Fuente principal: rates.dolarvzla.com (trae la tasa vigente Y la anterior,
+// asi si algun dia no se abrio la app, la fecha anterior tambien se completa).
+// Respaldo: ve.dolarapi.com. Solo AGREGA fechas que aun no existen en el
+// historial; nunca sobreescribe una tasa ya cargada (para eso esta la
+// edicion manual de 00, 01 y 20).
+var TASAS_BCV_FUENTES=[
+  {nombre:'rates.dolarvzla.com', url:'https://rates.dolarvzla.com/bcv/current.json'},
+  {nombre:'ve.dolarapi.com', url:'https://ve.dolarapi.com/v1/dolares/oficial'}
+];
+var TASAS_BCV_ULTIMO_AUTO=0;
+
+function tasaBCVHoyISO(){
+  var d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// Saca de la respuesta las parejas fecha/tasa, sea cual sea la fuente
+function tasaBCVExtraerEntradas(j){
+  var out=[];
+  if(!j) return out;
+  if(j.current || j.previous){
+    if(j.previous) out.push({iso:String(j.previous.date||'').substring(0,10), valor:parseFloat(j.previous.usd), rol:'previous'});
+    if(j.current) out.push({iso:String(j.current.date||'').substring(0,10), valor:parseFloat(j.current.usd), rol:'current'});
+  } else {
+    var v=(j.promedio!==null&&j.promedio!==undefined)?j.promedio:((j.venta!==null&&j.venta!==undefined)?j.venta:j.compra);
+    out.push({iso:String(j.fechaActualizacion||'').substring(0,10), valor:parseFloat(v), rol:'current'});
+  }
+  return out;
+}
+
+// Evalua UNA pareja fecha/tasa contra el historial. No toca Firebase.
+function tasaBCVEvaluarEntrada(iso, v){
+  if(!(v>0) || !/^\d{4}-\d{2}-\d{2}$/.test(iso) || !tasaBCVParseFecha(iso)) return {estado:'invalida'};
+  v=Math.round(v*10000)/10000;
+  var limite=new Date(); limite.setDate(limite.getDate()+7);
+  var limISO=limite.getFullYear()+'-'+String(limite.getMonth()+1).padStart(2,'0')+'-'+String(limite.getDate()).padStart(2,'0');
+  if(iso>limISO) return {estado:'invalida'};
+  if(TASAS_BCV[iso]>0){
+    if(Math.abs(TASAS_BCV[iso]-v)<0.00005) return {estado:'ya-estaba', iso:iso, valor:v};
+    return {estado:'distinta', iso:iso, valor:v, actual:TASAS_BCV[iso]};
+  }
+  var prev=null;
+  for(var i=TASAS_BCV_FECHAS.length-1;i>=0;i--){ if(TASAS_BCV_FECHAS[i]<iso){ prev=TASAS_BCV_FECHAS[i]; break; } }
+  if(prev && Math.abs(v/TASAS_BCV[prev]-1)>0.10) return {estado:'brusca', iso:iso, valor:v, prevIso:prev, prev:TASAS_BCV[prev]};
+  return {estado:'nueva', iso:iso, valor:v};
+}
+
+// Evalua toda la respuesta: junta lo nuevo y el aviso mas importante
+function tasaBCVEvaluarRespuestaWeb(j){
+  var entradas=tasaBCVExtraerEntradas(j);
+  var evs=entradas.map(function(en){ var ev=tasaBCVEvaluarEntrada(en.iso, en.valor); ev.rol=en.rol; return ev; });
+  var nuevas=evs.filter(function(e){ return e.estado==='nueva'; });
+  if(nuevas.length){
+    var ultima=nuevas[nuevas.length-1];
+    var avisos=evs.filter(function(e){ return e.estado==='distinta'||e.estado==='brusca'; });
+    return {estado:'nueva', iso:ultima.iso, valor:ultima.valor, nuevas:nuevas, avisos:avisos};
+  }
+  var dist=evs.filter(function(e){ return e.estado==='distinta'; })[0];
+  if(dist) return dist;
+  var bru=evs.filter(function(e){ return e.estado==='brusca'; })[0];
+  if(bru) return bru;
+  var ya=evs.filter(function(e){ return e.estado==='ya-estaba'; });
+  if(ya.length) return ya[ya.length-1];
+  return {estado:'invalida'};
+}
+
+// Consulta una fuente; devuelve (resultado, nombreFuente). Si la fuente
+// falla o responde algo inutilizable, prueba con la siguiente
+function tasaBCVConsultarFuente(idx, cb){
+  if(idx>=TASAS_BCV_FUENTES.length){ cb({estado:'error'}, ''); return; }
+  var fuente=TASAS_BCV_FUENTES[idx];
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=ctrl?setTimeout(function(){ ctrl.abort(); }, 10000):null;
+  var siguiente=function(prim){ tasaBCVConsultarFuente(idx+1, function(r, f){ cb(r.estado==='error'&&prim?prim:r, f||fuente.nombre); }); };
+  fetch(fuente.url, {cache:'no-store', signal:ctrl?ctrl.signal:undefined}).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(j){
+    if(timer) clearTimeout(timer);
+    var ev=tasaBCVEvaluarRespuestaWeb(j);
+    if(ev.estado==='invalida'){ siguiente(ev); return; }
+    cb(ev, fuente.nombre);
+  }, function(e){
+    if(timer) clearTimeout(timer);
+    console.log('No se pudo consultar '+fuente.nombre+':', e);
+    siguiente(null);
+  });
+}
+
+// opts.manual=true ignora el limite de frecuencia (boton de Admin)
+function actualizarTasaBCVDesdeWeb(opts, cb){
+  opts=opts||{};
+  var ahora=Date.now();
+  if(!opts.manual && (ahora-TASAS_BCV_ULTIMO_AUTO)<1800000){ if(cb) cb({estado:'omitido'}); return; }
+  TASAS_BCV_ULTIMO_AUTO=ahora;
+  if(typeof fetch!=='function'){ if(cb) cb({estado:'error'}); return; }
+  tasaBCVConsultarFuente(0, function(ev, fuente){
+    ev.fuente=fuente;
+    if(ev.estado!=='nueva'){ if(cb) cb(ev); return; }
+    var mapa={};
+    ev.nuevas.forEach(function(n){ mapa[n.iso]=n.valor; });
+    tasaBCVGuardarMapa(mapa, function(ok){
+      ev.estado=ok?'agregada':'error';
+      if(cb) cb(ev);
+    }, {quien:'Automatico ('+fuente+') '+new Date().toLocaleString('es-VE'), silencioso:true});
+  });
+}
+
+function textoResultadoTasaWeb(r){
+  var f=r.fuente?(' (fuente: '+r.fuente+')'):'';
+  if(r.estado==='agregada'){
+    var lista=(r.nuevas||[{iso:r.iso,valor:r.valor}]).map(function(n){ return tasaFechaVE(n.iso)+' = '+formatearNumeroConMiles(n.valor,4); }).join('; ');
+    return {ok:true, txt:'Se agrego la tasa del '+lista+f+'.'};
+  }
+  if(r.estado==='ya-estaba') return {ok:true, txt:'La web informa la tasa del '+tasaFechaVE(r.iso)+' ('+formatearNumeroConMiles(r.valor,4)+') y ya esta cargada. No hay nada nuevo.'};
+  if(r.estado==='distinta') return {ok:false, txt:'La web informa '+formatearNumeroConMiles(r.valor,4)+' para el '+tasaFechaVE(r.iso)+', pero en la app esa fecha tiene '+formatearNumeroConMiles(r.actual,4)+'. No se cambio nada; si la de la app esta mal, editala a mano.'};
+  if(r.estado==='brusca') return {ok:false, txt:'La web informa '+formatearNumeroConMiles(r.valor,4)+' para el '+tasaFechaVE(r.iso)+', que cambia mas de 10% frente a la del '+tasaFechaVE(r.prevIso)+' ('+formatearNumeroConMiles(r.prev,4)+'). No se agrego por seguridad; si es correcta, cargala a mano.'};
+  if(r.estado==='invalida') return {ok:false, txt:'La web respondio con datos que no se pudieron usar. Carga la tasa a mano.'};
+  return {ok:false, txt:'No se pudo consultar la web (sin conexion o el servicio no responde). Carga la tasa a mano.'};
+}
+
+function botonActualizarTasaWeb(){
+  var res=document.getElementById('tasasBCVWebRes');
+  if(res) res.innerHTML='<div style="font-size:12px;color:#888">Consultando la web...</div>';
+  actualizarTasaBCVDesdeWeb({manual:true}, function(r){
+    var t=textoResultadoTasaWeb(r);
+    if(res) res.innerHTML='<div style="font-size:12px;border-radius:6px;padding:6px 8px;'+(t.ok?'color:var(--verde);background:var(--verde-c)':'color:#856404;background:#FFF3CD')+'">'+t.txt+'</div>';
+    renderAdminTasasBCV();
+  });
+}
+
+// ─── Admin: pantalla Tasas BCV ───
+function tasaBCVParseNumero(s){
+  s=String(s===undefined||s===null?'':s).trim().replace(/\s/g,'');
+  if(!/^[\d.,]+$/.test(s)) return NaN;
+  var iC=s.lastIndexOf(','), iP=s.lastIndexOf('.');
+  if(iC>=0 && iP>=0){
+    if(iC>iP) s=s.replace(/\./g,'').replace(',','.');
+    else s=s.replace(/,/g,'');
+  } else if(iC>=0){
+    if((s.match(/,/g)||[]).length>1) return NaN;
+    s=s.replace(',','.');
+  } else if(iP>=0){
+    if((s.match(/\./g)||[]).length>1) return NaN;
+  }
+  var v=parseFloat(s);
+  return (v>0 && v<10000000)?v:NaN;
+}
+
+function tasaBCVParseFecha(s){
+  s=String(s||'').trim();
+  var m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s), y, mo, da;
+  if(m){ y=+m[1]; mo=+m[2]; da=+m[3]; }
+  else {
+    m=/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/.exec(s);
+    if(!m) return null;
+    da=+m[1]; mo=+m[2]; y=+m[3]; if(y<100) y+=2000;
+  }
+  var dt=new Date(Date.UTC(y,mo-1,da));
+  if(dt.getUTCFullYear()!==y || dt.getUTCMonth()!==mo-1 || dt.getUTCDate()!==da) return null;
+  return y+'-'+String(mo).padStart(2,'0')+'-'+String(da).padStart(2,'0');
+}
+
+function tasaBCVQuien(){
+  return (VEND?VEND.nombre:'')+' ('+(VEND?VEND.codigo:'')+') '+new Date().toLocaleString('es-VE');
+}
+
+// Escribe un conjunto de tasas {iso: valor} en Firebase (fusionando)
+function tasaBCVGuardarMapa(mapa, cb, opciones){
+  opciones=opciones||{};
+  var upd={tasas:{}, meta:{}};
+  var quien=opciones.quien||tasaBCVQuien();
+  Object.keys(mapa).forEach(function(k){ upd.tasas[k]=mapa[k]; upd.meta[k]=quien; });
+  db.collection('config').doc('tasas_bcv').set(upd,{merge:true}).then(function(){
+    Object.keys(mapa).forEach(function(k){ TASAS_BCV_FB[k]=mapa[k]; TASAS_BCV_META[k]=quien; });
+    tasasBCVReconstruir();
+    TASAS_BCV_ULTIMA_CARGA=Date.now();
+    if(cb) cb(true);
+  }, function(e){
+    console.log('Error guardando tasas BCV:', e);
+    if(!opciones.silencioso) toast('No se pudo guardar la tasa. Revisa la conexion e intenta de nuevo.');
+    if(cb) cb(false);
+  });
+}
+
+function guardarTasaBCVManual(){
+  if(!puedeEditarTasasBCV()){ toast('Solo los usuarios 00, 01 y 20 pueden cargar tasas'); return; }
+  var iso=tasaBCVParseFecha(document.getElementById('tasaBCVFecha').value);
+  var v=tasaBCVParseNumero(document.getElementById('tasaBCVValor').value);
+  var aviso=document.getElementById('tasaBCVAviso');
+  if(!iso){ toast('Indica la fecha'); return; }
+  if(!(v>0)){ toast('Indica una tasa valida (ej: 875,6505)'); return; }
+  v=Math.round(v*10000)/10000;
+  // Proteccion contra errores de digitacion: cambio brusco frente a la tasa
+  // anterior conocida pide confirmar con un segundo clic
+  var prev=null;
+  for(var i=TASAS_BCV_FECHAS.length-1;i>=0;i--){ if(TASAS_BCV_FECHAS[i]<iso){ prev=TASAS_BCV_FECHAS[i]; break; } }
+  if(prev){
+    var pct=(v/TASAS_BCV[prev]-1)*100;
+    var clave=iso+'|'+v;
+    if(Math.abs(pct)>5 && TASAS_BCV_PEND_CONFIRMAR!==clave){
+      TASAS_BCV_PEND_CONFIRMAR=clave;
+      if(aviso) aviso.innerHTML='<div style="font-size:12px;color:var(--rojo);background:var(--rojo-c);border-radius:6px;padding:6px 8px;margin-bottom:8px;font-weight:600">Esta tasa cambia '+(pct>0?'+':'')+pct.toFixed(2)+'% frente a la del '+tasaFechaVE(prev)+' ('+formatearNumeroConMiles(TASAS_BCV[prev],4)+'). Si es correcta, pulsa "Guardar tasa" otra vez para confirmar.</div>';
+      return;
+    }
+  }
+  TASAS_BCV_PEND_CONFIRMAR=null;
+  var mapa={}; mapa[iso]=v;
+  tasaBCVGuardarMapa(mapa, function(ok){
+    if(!ok) return;
+    if(aviso) aviso.innerHTML='';
+    document.getElementById('tasaBCVValor').value='';
+    toast('Tasa del '+tasaFechaVE(iso)+' guardada');
+    renderAdminTasasBCV();
+  });
+}
+
+function importarTasasBCVPegadas(){
+  if(!puedeEditarTasasBCV()){ toast('Solo los usuarios 00, 01 y 20 pueden cargar tasas'); return; }
+  var txt=document.getElementById('tasasBCVPegar').value||'';
+  var lineas=txt.split(/\r?\n/);
+  var mapa={}, ok=0, malas=[];
+  lineas.forEach(function(l){
+    l=l.trim();
+    if(!l) return;
+    var partes=l.split(/[\t;]+|\s+/).filter(function(x){ return x!==''; });
+    var iso=partes.length>=2?tasaBCVParseFecha(partes[0]):null;
+    var v=partes.length>=2?tasaBCVParseNumero(partes[1]):NaN;
+    if(!iso || !(v>0)){ malas.push(l); return; }
+    mapa[iso]=Math.round(v*10000)/10000; ok++;
+  });
+  var res=document.getElementById('tasasBCVPegarRes');
+  if(ok===0){ if(res) res.innerHTML='<div style="font-size:12px;color:var(--rojo)">No se reconocio ninguna linea. Formato: fecha y tasa separadas por tabulador o espacio (ej: 13/10/2026  875,65).</div>'; return; }
+  tasaBCVGuardarMapa(mapa, function(guardado){
+    if(!guardado) return;
+    document.getElementById('tasasBCVPegar').value='';
+    if(res) res.innerHTML='<div style="font-size:12px;color:var(--verde)">'+ok+' tasa(s) guardada(s).'+(malas.length?(' <span style="color:var(--rojo)">'+malas.length+' linea(s) no reconocida(s): '+malas.slice(0,3).join(' | ')+(malas.length>3?' ...':'')+'</span>'):'')+'</div>';
+    toast(ok+' tasa(s) guardada(s)');
+    renderAdminTasasBCV();
+  });
+}
+
+function editarTasaBCVFila(iso){
+  if(!puedeEditarTasasBCV()) return;
+  document.getElementById('tasaBCVFecha').value=iso;
+  document.getElementById('tasaBCVValor').value=String(TASAS_BCV[iso]).replace('.',',');
+  document.getElementById('tasaBCVValor').focus();
+}
+
+function consultarTasaBCV(){
+  var iso=document.getElementById('tasaBCVConsFecha').value;
+  var el=document.getElementById('tasaBCVConsRes');
+  if(!el) return;
+  if(!iso){ el.innerHTML=''; return; }
+  var ref=buscarTasaBCV(iso);
+  if(!ref){ el.innerHTML='<div style="font-size:12px;color:#856404;background:#FFF3CD;border-radius:6px;padding:6px 8px">No hay tasa cargada para el '+tasaFechaVE(iso)+' ni un dia habil siguiente (dentro de '+TASAS_BCV_MAX_DIAS+' dias).</div>'; return; }
+  el.innerHTML='<div style="font-size:13px;color:#444">'+
+    (ref.exacta
+      ?('Para el '+tasaNombreDia(iso)+' '+tasaFechaVE(iso)+' aplica su propia tasa: ')
+      :('El '+tasaNombreDia(iso)+' '+tasaFechaVE(iso)+' no tiene tasa (fin de semana o feriado). Aplica la del dia habil siguiente, '+tasaNombreDia(ref.fechaTasa)+' '+tasaFechaVE(ref.fechaTasa)+': '))+
+    '<strong>'+formatearNumeroConMiles(ref.tasaExacta,4)+'</strong> (en cobranza se coloca '+formatearNumeroConMiles(ref.tasa,2)+')</div>';
+}
+
+function renderAdminTasasBCV(){
+  var puede=puedeEditarTasasBCV();
+  var wrap=document.getElementById('tasasBCVEditWrap');
+  if(wrap) wrap.style.display=puede?'block':'none';
+  var aviso=document.getElementById('tasasBCVSoloLectura');
+  if(aviso) aviso.style.display=puede?'none':'block';
+  var res=document.getElementById('tasasBCVResumen');
+  var fechas=TASAS_BCV_FECHAS;
+  if(res){
+    if(!fechas.length) res.innerHTML='<div style="color:#aaa;font-size:13px">Aun no hay tasas cargadas</div>';
+    else {
+      var ult=fechas[fechas.length-1];
+      res.innerHTML='<div style="font-size:13px;color:#444;margin-bottom:10px">Ultima tasa cargada: <strong>'+tasaNombreDia(ult)+' '+tasaFechaVE(ult)+' = '+formatearNumeroConMiles(TASAS_BCV[ult],4)+'</strong> &middot; '+fechas.length+' tasas en el historial (desde '+tasaFechaVE(fechas[0])+')</div>';
+    }
+  }
+  var lista=document.getElementById('tasasBCVLista');
+  if(lista){
+    var html='<div style="font-size:12px;color:#888;margin:8px 0 4px">Ultimas 45 tasas</div>';
+    var desde=Math.max(0,fechas.length-45);
+    for(var i=fechas.length-1;i>=desde;i--){
+      var f=fechas[i];
+      var editada=TASAS_BCV_FB[f]!==undefined;
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--borde);font-size:13px">'+
+        '<span>'+tasaNombreDia(f)+' '+tasaFechaVE(f)+(editada?' <span style="font-size:10px;color:var(--azul)" title="'+(TASAS_BCV_META[f]||'')+'">(cargada en la app)</span>':'')+'</span>'+
+        '<span><strong>'+formatearNumeroConMiles(TASAS_BCV[f],4)+'</strong>'+
+          (puede?' <button type="button" onclick="editarTasaBCVFila(&quot;'+f+'&quot;)" style="background:none;border:none;color:var(--azul);font-size:12px;cursor:pointer;margin-left:6px">Editar</button>':'')+
+        '</span></div>';
+    }
+    lista.innerHTML=html;
+  }
+  consultarTasaBCV();
 }
 
 // ═══ COBROS: uno o varios depositos por pago ═══
@@ -13546,6 +14736,7 @@ function onInputCentavos(el, idx, campo, decimales){
   var soloDigitos=el.value.replace(/\D/g,'').replace(/^0+(?=\d)/,'');
   var valorNumerico=soloDigitos?(parseInt(soloDigitos,10)/Math.pow(10,decimales)):0;
   cobroDepositos[idx][campo]=valorNumerico;
+  if(campo==='tasa'){ cobroDepositos[idx]._tasaEditadaManual=true; cobroDepositos[idx]._tasaAuto=false; }
   el.value=soloDigitos?formatearNumeroConMiles(valorNumerico,decimales):'';
   var previewEl=document.getElementById('previewCentavos_'+idx+'_'+campo);
   if(previewEl){
@@ -13553,19 +14744,23 @@ function onInputCentavos(el, idx, campo, decimales){
       ?('Se registrara: <strong style="font-size:15px">'+formatearNumeroConMiles(valorNumerico,decimales)+'</strong>')
       :'';
   }
+  if(campo==='tasa') actualizarInfoTasaDeposito(idx);
   calcularValidacionCobro();
 }
 
 function actualizarCampoDeposito(idx, campo, valor){
   cobroDepositos[idx][campo]=valor;
   if(campo==='fecha') cobroDepositos[idx]._fechaEditadaManual=true;
-  if(campo==='formaPago') renderDepositosCobro();
+  // Al cambiar la fecha o la forma de pago se vuelve a buscar la tasa del
+  // historial (solo se sustituye la tasa si no fue escrita a mano)
+  if(campo==='formaPago' || campo==='fecha') renderDepositosCobro();
   calcularValidacionCobro();
 }
 
 function renderDepositosCobro(){
   var el=document.getElementById('cobroDepositosList');
   if(!el) return;
+  var tasaAutoCambio=tasaAutoRellenarDepositos();
   var html='';
   for(var i=0;i<cobroDepositos.length;i++){
     var d=cobroDepositos[i];
@@ -13599,15 +14794,17 @@ function renderDepositosCobro(){
         '<div style="font-size:11px;color:#888;margin-top:2px">Escribe solo numeros, sin punto ni coma (el punto se acomoda solo). Ej: para 1.420,91 escribe 142091</div>'+
         '<div id="previewCentavos_'+i+'_monto" style="font-size:13px;color:var(--azul);margin-top:2px">'+(d.monto?('Se registrara: <strong style="font-size:15px">'+formatearNumeroConMiles(d.monto,2)+'</strong>'):'')+'</div></div>'+
       (esT?(
-        '<div class="field"><label>Tasa BCV del dia</label>'+
+        '<div class="field"><label>Tasa BCV del dia (se llena sola segun la fecha del deposito; puedes editarla)</label>'+
         '<input type="text" inputmode="numeric" value="'+(d.tasa?formatearNumeroConMiles(d.tasa,2):'')+'" placeholder="0.00" '+
         'oninput="onInputCentavos(this,'+i+',&quot;tasa&quot;,2)">'+
-        '<div style="font-size:11px;color:#888;margin-top:2px">Escribe solo numeros. Ej: para 725,00 escribe 72500</div>'+
-        '<div id="previewCentavos_'+i+'_tasa" style="font-size:13px;color:var(--azul);margin-top:2px">'+(d.tasa?('Se registrara: <strong style="font-size:15px">'+formatearNumeroConMiles(d.tasa,2)+'</strong>'):'')+'</div></div>'
+        '<div style="font-size:11px;color:#888;margin-top:2px">Si la editas, escribe solo numeros. Ej: para 725,00 escribe 72500</div>'+
+        '<div id="previewCentavos_'+i+'_tasa" style="font-size:13px;color:var(--azul);margin-top:2px">'+(d.tasa?('Se registrara: <strong style="font-size:15px">'+formatearNumeroConMiles(d.tasa,2)+'</strong>'):'')+'</div>'+
+        '<div id="tasaInfo_'+i+'">'+htmlInfoTasaDeposito(i)+'</div></div>'
       ):'')+
     '</div>';
   }
   el.innerHTML=html;
+  if(tasaAutoCambio) calcularValidacionCobro();
 }
 
 function calcularMontoUSDDeposito(d){
@@ -13648,15 +14845,18 @@ function calcularValidacionCobro(){
     if(d){ sumaDocs+=d.saldo; ivaTotal+=(d.iva||0); }
   }
   var hayRetencion=wrapRet && !wrapRet.classList.contains('hidden') && document.getElementById('cobroRetencionIVA').checked;
-  // Si hay retencion, el 75% del IVA de los documentos seleccionados
-  // NUNCA entra como dinero (se cubre con un comprobante de retencion) -
-  // eso se resta directamente del monto esperado a depositar, para que
-  // el documento SI quede saldado en su totalidad al depositar solo el
-  // 25% del IVA restante, sin dejar una diferencia pendiente que alguien
-  // tenga que "perdonar" despues a mano.
+  // Si hay retencion, el 75% del IVA de los documentos seleccionados NUNCA
+  // entra como dinero (se cubre con un comprobante de retencion) - ese
+  // monto se abona de una vez a los documentos, sin tener que depositarse.
   var ivaRetenidoEsperado=hayRetencion?Math.round(ivaTotal*0.75*100)/100:0;
-  var esperado=Math.round((sumaDocs*(1-descPct/100)-ivaRetenidoEsperado)*100)/100;
-  var diferencia=montoUSD-esperado;
+  // El descuento se aplica sobre el dinero REALMENTE depositado (no sobre
+  // el total de los documentos seleccionados), para que un abono PARCIAL
+  // con descuento abone el monto que le corresponde y no el total de los
+  // documentos. Ej: $900 pagados con 10% de descuento abonan $1,000 a los
+  // documentos (igual que en un pago completo: $900 / (1-10%) = $1,000).
+  var pctParaDividir=Math.min(descPct,99.99);
+  var montoAbonado=Math.round((ivaRetenidoEsperado+montoUSD/(1-pctParaDividir/100))*100)/100;
+  var quedaPendiente=Math.round((sumaDocs-montoAbonado)*100)/100;
   var html='<div style="background:#f7f8fb;border-radius:10px;padding:14px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#666;margin-bottom:6px">'+
       '<span>'+(cobroDepositos.length>1?('Total de '+cobroDepositos.length+' depositos'):'Monto pagado')+'</span>'+
@@ -13664,22 +14864,27 @@ function calcularValidacionCobro(){
     '</div>';
   if(hayRetencion && ivaRetenidoEsperado>0){
     html+='<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--ambar);padding-bottom:6px">'+
-      '<span>IVA retenido (75%, no entra en dinero)</span>'+
-      '<strong>-$'+formatearNumeroConMiles(ivaRetenidoEsperado,2)+'</strong>'+
+      '<span>IVA retenido (75%, se abona sin depositarse)</span>'+
+      '<strong>+$'+formatearNumeroConMiles(ivaRetenidoEsperado,2)+'</strong>'+
     '</div>';
   }
   html+='<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#666;padding-bottom:10px;border-bottom:1px solid var(--borde)">'+
-      '<span>Esperado en dinero'+(hayRetencion?' (ya sin la retencion)':' (con descuento)')+'</span>'+
-      '<strong style="font-size:18px">$'+formatearNumeroConMiles(esperado,2)+'</strong>'+
+      '<span>Se abona a los documentos'+(descPct>0?' (con descuento)':'')+'</span>'+
+      '<strong style="font-size:18px">$'+formatearNumeroConMiles(montoAbonado,2)+'</strong>'+
     '</div>';
   if(cobroDocsSeleccionados.length===0){
     html+='<div style="font-size:13px;color:var(--ambar);text-align:center;padding-top:10px;font-weight:600">Selecciona al menos un documento</div>';
-  } else if(Math.abs(diferencia)<0.01){
-    html+='<div style="text-align:center;padding-top:10px"><span class="tag tag-v" style="font-size:13px;padding:6px 14px">✓ Coincide</span></div>';
+  } else if(Math.abs(quedaPendiente)<0.01){
+    html+='<div style="text-align:center;padding-top:10px"><span class="tag tag-v" style="font-size:13px;padding:6px 14px">✓ Queda saldado</span></div>';
+  } else if(quedaPendiente>0){
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px">'+
+      '<span style="font-size:13px;color:#666;font-weight:600">Quedara pendiente</span>'+
+      '<strong style="font-size:20px;color:var(--ambar)">$'+formatearNumeroConMiles(quedaPendiente,2)+'</strong>'+
+    '</div>';
   } else {
     html+='<div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px">'+
-      '<span style="font-size:13px;color:var(--rojo);font-weight:600">Diferencia '+(diferencia>0?'(a favor del cliente)':'(falta)')+'</span>'+
-      '<strong style="font-size:20px;color:var(--rojo)">'+(diferencia>0?('($'+formatearNumeroConMiles(Math.abs(diferencia),2)+')'):('$'+formatearNumeroConMiles(Math.abs(diferencia),2)))+'</strong>'+
+      '<span style="font-size:13px;color:var(--verde);font-weight:600">Saldo a favor del cliente</span>'+
+      '<strong style="font-size:20px;color:var(--verde)">$'+formatearNumeroConMiles(Math.abs(quedaPendiente),2)+'</strong>'+
     '</div>';
   }
   html+='</div>';
@@ -13712,6 +14917,7 @@ function guardarPagoCobro(){
 
   var depositosFinal=[];
   var montoUSDTotal=0;
+  var hayDifTasa=false;
   for(var i=0;i<cobroDepositos.length;i++){
     var d=cobroDepositos[i];
     var fechaDeposito=d.fecha||fecha;
@@ -13728,6 +14934,21 @@ function guardarPagoCobro(){
       dCopia.referencia=referencia;
       dCopia.tasa=tasa;
       dCopia.montoUSD=monto/tasa;
+      // Registro de control de la tasa: se guarda la tasa que correspondia
+      // segun el historial BCV y si la usada difiere, para que la oficina
+      // pueda verificarlo
+      var cmpT=compararTasaConHistorial(tasa, fechaDeposito);
+      if(cmpT.ref){
+        dCopia.tasaReferencia=cmpT.ref.tasa;
+        dCopia.tasaReferenciaFecha=cmpT.ref.fechaTasa;
+        dCopia.tasaDifiere=cmpT.difiere;
+        dCopia.tasaDifPct=cmpT.difPct;
+        dCopia.tasaOrigen=cmpT.difiere?'manual':'historial';
+        if(cmpT.difiere) hayDifTasa=true;
+      } else {
+        dCopia.tasaOrigen='manual';
+        dCopia.tasaSinReferencia=true;
+      }
     } else {
       dCopia.montoUSD=monto;
     }
@@ -13744,11 +14965,20 @@ function guardarPagoCobro(){
     if(d){ docsSeleccionadosInfo.push({numero:d.numero, saldo:d.saldo, vencimiento:d.vencimiento, emision:d.emision, iva:d.iva||0}); sumaDocs+=d.saldo; ivaTotalDocs+=(d.iva||0); }
   }
   // Si hay retencion, el 75% del IVA de los documentos nunca entra en
-  // dinero (se cubre con un comprobante de retencion) - se resta del
-  // monto esperado para que el documento SI quede saldado completo al
-  // confirmar, sin dejar una diferencia manual pendiente por "perdonar".
+  // dinero (se cubre con un comprobante de retencion) - ese monto se
+  // abona de una vez a los documentos, sin tener que depositarse.
   var ivaRetenidoDelPago=retencionMarcada?Math.round(ivaTotalDocs*0.75*100)/100:0;
-  var esperado=Math.round((sumaDocs*(1-descPct/100)-ivaRetenidoDelPago)*100)/100;
+  // El descuento se aplica sobre el dinero REALMENTE depositado, no sobre
+  // el total de los documentos seleccionados, para que un abono PARCIAL
+  // con descuento abone solo lo que le corresponde (ver calcularValidacionCobro).
+  var pctParaDividirGuardar=Math.min(descPct,99.99);
+  var montoAbonado=Math.round((ivaRetenidoDelPago+montoUSDTotal/(1-pctParaDividirGuardar/100))*100)/100;
+  // montoEsperado se deriva de montoAbonado (no al reves) para que
+  // "diferencia = montoEsperado - montoUSD" (usada en todo el resto del
+  // flujo de confirmacion/aplicacion a documentos) sea exactamente
+  // "lo que queda pendiente en los documentos" = sumaDocs - montoAbonado,
+  // tanto para pagos completos como para abonos parciales.
+  var esperado=Math.round((montoUSDTotal+sumaDocs-montoAbonado)*100)/100;
   var cliInfo=obtenerClientesConDeuda().find(function(x){return x.id===cobroClienteSeleccionado;});
 
   var esEdicion=!!pagoEditandoId;
@@ -13764,9 +14994,11 @@ function guardarPagoCobro(){
     fecha:fecha,
     fechaRegistroISO:fechaRegistroISO,
     depositos:depositosFinal,
+    tasaConDiferencia:hayDifTasa,
     montoUSD:montoUSDTotal,
     descuentoPct:descPct,
     montoEsperado:esperado,
+    montoAbonado:montoAbonado,
     sumaDocsOriginal:sumaDocs,
     retencionIVA:retencionMarcada,
     vendedor:(esEdicion && pagoOriginal)?pagoOriginal.vendedor:VEND.codigo,
@@ -13884,6 +15116,14 @@ function filtroCobroTodo(){
   renderHistorialCobros();
 }
 
+// Fecha en que el pago se REGISTRO (proceso) en el sistema. Es la que usa la
+// pantalla de Cobranza y sus exportaciones para filtrar por rango, igual que
+// "Pagos hoy" y las comisiones. Los pagos guardados antes de que existiera
+// ese dato usan la fecha del pago como respaldo.
+function fechaProcesoPagoCobranza(p){
+  return p.fechaRegistroISO||p.fecha;
+}
+
 function getPagosCobranzaFiltrados(){
   var desde=document.getElementById('filtroCobroDesde').value;
   var hasta=document.getElementById('filtroCobroHasta').value;
@@ -13892,8 +15132,9 @@ function getPagosCobranzaFiltrados(){
   var filtCliEl=document.getElementById('filtroCobroCliente');
   var filtCli=filtCliEl?filtCliEl.value.trim().toLowerCase():'';
   return PAGOS_COBRANZA.filter(function(p){
-    if(desde && p.fecha<desde) return false;
-    if(hasta && p.fecha>hasta) return false;
+    var fProc=fechaProcesoPagoCobranza(p);
+    if(desde && fProc<desde) return false;
+    if(hasta && fProc>hasta) return false;
     if(estadoF!=='todos' && p.estado!==estadoF) return false;
     if(filtVend && filtVend.value && filtVend.value!=='todos' && p.vendedor!==filtVend.value) return false;
     if(filtCli){
@@ -13922,7 +15163,7 @@ function renderPagoCobroCard(p){
         (p.depositos.length>1?('Deposito '+(idx+1)+(d.fecha&&d.fecha!==p.fecha?' ('+d.fecha+')':'')+': '):'')+
         (esT?('Transferencia - '+BANCOS_COBRO[d.banco]+' - Ref: '+d.referencia):(d.formaPago==='efectivo'?'Efectivo':'Divisas'))+
         ' - $'+formatearNumeroConMiles(d.montoUSD||0,2)+
-      '</div>';
+      '</div>'+htmlDiferenciaTasaPago(d, p.fecha);
     });
   }
   var comprobHtml='';
@@ -13972,7 +15213,7 @@ function renderPagoCobroCard(p){
       '</div>'+
       badgeEstadoCobro(p.estado)+
     '</div>'+
-    '<div style="font-size:13px;margin-top:6px">Monto total: <strong>$'+formatearNumeroConMiles(p.montoUSD,2)+'</strong>'+(p.descuentoPct?' | Desc. '+p.descuentoPct+'%':'')+' | Esperado: $'+formatearNumeroConMiles(p.montoEsperado,2)+'</div>'+
+    '<div style="font-size:13px;margin-top:6px">Monto pagado: <strong>$'+formatearNumeroConMiles(p.montoUSD,2)+'</strong>'+(p.descuentoPct?' | Desc. '+p.descuentoPct+'%':'')+' | Se abona: $'+formatearNumeroConMiles((p.montoAbonado!==undefined&&p.montoAbonado!==null)?p.montoAbonado:p.montoEsperado,2)+'</div>'+
     saldoAjustLine+
     (p.estado==='rechazado' && p.motivoRechazo?'<div style="font-size:12px;color:var(--rojo);margin-top:4px">Motivo: '+p.motivoRechazo+'</div>':'')+
     (comprobHtml?'<div style="margin-top:8px">'+comprobHtml+'</div>':'')+
@@ -14101,11 +15342,12 @@ function abrirConfirmarPago(pagoId){
   if(!pago){ toast('Pago no encontrado'); return; }
   pagoConfirmandoId=pagoId;
   var diferencia=Math.round((pago.montoEsperado-pago.montoUSD)*100)/100;
-  var resumenHtml='Monto pagado: <strong>$'+formatearNumeroConMiles(pago.montoUSD,2)+'</strong> &nbsp;|&nbsp; Esperado: <strong>$'+formatearNumeroConMiles(pago.montoEsperado,2)+'</strong>';
+  var abonadoMostrar=(pago.montoAbonado!==undefined&&pago.montoAbonado!==null)?pago.montoAbonado:pago.montoEsperado;
+  var resumenHtml='Monto pagado: <strong>$'+formatearNumeroConMiles(pago.montoUSD,2)+'</strong> &nbsp;|&nbsp; Se abona a los documentos: <strong>$'+formatearNumeroConMiles(abonadoMostrar,2)+'</strong>';
   if(Math.abs(diferencia)>0.009){
-    resumenHtml+='<br>Diferencia: <strong style="color:'+(diferencia>0?'var(--rojo)':'var(--verde)')+'">'+(diferencia<0?('($'+formatearNumeroConMiles(Math.abs(diferencia),2)+')'):('$'+formatearNumeroConMiles(diferencia,2)))+'</strong> '+(diferencia>0?'(quedaria pendiente por cobrar)':'(a favor del cliente, quedaria como saldo negativo)');
+    resumenHtml+='<br>'+(diferencia>0?'Quedaria pendiente':'Saldo a favor del cliente')+': <strong style="color:'+(diferencia>0?'var(--ambar)':'var(--verde)')+'">$'+formatearNumeroConMiles(Math.abs(diferencia),2)+'</strong>';
   } else {
-    resumenHtml+='<br><span style="color:var(--verde);font-weight:600">✓ El monto coincide exacto</span>';
+    resumenHtml+='<br><span style="color:var(--verde);font-weight:600">✓ Queda saldado</span>';
   }
   document.getElementById('confirmarPagoResumen').innerHTML=resumenHtml;
   document.getElementById('confirmarPagoSaldoPendiente').value=diferencia.toFixed(2);
@@ -14415,7 +15657,7 @@ function aplicarFormatoNumerico(ws, row, col, formato){
 // para una lista de pagos, con una fila por deposito y una nota aparte
 // cuando se uso un documento con saldo a favor como abono.
 function construirHojaCobros(lista, tituloHoja){
-  var headers=['Fecha del pago','Fecha de registro','Cod cliente','Cliente','Documento','Vendedor','Monto en Bs','Banco','Ref','Tasa','Monto Pagado Equivalente en $','Descuento','Retencion IVA','Saldo','Estado','Nro Comp'];
+  var headers=['Fecha del pago','Fecha de registro','Cod cliente','Cliente','Documento','Vendedor','Monto en Bs','Banco','Ref','Tasa','Monto Pagado Equivalente en $','Descuento','Retencion IVA','Saldo','Estado','Nro Comp','Tasa segun historial BCV','Diferencia de tasa'];
   var rows=[['PAGOS REPORTADOS'+(tituloHoja?(' - '+tituloHoja):'')]];
   var notaRowIndices=[]; // filas de "nota de credito aplicado" (verde)
   var tituloTablaRowIndices=[]; // filas de titulo de cada tabla (Nota / Fiscal)
@@ -14462,7 +15704,9 @@ function construirHojaCobros(lista, tituloHoja){
           p.retencionIVA?'Si':'No',
           saldoPendiente,
           p.estado,
-          '' // Nro Comp: vacio, para control interno
+          '', // Nro Comp: vacio, para control interno
+          (function(){ if(!esT) return null; var cT=compararTasaConHistorial(parseFloat(d.tasa)||0, d.fecha||p.fecha); if(cT.ref) return cT.ref.tasa; return d.tasaReferencia>0?d.tasaReferencia:null; })(),
+          (function(){ var inf=infoDiferenciaTasaPago(d, p.fecha); return inf?('Dif '+(inf.pct>0?'+':'')+inf.pct.toFixed(2)+'%: deberia ser '+inf.ref.toFixed(2)+(inf.mayor1?' (MAYOR A 1%)':'')):''; })()
         ]);
       }
       // Si alguno de los documentos de este pago tenia saldo NEGATIVO (un
@@ -14509,6 +15753,7 @@ function construirHojaCobros(lista, tituloHoja){
     aplicarFormatoNumerico(ws, rd, 10, '#,##0.00');
     aplicarFormatoNumerico(ws, rd, 11, '0.0%');
     aplicarFormatoNumerico(ws, rd, 13, '#,##0.00_);(#,##0.00)');
+    aplicarFormatoNumerico(ws, rd, 16, '#,##0.00');
   }
 
   // Resaltar en verde las filas de nota de credito aplicado
@@ -14518,7 +15763,7 @@ function construirHojaCobros(lista, tituloHoja){
     if(ws[addrNota]) ws[addrNota].s={font:{italic:true,color:{rgb:'1A7A4C'}},fill:{fgColor:{rgb:'F0FBF6'}}};
   }
 
-  ws['!cols']=[{wch:11},{wch:13},{wch:10},{wch:26},{wch:14},{wch:22},{wch:13},{wch:12},{wch:10},{wch:9},{wch:16},{wch:10},{wch:12},{wch:13},{wch:12},{wch:10}];
+  ws['!cols']=[{wch:11},{wch:13},{wch:10},{wch:26},{wch:14},{wch:22},{wch:13},{wch:12},{wch:10},{wch:9},{wch:16},{wch:10},{wch:12},{wch:13},{wch:12},{wch:10},{wch:14},{wch:34}];
   return ws;
 }
 
@@ -14530,8 +15775,9 @@ function ejecutarExportarCobrosExcel(){
   var periodoTxt=desde?(desde===hasta?desde:('Del '+desde+' al '+hasta)):'Todo el periodo';
 
   var lista=PAGOS_COBRANZA.filter(function(p){
-    if(desde && p.fecha<desde) return false;
-    if(hasta && p.fecha>hasta) return false;
+    var fProc=fechaProcesoPagoCobranza(p);
+    if(desde && fProc<desde) return false;
+    if(hasta && fProc>hasta) return false;
     if(modoAnulados==='excluir' && p.estado==='anulado') return false;
     if(modoAnulados==='solo' && p.estado!=='anulado') return false;
     return true;
@@ -14577,8 +15823,9 @@ function ejecutarExportarCobrosExcelEstilo(){
   var periodoTxt=desde?(desde===hasta?desde:('Del '+desde+' al '+hasta)):'Todo el periodo';
 
   var lista=PAGOS_COBRANZA.filter(function(p){
-    if(desde && p.fecha<desde) return false;
-    if(hasta && p.fecha>hasta) return false;
+    var fProc=fechaProcesoPagoCobranza(p);
+    if(desde && fProc<desde) return false;
+    if(hasta && fProc>hasta) return false;
     if(modoAnulados==='excluir' && p.estado==='anulado') return false;
     if(modoAnulados==='solo' && p.estado!=='anulado') return false;
     return true;
