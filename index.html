@@ -797,6 +797,38 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <button class="btn btn-s btn-sm" onclick="verClientesProvisionales()">Ver clientes con codigo provisional</button>
           <button class="btn btn-s btn-sm" onclick="analizarStorageClientesHuerfanos()">Buscar documentos huerfanos en Storage</button>
           <button class="btn btn-s btn-sm" onclick="verRifsDuplicados()">Buscar RIFs duplicados</button>
+          <button class="btn btn-s btn-sm" onclick="buscarPedidosProvisionalesHuerfanos()">Reparar pedidos con codigo provisional</button>
+          <button class="btn btn-s btn-sm" onclick="limpiarPedidosDuplicadosEntreVendedores()">Eliminar pedidos duplicados</button>
+          <button class="btn btn-s btn-sm" onclick="abrirPedidosDeCliente()">Ver pedidos de un cliente</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: pedidos de un cliente (todos los vendedores) -->
+    <div class="modal-bg" id="mPedidosCliente">
+      <div class="modal" style="max-width:720px">
+        <h3>Pedidos de un cliente</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:10px">Busca por nombre, codigo o RIF. Muestra todos los pedidos guardados en TODOS los vendedores (incluye los que tienen codigo provisional) y marca los posibles duplicados (mismo monto y fecha).</p>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <input type="text" id="pedCliBusq" placeholder="Ej: estrella de galicia" style="flex:1;padding:8px;border:1px solid var(--borde);border-radius:8px" onkeydown="if(event.key==='Enter') buscarPedidosDeCliente()">
+          <button class="btn btn-p btn-sm" onclick="buscarPedidosDeCliente()">Buscar</button>
+        </div>
+        <div id="pedCliContenido" style="max-height:55vh;overflow-y:auto"></div>
+        <div style="margin-top:16px">
+          <button class="btn btn-s" onclick="cerrarModal('mPedidosCliente')">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: pedidos con codigo provisional huerfano -->
+    <div class="modal-bg" id="mPedidosHuerfanos">
+      <div class="modal" style="max-width:640px">
+        <h3>Pedidos con codigo provisional</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:10px">Busca pedidos que quedaron guardados con un codigo provisional (NEW-...) de un cliente que ya no existe como provisional (porque se vinculo a su codigo de Profit). Por eso en Reportes aparece el mismo cliente dos veces. Se cruzan por RIF (o por nombre exacto) con el cliente oficial.</p>
+        <div id="pedidosHuerfanosContenido" style="max-height:60vh;overflow-y:auto"></div>
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-p" id="btnAplicarHuerfanos" onclick="aplicarReparacionPedidosHuerfanos()" style="display:none">Corregir pedidos</button>
+          <button class="btn btn-s" onclick="cerrarModal('mPedidosHuerfanos')">Cerrar</button>
         </div>
       </div>
     </div>
@@ -1250,7 +1282,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <label>Cliente</label>
         <input type="text" id="rptClienteBusq" placeholder="Todos los clientes (escribe para buscar)" autocomplete="off" oninput="filtrarRptClienteOpciones()" onfocus="filtrarRptClienteOpciones()" onblur="setTimeout(function(){var d=document.getElementById('rptClienteOpciones'); if(d) d.style.display='none';},150)">
         <input type="hidden" id="rptCliente" value="todos">
-        <div id="rptClienteOpciones" style="display:none;position:absolute;z-index:20;background:#fff;border:1px solid var(--borde);border-radius:8px;max-height:220px;overflow-y:auto;width:100%;box-shadow:0 4px 12px rgba(0,0,0,.12);font-size:13px"></div>
+        <div id="rptClienteOpciones" style="display:none;position:absolute;top:100%;left:0;margin-top:2px;z-index:20;background:#fff;border:1px solid var(--borde);border-radius:8px;max-height:220px;overflow-y:auto;width:100%;box-shadow:0 4px 12px rgba(0,0,0,.12);font-size:13px"></div>
       </div>
     </div>
 
@@ -2481,6 +2513,7 @@ function cargarTodosFirebase(callback, filtroIds){
     }
     Promise.all(promesas).then(function(docs){
       var todos=[];
+      var vistosDup={};
       for(var i=0;i<docs.length;i++){
         var doc=docs[i];
         var vid=vendIds[i];
@@ -2489,6 +2522,7 @@ function cargarTodosFirebase(callback, filtroIds){
           var peds=[];
           try{ peds=data.pedidos?JSON.parse(data.pedidos):[]; }catch(e){}
           for(var j=0;j<peds.length;j++){
+            var teniaVendedor=!!peds[j].vendedor;
             if(!peds[j].vendedor) peds[j].vendedor=vid;
             // Buscar el nombre segun el codigo REAL guardado en el pedido
             // (no segun el documento de Firestore de donde se leyo),
@@ -2499,6 +2533,17 @@ function cargarTodosFirebase(callback, filtroIds){
               if(VENDEDORES[vk].id===pedVid){vObjPed=VENDEDORES[vk];break;}
             }
             peds[j].vendedorNombre = vObjPed ? vObjPed.nombre : ('VEND '+pedVid);
+            // Un mismo pedido (mismo ID, monto y fecha) que aparece en mas de
+            // un documento es una copia accidental: se cuenta UNA sola vez,
+            // prefiriendo la copia del documento de su vendedor dueno.
+            var kDup=String(peds[j].id)+'|'+peds[j].monto+'|'+peds[j].fecha;
+            var esDuenoDoc=teniaVendedor && peds[j].vendedor===vid;
+            if(peds[j].id!==undefined && vistosDup[kDup]!==undefined){
+              var prev=vistosDup[kDup];
+              if(esDuenoDoc && !prev.esDueno){ todos[prev.idx]=peds[j]; prev.esDueno=true; }
+              continue;
+            }
+            if(peds[j].id!==undefined) vistosDup[kDup]={idx:todos.length, esDueno:esDuenoDoc};
             todos.push(peds[j]);
           }
         }
@@ -2639,6 +2684,20 @@ function getClientesParaVendedor(){
       if(!existe) base.unshift(nuevosMios[i]);
     }
   }
+  // Un cliente provisional (NEW-...) cuyo RIF ya existe como cliente oficial
+  // de Profit no se ofrece mas: asi no se pueden tomar pedidos con el codigo
+  // provisional viejo (copia desactualizada) cuando ya hay codigo oficial.
+  var rifsOficiales={};
+  for(var ro=0;ro<CLIENTES_PROFIT.length;ro++){
+    if(esNuevo(CLIENTES_PROFIT[ro])) continue;
+    var rnOf=normalizarRif(CLIENTES_PROFIT[ro].rif);
+    if(rnOf) rifsOficiales[rnOf]=true;
+  }
+  base=base.filter(function(c){
+    if(!esNuevo(c)) return true;
+    var rnC=normalizarRif(c.rif);
+    return !(rnC && rifsOficiales[rnC]);
+  });
   return base;
 }
 function nl(){return String.fromCharCode(10);}
@@ -2783,6 +2842,7 @@ function cargarPedidosTodos(){
 }
 
 function init(){
+  revisarVersionApp();
   var lCodEl=document.getElementById('lCod');
   if(lCodEl) lCodEl.disabled=true;
   // IMPORTANTE: antes esto solo se ejecutaba si ya habia una sesion guardada
@@ -2795,6 +2855,13 @@ function init(){
     if(lCodEl) lCodEl.disabled=false;
     VEND=lsGet('tutim_vend',null);
     if(VEND){
+      // Si la ultima actividad fue hace mas del tiempo de inactividad, no se
+      // restaura la sesion: se pide el PIN otra vez
+      var ultAct=0; try{ ultAct=parseInt(localStorage.getItem('tutim_last')||'0',10)||0; }catch(e){}
+      if(ultAct && Date.now()-ultAct>INACT_MS){
+        cerrarSesion();
+        return;
+      }
       CLIENTES=getClientesParaVendedor();
       var verTodos=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
       // SOLO cargar pedidos propios del vendedor — nunca mezclar con otros
@@ -2934,6 +3001,7 @@ function verDetalleComisionVendedor(id){
 }
 
 function mostrarApp(){
+  INACT_ULT_GUARDADO=0; registrarActividadInact(); iniciarControlInactividad();
   var verTodos=(VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20');
   var alcanceApp=alcanceVendedoresVisibles(); // null = sin restriccion (admin), o array de codigos (supervisor)
   var cargarDatosMultiples=esVistaMultiVendedor(); // admin completo, o supervisor con equipo vinculado
@@ -7576,6 +7644,10 @@ function filtrarRptClienteOpciones(){
   var q=(document.getElementById('rptClienteBusq').value||'').trim().toLowerCase();
   var cont=document.getElementById('rptClienteOpciones');
   if(!cont) return;
+  // Si se borra todo el texto, vuelve a "Todos los clientes" (antes quedaba
+  // el cliente anterior seleccionado aunque el cuadro estuviera vacio)
+  var hid=document.getElementById('rptCliente');
+  if(q==='' && hid && hid.value!=='todos'){ hid.value='todos'; renderReportes(); }
   var filtrados = q ? RPT_CLIENTES_DISPONIBLES.filter(function(c){
     return c.nombre.toLowerCase().indexOf(q)>=0 || c.id.toLowerCase().indexOf(q)>=0;
   }) : RPT_CLIENTES_DISPONIBLES;
@@ -12441,6 +12513,7 @@ function vincularClienteManualmente(idx, oficialId){
       pagosCobranza: data.pagosCobranza||'[]',
       ultimaActualizacion: new Date().toISOString()
     }, {merge:true}).then(function(){
+      reasignarPedidosProvisionalesEnTodos([{provId:cn.id, oficial:oficial}]);
       db.collection('config').doc('clientes').set({
         data: JSON.stringify(CLIENTES_PROFIT),
         actualizado: new Date().toISOString()
@@ -12519,6 +12592,8 @@ function _guardarClientesBaseInterno(nuevaBase){
   // Esto copia los documentos adjuntos al cliente oficial, reasigna sus pedidos
   // y elimina el registro fantasma "NEW-xxxx".
   vincularClientesNuevosPorRif(nuevaBase, function(totalVinculados, vinculadosDetalle){
+    // Tambien se reasignan los pedidos de OTROS vendedores que apuntaban al codigo provisional
+    reasignarPedidosProvisionalesEnTodos(vinculadosDetalle.map(function(v){ return {provId:v.provisionalId, oficial:cliMapNuevo[v.oficialId]}; }).filter(function(x){ return x.oficial; }));
     if(estadoEl) estadoEl.innerHTML='<span style="color:#aaa">Guardando en Firebase...</span>';
     db.collection('config').doc('clientes').set({
       data:JSON.stringify(nuevaBase),
@@ -12593,6 +12668,232 @@ function copiarDatosDeProvisionalAOficialYReasignarPedidos(cn, oficial, peds){
       peds[p].cliente.esNuevo=false;
     }
   }
+}
+
+// Elimina las copias accidentales de un mismo pedido (mismo ID, monto y
+// fecha) que quedaron guardadas en mas de un documento de vendedor. Conserva
+// la copia del vendedor dueno. soloIds (opcional): {id:true} para limitarse
+// a esos pedidos. callback(cantidadEliminada)
+function eliminarCopiasDuplicadasDePedidos(soloIds, callback, soloContar){
+  db.collection('vendedores').get().then(function(snap){
+    var datos=snap.docs.map(function(doc){
+      var peds=[]; try{ peds=JSON.parse(doc.data().pedidos||'[]'); }catch(e){}
+      return {doc:doc, vid:doc.id, peds:peds, borrar:{}};
+    });
+    var porClave={};
+    datos.forEach(function(d){
+      d.peds.forEach(function(p,i){
+        if(!p || p.id===undefined) return;
+        if(soloIds && !soloIds[String(p.id)]) return;
+        var k=String(p.id)+'|'+p.monto+'|'+p.fecha;
+        (porClave[k]=porClave[k]||[]).push({d:d,i:i,p:p});
+      });
+    });
+    var total=0;
+    Object.keys(porClave).forEach(function(k){
+      var g=porClave[k]; if(g.length<2) return;
+      var dueno=-1;
+      for(var x=0;x<g.length;x++){ if(g[x].p.vendedor && g[x].p.vendedor===g[x].d.vid){ dueno=x; break; } }
+      if(dueno<0) dueno=0;
+      for(var x=0;x<g.length;x++){ if(x!==dueno){ g[x].d.borrar[g[x].i]=true; total++; } }
+    });
+    if(soloContar || total===0){ if(callback) callback(total, datos); return; }
+    var escrituras=[];
+    datos.forEach(function(d){
+      if(Object.keys(d.borrar).length===0) return;
+      var nuevos=d.peds.filter(function(p,i){ return !d.borrar[i]; });
+      escrituras.push(d.doc.ref.set({pedidos:JSON.stringify(nuevos), ultimaActualizacion:new Date().toISOString()},{merge:true}));
+    });
+    Promise.all(escrituras).then(function(){ if(callback) callback(total); }).catch(function(){ toast('Error guardando en Firebase'); if(callback) callback(0); });
+  }).catch(function(){ toast('Error leyendo Firebase'); if(callback) callback(0); });
+}
+
+function limpiarPedidosDuplicadosEntreVendedores(){
+  eliminarCopiasDuplicadasDePedidos(null, function(n){
+    if(n===0){ toast('No hay pedidos duplicados entre vendedores'); return; }
+    if(!confirm('Se encontraron '+n+' copia(s) duplicada(s) de pedidos (mismo ID, monto y fecha en mas de un vendedor). Se conserva la copia del vendedor dueno y se eliminan las demas. ¿Eliminar?')) return;
+    eliminarCopiasDuplicadasDePedidos(null, function(m){
+      toast(m+' copia(s) duplicada(s) eliminada(s). Recarga la app para ver los reportes actualizados.');
+    });
+  }, true);
+}
+
+// ═══ Pedidos de un cliente en TODOS los vendedores (diagnostico de duplicados) ═══
+var FILAS_PEDIDOS_CLIENTE=[];
+function abrirPedidosDeCliente(){
+  document.getElementById('pedCliContenido').innerHTML='';
+  document.getElementById('mPedidosCliente').classList.add('open');
+  setTimeout(function(){ var i=document.getElementById('pedCliBusq'); if(i) i.focus(); },50);
+}
+
+function buscarPedidosDeCliente(){
+  var q=(document.getElementById('pedCliBusq').value||'').trim().toLowerCase();
+  var qr=normalizarRif(q);
+  var cont=document.getElementById('pedCliContenido');
+  if(q.length<2){ cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Escribe al menos 2 letras</div>'; return; }
+  cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Buscando en todos los vendedores...</div>';
+  db.collection('vendedores').get().then(function(snap){
+    var filas=[];
+    snap.docs.forEach(function(doc){
+      var peds=[]; try{ peds=JSON.parse(doc.data().pedidos||'[]'); }catch(e){}
+      peds.forEach(function(p){
+        var c=p.cliente; if(!c) return;
+        var ok=(c.nombre||'').toLowerCase().indexOf(q)>=0 || String(c.id||'').toLowerCase().indexOf(q)>=0 || (qr.length>=4 && normalizarRif(c.rif).indexOf(qr)>=0);
+        if(ok) filas.push({docVid:doc.id, p:p});
+      });
+    });
+    filas.sort(function(a,b){
+      var fa=fechaToISO(a.p.fecha)+' '+(a.p.hora||''), fb=fechaToISO(b.p.fecha)+' '+(b.p.hora||'');
+      return fb>fa?1:fb<fa?-1:0;
+    });
+    // posibles duplicados: mismo monto y fecha
+    var cuenta={};
+    filas.forEach(function(f){ var k=f.p.monto+'|'+f.p.fecha; cuenta[k]=(cuenta[k]||0)+1; });
+    FILAS_PEDIDOS_CLIENTE=filas;
+    if(filas.length===0){ cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">No se encontraron pedidos</div>'; return; }
+    var puedeBorrar=(VEND.codigo==='01'||VEND.codigo==='20');
+    var html='<div style="font-weight:600;font-size:13px;color:var(--azul);margin-bottom:8px">'+filas.length+' pedido(s) encontrados</div>';
+    filas.forEach(function(f,i){
+      var p=f.p, dup=cuenta[p.monto+'|'+p.fecha]>1;
+      html+='<div style="border:1px solid '+(dup?'var(--ambar)':'var(--borde)')+';border-radius:8px;padding:10px;margin-bottom:8px;'+(p.anulado?'opacity:.6':'')+'">'+
+        '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><strong style="font-size:13px">'+(p.cliente.nombre||'')+' <span style="color:#999;font-size:11px">(Cod: '+p.cliente.id+')</span></strong>'+
+        (dup?'<span class="tag" style="background:#FFF3CD;color:#856404;font-size:11px">Posible duplicado</span>':'')+'</div>'+
+        '<div style="font-size:12px;color:#666;margin-top:3px">'+p.fecha+(p.hora?' '+p.hora:'')+' | $'+formatearNumeroConMiles(p.monto||0,2)+' | '+(p.bultos||0)+' bultos'+(p.anulado?' | <span style="color:var(--rojo)">ANULADO</span>':'')+(p.recibidoOficina?' | Recibido x oficina':'')+'</div>'+
+        '<div style="font-size:11px;color:#888;margin-top:2px">Pedido ID: '+p.id+' | Vendedor del pedido: '+(p.vendedor||'(sin dato)')+' | Guardado en el documento del vendedor: <strong>'+f.docVid+'</strong></div>'+
+        (puedeBorrar?'<button onclick="eliminarFilaPedidoCliente('+i+')" style="margin-top:6px;background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Eliminar este pedido</button>':'')+
+      '</div>';
+    });
+    cont.innerHTML=html;
+  }).catch(function(){ cont.innerHTML='<div style="color:var(--rojo);font-size:13px;text-align:center;padding:12px">Error leyendo Firebase</div>'; });
+}
+
+function eliminarFilaPedidoCliente(i){
+  var f=FILAS_PEDIDOS_CLIENTE[i];
+  if(!f || !(VEND.codigo==='01'||VEND.codigo==='20')) return;
+  if(!confirm('Se ELIMINARA definitivamente este pedido ('+f.p.fecha+', $'+formatearNumeroConMiles(f.p.monto||0,2)+') del documento del vendedor '+f.docVid+'. Esta accion no se puede deshacer. ¿Continuar?')) return;
+  var ref=db.collection('vendedores').doc(f.docVid);
+  ref.get().then(function(doc){
+    var peds=[]; try{ peds=JSON.parse(doc.data().pedidos||'[]'); }catch(e){}
+    var idx=-1;
+    for(var k=0;k<peds.length;k++){ if(String(peds[k].id)===String(f.p.id) && peds[k].monto===f.p.monto && peds[k].fecha===f.p.fecha && (peds[k].cliente&&peds[k].cliente.id)===f.p.cliente.id){ idx=k; break; } }
+    if(idx<0){ toast('No se encontro el pedido (ya fue eliminado o cambio)'); buscarPedidosDeCliente(); return; }
+    peds.splice(idx,1);
+    return ref.set({pedidos:JSON.stringify(peds), ultimaActualizacion:new Date().toISOString()},{merge:true}).then(function(){
+      toast('Pedido eliminado. Recarga la app para ver los reportes actualizados.');
+      buscarPedidosDeCliente();
+    });
+  }).catch(function(){ toast('Error guardando en Firebase'); });
+}
+
+// Reasigna, en los pedidos de TODOS los vendedores (no solo del que creo el
+// cliente provisional), cualquier pedido que apunte a un codigo provisional
+// ya vinculado, para que no queden pedidos "huerfanos" con el codigo NEW-.
+// pares: [{provId, oficial}]
+function reasignarPedidosProvisionalesEnTodos(pares, callback){
+  if(!pares || !pares.length){ if(callback) callback(0); return; }
+  var mapa={};
+  pares.forEach(function(p){ mapa[p.provId]=p.oficial; });
+  db.collection('vendedores').get().then(function(snap){
+    var docs=snap.docs, pendientes=docs.length, total=0;
+    if(pendientes===0){ if(callback) callback(0); return; }
+    var idsTocados={};
+    function fin(){
+      pendientes--;
+      if(pendientes<=0){
+        // Si el pedido corregido tenia una copia accidental en otro vendedor,
+        // al unificar el codigo quedarian dos copias iguales: se limpia.
+        if(Object.keys(idsTocados).length>0) eliminarCopiasDuplicadasDePedidos(idsTocados, function(){ if(callback) callback(total); });
+        else if(callback) callback(total);
+      }
+    }
+    docs.forEach(function(doc){
+      var data=doc.data(), peds=[];
+      try{ peds=JSON.parse(data.pedidos||'[]'); }catch(e){}
+      var n=0;
+      for(var i=0;i<peds.length;i++){
+        var c=peds[i].cliente, of=c&&mapa[c.id];
+        if(of){ c.id=of.id; c.nombre=of.nombre||c.nombre; c.rif=of.rif||c.rif; c.esNuevo=false; n++; idsTocados[String(peds[i].id)]=true; }
+      }
+      if(n>0){
+        total+=n;
+        doc.ref.set({pedidos:JSON.stringify(peds), ultimaActualizacion:new Date().toISOString()},{merge:true}).then(fin).catch(fin);
+      } else fin();
+    });
+  }).catch(function(){ if(callback) callback(0); });
+}
+
+// ═══ Pedidos con codigo provisional huerfano (herramienta de reparacion) ═══
+var PLAN_PEDIDOS_HUERFANOS=null;
+function buscarPedidosProvisionalesHuerfanos(){
+  var cont=document.getElementById('pedidosHuerfanosContenido');
+  var btn=document.getElementById('btnAplicarHuerfanos');
+  if(btn) btn.style.display='none';
+  PLAN_PEDIDOS_HUERFANOS=null;
+  cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Revisando pedidos de todos los vendedores...</div>';
+  document.getElementById('mPedidosHuerfanos').classList.add('open');
+  db.collection('vendedores').get().then(function(snap){
+    var provisionalesVivos={};
+    var orfanos={}; // id -> {id,nombre,rif,pedidos:n,vendedores:{}}
+    snap.docs.forEach(function(doc){
+      var data=doc.data(), cns=[], peds=[];
+      try{ cns=JSON.parse(data.clientesNuevos||'[]'); }catch(e){}
+      try{ peds=JSON.parse(data.pedidos||'[]'); }catch(e){}
+      cns.forEach(function(c){ provisionalesVivos[c.id]=true; });
+      peds.forEach(function(p){
+        var c=p.cliente;
+        if(c && c.id && String(c.id).indexOf('NEW-')===0){
+          if(!orfanos[c.id]) orfanos[c.id]={id:c.id,nombre:c.nombre||'',rif:c.rif||'',pedidos:0,vendedores:{}};
+          orfanos[c.id].pedidos++;
+          orfanos[c.id].vendedores[doc.id]=true;
+        }
+      });
+    });
+    var oficiales=CLIENTES_PROFIT.filter(function(c){ return !esNuevo(c); });
+    var lista=Object.keys(orfanos).filter(function(id){ return !provisionalesVivos[id]; }).map(function(id){
+      var o=orfanos[id], match=null, how='';
+      var rn=normalizarRif(o.rif);
+      if(rn){
+        var m=oficiales.filter(function(c){ return normalizarRif(c.rif)===rn; });
+        if(m.length===1){ match=m[0]; how='RIF'; }
+      }
+      if(!match && o.nombre){
+        var nn=o.nombre.trim().toLowerCase();
+        var m2=oficiales.filter(function(c){ return (c.nombre||'').trim().toLowerCase()===nn; });
+        if(m2.length===1){ match=m2[0]; how='nombre'; }
+      }
+      o.match=match; o.how=how; return o;
+    });
+    if(lista.length===0){
+      cont.innerHTML='<div style="color:var(--verde);font-size:13px;text-align:center;padding:12px">No hay pedidos con codigo provisional huerfano.</div>';
+      return;
+    }
+    PLAN_PEDIDOS_HUERFANOS=lista;
+    var html='<div style="font-weight:600;font-size:13px;color:var(--ambar);margin-bottom:8px">'+lista.length+' codigo(s) provisional(es) sin cliente</div>';
+    lista.forEach(function(o){
+      html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:10px;margin-bottom:8px">'+
+        '<div style="font-weight:600;font-size:13px">'+o.nombre+' <span style="color:#999;font-size:11px">('+o.id+')</span></div>'+
+        '<div style="font-size:12px;color:#666">'+o.pedidos+' pedido(s) | Vendedor(es): '+Object.keys(o.vendedores).join(', ')+'</div>'+
+        (o.match
+          ?'<div style="font-size:12px;color:var(--verde);margin-top:4px">&rarr; Se pasara al cliente oficial <strong>'+o.match.id+'</strong> — '+o.match.nombre+' (coincide por '+o.how+')</div>'
+          :'<div style="font-size:12px;color:var(--rojo);margin-top:4px">Sin coincidencia unica con un cliente oficial: no se toca</div>')+
+      '</div>';
+    });
+    cont.innerHTML=html;
+    if(lista.some(function(o){ return o.match; }) && btn) btn.style.display='';
+  }).catch(function(){ cont.innerHTML='<div style="color:var(--rojo);font-size:13px;text-align:center;padding:12px">Error leyendo Firebase</div>'; });
+}
+
+function aplicarReparacionPedidosHuerfanos(){
+  if(!PLAN_PEDIDOS_HUERFANOS) return;
+  var pares=PLAN_PEDIDOS_HUERFANOS.filter(function(o){ return o.match; }).map(function(o){ return {provId:o.id, oficial:o.match}; });
+  if(pares.length===0) return;
+  if(!confirm('Se cambiara el codigo de los pedidos de '+pares.length+' cliente(s) provisional(es) al codigo oficial. ¿Continuar?')) return;
+  var btn=document.getElementById('btnAplicarHuerfanos'); if(btn) btn.style.display='none';
+  document.getElementById('pedidosHuerfanosContenido').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Corrigiendo pedidos...</div>';
+  reasignarPedidosProvisionalesEnTodos(pares, function(total){
+    toast(total+' pedido(s) corregido(s). Recarga la app para ver los reportes actualizados.');
+    buscarPedidosProvisionalesHuerfanos();
+  });
 }
 
 function vincularClientesNuevosPorRif(nuevaBase, callback){
@@ -14157,6 +14458,17 @@ function renderDocsPendientesCliente(clienteId, preservarSeleccion){
 // ═══ COBROS: editar y anular un pago rechazado ═══
 var pagoEditandoId=null;
 
+// IVA retenido que un pago realmente abono en su monto (campo guardado, o
+// inferido para pagos viejos: lo que "Se abona" excede al dinero depositado
+// ya considerando el descuento).
+function ivaRetenidoDePago(p){
+  if(p.ivaRetenidoMonto!==undefined && p.ivaRetenidoMonto!==null) return p.ivaRetenidoMonto;
+  if(p.montoAbonado===undefined || p.montoAbonado===null) return 0;
+  var base=(p.montoUSD||0)/(1-Math.min(p.descuentoPct||0,99.99)/100);
+  var ex=Math.round((p.montoAbonado-base)*100)/100;
+  return ex>0.01?ex:0;
+}
+
 function editarPagoRechazado(pagoId){
   var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoId;});
   if(!pago){ toast('Pago no encontrado'); return; }
@@ -14171,7 +14483,13 @@ function editarPagoRechazado(pagoId){
   renderDocsPendientesCliente(pago.clienteId, true);
   document.getElementById('cobroFecha').value=pago.fecha;
   document.getElementById('cobroDescuento').value=pago.descuentoPct||0;
-  document.getElementById('cobroRetencionIVA').checked=!!pago.retencionIVA;
+  // La casilla de retencion se marca SOLO si el pago realmente abonó el IVA
+  // retenido en su monto. La marca "Retencion IVA: SI" que se pone despues
+  // en un pago confirmado (para comisiones) no abona nada, y si se heredara
+  // aqui, al reenviar se sumaria el 75% del IVA y "Se abona" se inflaria.
+  var ivaRetAbonado=ivaRetenidoDePago(pago);
+  var retAbonada=ivaRetAbonado>0.01;
+  document.getElementById('cobroRetencionIVA').checked=retAbonada;
   cobroDepositos=(pago.depositos||[]).map(function(d){ var c={}; for(var k in d) c[k]=d[k]; if(!c.fecha) c.fecha=pago.fecha; if(c.formaPago==='transferencia' && c.tasa) c._tasaEditadaManual=true; return c; });
   if(cobroDepositos.length===0) cobroDepositos=[{formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:'', fecha:pago.fecha}];
   renderDepositosCobro();
@@ -14181,7 +14499,8 @@ function editarPagoRechazado(pagoId){
   calcularValidacionCobro();
   var btnG=document.getElementById('btnGuardarCobro');
   if(btnG) btnG.textContent='Reenviar pago corregido';
-  toast('Editando pago rechazado. Corrige los datos y reenvialo.');
+  if(pago.retencionIVA && !retAbonada) toast('Editando pago. Ojo: tenia "Retencion IVA" marcada pero no se habia abonado; revisa la casilla antes de reenviar.');
+  else toast('Editando pago. Corrige los datos y reenvialo.');
 }
 
 function anularPagoRechazado(pagoId){
@@ -14842,13 +15161,14 @@ function calcularValidacionCobro(){
   var sumaDocs=0, ivaTotal=0;
   for(var i=0;i<cobroDocsSeleccionados.length;i++){
     var d=CUENTAS_COBRAR.find(function(x){return x.numero===cobroDocsSeleccionados[i];});
-    if(d){ sumaDocs+=d.saldo; ivaTotal+=(d.iva||0); }
+    if(d){ sumaDocs+=d.saldo; if(d.origenBase==='fiscal') ivaTotal+=(d.iva||0); }
   }
   var hayRetencion=wrapRet && !wrapRet.classList.contains('hidden') && document.getElementById('cobroRetencionIVA').checked;
   // Si hay retencion, el 75% del IVA de los documentos seleccionados NUNCA
   // entra como dinero (se cubre con un comprobante de retencion) - ese
   // monto se abona de una vez a los documentos, sin tener que depositarse.
   var ivaRetenidoEsperado=hayRetencion?Math.round(ivaTotal*0.75*100)/100:0;
+  if(ivaRetenidoEsperado>sumaDocs) ivaRetenidoEsperado=Math.max(0,Math.round(sumaDocs*100)/100);
   // El descuento se aplica sobre el dinero REALMENTE depositado (no sobre
   // el total de los documentos seleccionados), para que un abono PARCIAL
   // con descuento abone el monto que le corresponde y no el total de los
@@ -14959,15 +15279,25 @@ function guardarPagoCobro(){
   var descPct=parseFloat(document.getElementById('cobroDescuento').value)||0;
   var retencionMarcada=document.getElementById('cobroRetencionIVA')?document.getElementById('cobroRetencionIVA').checked:false;
   var docsSeleccionadosInfo=[];
-  var sumaDocs=0, ivaTotalDocs=0;
+  var sumaDocs=0, ivaTotalDocs=0, hayDocFiscal=false;
   for(var i=0;i<cobroDocsSeleccionados.length;i++){
     var d=CUENTAS_COBRAR.find(function(x){return x.numero===cobroDocsSeleccionados[i];});
-    if(d){ docsSeleccionadosInfo.push({numero:d.numero, saldo:d.saldo, vencimiento:d.vencimiento, emision:d.emision, iva:d.iva||0}); sumaDocs+=d.saldo; ivaTotalDocs+=(d.iva||0); }
+    if(d){
+      docsSeleccionadosInfo.push({numero:d.numero, saldo:d.saldo, vencimiento:d.vencimiento, emision:d.emision, iva:d.iva||0});
+      sumaDocs+=d.saldo;
+      // La retencion de IVA solo aplica a documentos FISCALES
+      if(d.origenBase==='fiscal'){ hayDocFiscal=true; ivaTotalDocs+=(d.iva||0); }
+    }
   }
+  // Sin documento fiscal no puede haber retencion, aunque la casilla haya
+  // quedado marcada de una edicion anterior
+  if(!hayDocFiscal) retencionMarcada=false;
   // Si hay retencion, el 75% del IVA de los documentos nunca entra en
   // dinero (se cubre con un comprobante de retencion) - ese monto se
   // abona de una vez a los documentos, sin tener que depositarse.
   var ivaRetenidoDelPago=retencionMarcada?Math.round(ivaTotalDocs*0.75*100)/100:0;
+  // La retencion nunca puede ser mayor que lo que realmente se debe
+  if(ivaRetenidoDelPago>sumaDocs) ivaRetenidoDelPago=Math.max(0,Math.round(sumaDocs*100)/100);
   // El descuento se aplica sobre el dinero REALMENTE depositado, no sobre
   // el total de los documentos seleccionados, para que un abono PARCIAL
   // con descuento abone solo lo que le corresponde (ver calcularValidacionCobro).
@@ -15001,6 +15331,7 @@ function guardarPagoCobro(){
     montoAbonado:montoAbonado,
     sumaDocsOriginal:sumaDocs,
     retencionIVA:retencionMarcada,
+    ivaRetenidoMonto:ivaRetenidoDelPago,
     vendedor:(esEdicion && pagoOriginal)?pagoOriginal.vendedor:VEND.codigo,
     vendedorNombre:(esEdicion && pagoOriginal)?pagoOriginal.vendedorNombre:VEND.nombre,
     estado:'pendiente',
@@ -15183,6 +15514,7 @@ function renderPagoCobroCard(p){
     acciones='<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+
       (puedeBorrarDiferenciaPago(p)?'<button onclick="borrarDiferenciaPago(&quot;'+p.id+'&quot;)" style="background:var(--ambar-c);color:#856404;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Borrar diferencia pendiente</button>':'')+
       ((puedeEditarRetencionIVA() && pagoTieneDocumentoFiscal(p))?'<button onclick="abrirEditarRetencionPago(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">'+(p.retencionIVA?'Retencion IVA: SI':'Marcar retencion IVA')+'</button>':'')+
+      (puedeAnularPagoCobranza(p)?'<button onclick="corregirPagoConfirmado(&quot;'+p.id+'&quot;)" style="background:var(--azul-c);color:var(--azul);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Corregir pago</button>':'')+
       (puedeAnularPagoCobranza(p)?'<button onclick="confirmarAnularPagoCobranza(&quot;'+p.id+'&quot;)" style="background:var(--rojo-c);color:var(--rojo);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">Anular pago</button>':'')+
     '</div>';
   } else if(p.estado==='rechazado' && (p.vendedor===VEND.codigo || puedeAprobar)){
@@ -15214,6 +15546,7 @@ function renderPagoCobroCard(p){
       badgeEstadoCobro(p.estado)+
     '</div>'+
     '<div style="font-size:13px;margin-top:6px">Monto pagado: <strong>$'+formatearNumeroConMiles(p.montoUSD,2)+'</strong>'+(p.descuentoPct?' | Desc. '+p.descuentoPct+'%':'')+' | Se abona: $'+formatearNumeroConMiles((p.montoAbonado!==undefined&&p.montoAbonado!==null)?p.montoAbonado:p.montoEsperado,2)+'</div>'+
+    ((ivaRetenidoDePago(p)>0.009)?'<div style="font-size:11px;color:var(--ambar);margin-top:2px">Incluye IVA retenido (75%) de $'+formatearNumeroConMiles(ivaRetenidoDePago(p),2)+' que se abona sin depositarse</div>':'')+
     saldoAjustLine+
     (p.estado==='rechazado' && p.motivoRechazo?'<div style="font-size:12px;color:var(--rojo);margin-top:4px">Motivo: '+p.motivoRechazo+'</div>':'')+
     (comprobHtml?'<div style="margin-top:8px">'+comprobHtml+'</div>':'')+
@@ -15387,6 +15720,8 @@ function ejecutarConfirmarPago(){
 function confirmarPagoCobranza(pagoId, saldoPendienteDeseado, observacionAjuste){
   var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoId;});
   if(!pago){ toast('Pago no encontrado'); return; }
+  // Solo se confirma un pago pendiente: evita aplicar dos veces el mismo pago
+  if(pago.estado!=='pendiente'){ toast('Este pago ya no esta pendiente (estado: '+pago.estado+')'); return; }
   pago.estado='confirmado';
   pago.confirmadoPor=VEND.nombre;
   pago.fechaConfirmacion=new Date().toLocaleString('es-VE');
@@ -15449,6 +15784,7 @@ function ejecutarRechazarPago(){
   if(!motivo){ toast('Indica el motivo del rechazo'); return; }
   var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoRechazandoId;});
   if(!pago){ cerrarModal('mRechazarPago'); return; }
+  if(pago.estado!=='pendiente'){ cerrarModal('mRechazarPago'); toast('Este pago ya no esta pendiente (estado: '+pago.estado+')'); return; }
   pago.estado='rechazado';
   pago.motivoRechazo=motivo;
   pago.fechaConfirmacion=new Date().toLocaleString('es-VE');
@@ -15490,9 +15826,35 @@ function confirmarAnularPagoCobranza(pagoId){
   pagoAnulandoId=pagoId;
   document.getElementById('mAnularPago').classList.add('open');
 }
+// Corregir un pago YA CONFIRMADO (ej. la tasa) en un solo paso, sin anularlo
+// y crear otro: libera el saldo de los documentos y abre el mismo pago en
+// modo edicion (mismo ID). Al reenviarlo queda pendiente y se vuelve a
+// confirmar. Solo 01 y 20.
+function corregirPagoConfirmado(pagoId){
+  if(!puedeAprobarPagosCobranza()) return;
+  var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoId;});
+  if(!pago){ toast('Pago no encontrado'); return; }
+  if(pago.estado!=='confirmado'){ toast('Este pago ya no esta confirmado (estado: '+pago.estado+')'); return; }
+  if(!confirm('Se reabrira este pago para corregirlo: el saldo de los documentos se libera y deberas reenviarlo y confirmarlo de nuevo. ¿Continuar?')) return;
+  revertirPagoEnDocumentosCxC(pago);
+  pago.estado='rechazado';
+  pago.motivoRechazo='Reabierto para correccion por '+VEND.nombre;
+  pago.fechaConfirmacion=new Date().toLocaleString('es-VE');
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    guardarPagoCobranzaEnDocVendedor(pago, function(){
+      editarPagoRechazado(pagoId);
+    });
+  }).catch(function(){ toast('Error guardando en Firebase'); });
+}
+
 function ejecutarAnularPagoCobranza(){
   var pago=PAGOS_COBRANZA.find(function(x){return x.id===pagoAnulandoId;});
   if(!pago){ cerrarModal('mAnularPago'); return; }
+  // Solo se anula un pago confirmado: evita devolver dos veces el saldo
+  if(pago.estado!=='confirmado'){ cerrarModal('mAnularPago'); toast('Este pago ya no esta confirmado (estado: '+pago.estado+')'); return; }
   revertirPagoEnDocumentosCxC(pago);
   pago.estado='anulado';
   pago.fechaConfirmacion=new Date().toLocaleString('es-VE');
@@ -16222,7 +16584,101 @@ function cerrarSesion(){
   pinActual='';
   actualizarPinDots();
   document.getElementById('loginError').style.display='none';
+  revisarVersionApp();
 }
+
+// ═══ ACTUALIZACION AUTOMATICA DE LA APP ═══
+// Cada vez que se publica una version nueva, junto a index.html se sube un
+// archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
+// y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
+// el publicado es distinto, la app se recarga sola con la version nueva.
+var APP_VERSION='2026-10-15-2335';
+function revisarVersionApp(){
+  try{
+    if(typeof fetch!=='function') return;
+    var base=location.href.split('#')[0].split('?')[0].replace(/[^\/]*$/,'');
+    fetch(base+'version.json?t='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok?r.json():null; }).then(function(j){
+      if(!j || !j.v || j.v===APP_VERSION) return;
+      // evita un ciclo de recargas si el servidor aun entrega la version vieja
+      var clave='tutim_recarga_'+j.v;
+      try{ if(sessionStorage.getItem(clave)) return; sessionStorage.setItem(clave,'1'); }catch(e){}
+      location.replace(base+'?v='+encodeURIComponent(j.v));
+    }).catch(function(){});
+  }catch(e){}
+}
+
+// ═══ CIERRE DE SESION POR INACTIVIDAD (seguridad) ═══
+// Si la app pasa INACT_MS sin que el usuario la toque (tocar, escribir,
+// mover el mouse o desplazarse), se cierra la sesion y pide el PIN de nuevo.
+// 30 segundos antes aparece un aviso con cuenta regresiva. Tambien aplica si
+// la app estuvo cerrada o en segundo plano mas de ese tiempo (se compara con
+// la ultima actividad guardada).
+var INACT_MS=5*60*1000;      // tiempo maximo sin usar la app
+var INACT_AVISO_MS=30*1000;  // aviso antes de cerrar
+var INACT_ULTIMA=Date.now();
+var INACT_ULT_GUARDADO=0;
+var INACT_TIMER=null;
+
+function registrarActividadInact(){
+  INACT_ULTIMA=Date.now();
+  var av=document.getElementById('inactAviso');
+  if(av && av.style.display!=='none') av.style.display='none';
+  // se guarda como maximo cada 5 s para no escribir en cada movimiento
+  if(INACT_ULTIMA-INACT_ULT_GUARDADO>5000){
+    INACT_ULT_GUARDADO=INACT_ULTIMA;
+    try{ localStorage.setItem('tutim_last', String(INACT_ULTIMA)); }catch(e){}
+  }
+}
+
+function inactSesionActiva(){
+  return !!(VEND && VEND.codigo && !document.getElementById('appMain').classList.contains('hidden'));
+}
+
+function revisarInactividad(){
+  if(!VEND || !VEND.codigo) return;
+  // la ultima actividad mas reciente entre esta pestaña y lo guardado (otra pestaña)
+  var guardada=0;
+  try{ guardada=parseInt(localStorage.getItem('tutim_last')||'0',10)||0; }catch(e){}
+  var ultima=Math.max(INACT_ULTIMA, guardada);
+  var inactivo=Date.now()-ultima;
+  if(inactivo>=INACT_MS){
+    var av0=document.getElementById('inactAviso'); if(av0) av0.style.display='none';
+    cerrarSesion();
+    toast('Sesion cerrada por inactividad. Ingresa tu PIN de nuevo.');
+    return;
+  }
+  if(inactivo>=INACT_MS-INACT_AVISO_MS && inactSesionActiva()){
+    var av=document.getElementById('inactAviso');
+    if(!av){
+      av=document.createElement('div');
+      av.id='inactAviso';
+      av.style.cssText='position:fixed;left:0;right:0;top:0;bottom:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+      av.innerHTML='<div style="background:#fff;border-radius:14px;padding:22px;max-width:340px;width:100%;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.3)">'+
+        '<div style="font-size:16px;font-weight:700;color:var(--azul);margin-bottom:8px">¿Sigues ahi?</div>'+
+        '<div style="font-size:13px;color:#555;margin-bottom:14px">Por seguridad, la sesion se cerrara por inactividad en <strong id="inactSeg">30</strong> segundos.</div>'+
+        '<button class="btn btn-p" style="width:100%" onclick="registrarActividadInact()">Seguir en la app</button></div>';
+      document.body.appendChild(av);
+    }
+    av.style.display='flex';
+    var seg=Math.max(0,Math.ceil((INACT_MS-inactivo)/1000));
+    var segEl=document.getElementById('inactSeg'); if(segEl) segEl.textContent=seg;
+  }
+}
+
+function iniciarControlInactividad(){
+  if(INACT_TIMER) return;
+  ['mousemove','mousedown','keydown','touchstart','touchmove','scroll','wheel','click','input'].forEach(function(ev){
+    document.addEventListener(ev, function(){
+      // con el aviso de cierre visible, solo el boton "Seguir en la app" lo cancela
+      var av=document.getElementById('inactAviso');
+      if(av && av.style.display!=='none') return;
+      registrarActividadInact();
+    }, {passive:true, capture:true});
+  });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) revisarInactividad(); });
+  INACT_TIMER=setInterval(revisarInactividad, 1000);
+}
+
 function cerrarModal(id){document.getElementById(id).classList.remove('open');}
 
 function toast(msg){
