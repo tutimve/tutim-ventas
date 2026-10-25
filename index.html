@@ -678,6 +678,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
       <button class="btn btn-g btn-sm" onclick="abrirExportarCobrosExcel()">Excel</button>
+      <button class="btn btn-s btn-sm" id="btnEstadisticaNotas35" style="display:none" onclick="abrirEstadisticaNotas35()">&#128202; Estadistica Notas / 35%</button>
       <button class="btn btn-sm" style="background:#EA4335;color:#fff;font-weight:600" onclick="enviarCorreoCobros()">&#9993; Correo</button>
     </div>
     <div id="listaCobros"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin pagos reportados</div></div>
@@ -2058,6 +2059,42 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
+<!-- MODAL ESTADISTICA: COBROS DE NOTAS / 35% POR TRANSFERENCIA -->
+<div class="modal-bg" id="mEstadisticaNotas35">
+  <div class="modal" style="max-height:90vh;overflow-y:auto">
+    <h3>Cobros de Notas y 35% (sin facturas)</h3>
+    <div style="font-size:11px;color:#888;margin-bottom:8px">Cuenta los cobros cuyos documentos son Nota o Diferencia 35% (nunca fiscales), pagados por transferencia. El rango usa la fecha de registro del pago.</div>
+    <div style="display:flex;gap:8px">
+      <div class="field" style="flex:1"><label>Desde</label><input type="date" id="est35Desde" onchange="calcularEstadisticaNotas35()"></div>
+      <div class="field" style="flex:1"><label>Hasta</label><input type="date" id="est35Hasta" onchange="calcularEstadisticaNotas35()"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="field" style="flex:1;min-width:130px"><label>Estado del pago</label>
+        <select id="est35Estado" onchange="calcularEstadisticaNotas35()">
+          <option value="validos">Pendientes + confirmados</option>
+          <option value="confirmado">Solo confirmados</option>
+          <option value="pendiente">Solo pendientes</option>
+        </select></div>
+      <div class="field" style="flex:1;min-width:130px"><label>Excluir banco</label>
+        <select id="est35Banco" onchange="calcularEstadisticaNotas35()">
+          <option value="">Ninguno</option>
+          <option value="Venezuela">Banco de Venezuela</option>
+          <option value="Banesco">Banesco</option>
+          <option value="Mercantil">Mercantil</option>
+          <option value="BNC">BNC</option>
+          <option value="Amiga" selected>Amiga</option>
+        </select></div>
+      <div class="field" id="est35VendWrap" style="display:none;flex:1;min-width:130px"><label>Vendedor</label>
+        <select id="est35Vendedor" onchange="calcularEstadisticaNotas35()"><option value="todos">Todos</option></select></div>
+    </div>
+    <div id="est35Resultado"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-g" style="flex:1" onclick="descargarExcelEstadisticaNotas35()">Descargar Excel</button>
+      <button class="btn btn-s" style="flex:1" onclick="cerrarModal('mEstadisticaNotas35')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL DETALLE DE UN COBRO -->
 <div class="modal-bg" id="mDetallePagoCobro">
   <div class="modal" style="max-height:90vh;overflow-y:auto">
@@ -2668,7 +2705,7 @@ var cobroClienteSeleccionado=null;
 var cobroDocsSeleccionados=[];
 var cobroComprobantesData=[];
 var cobroDepositos=[];
-var BANCOS_COBRO={Venezuela:'Banco de Venezuela',Banesco:'Banesco',Mercantil:'Mercantil',BNC:'BNC'};
+var BANCOS_COBRO={Venezuela:'Banco de Venezuela',Banesco:'Banesco',Mercantil:'Mercantil',BNC:'BNC',Amiga:'Amiga'};
 // Trae los clientes nuevos de TODOS los vendedores directamente desde Firebase
 // (antes esto solo se leia del localStorage propio del dispositivo del admin,
 // por lo que nunca aparecian los clientes nuevos creados por otros vendedores)
@@ -15789,6 +15826,139 @@ function renderPagoCobroCard(p){
   '</div>';
 }
 
+// ═══ Estadistica: cobros de Notas / 35% (sin facturas) pagados por transferencia ═══
+var ULTIMA_EST_NOTAS35=null;
+// Esta estadistica es solo para VEND 01 y 20
+function puedeVerEstadisticaNotas35(){
+  return !!VEND && (VEND.codigo==='01' || VEND.codigo==='20');
+}
+
+// Clasifica un pago segun sus documentos: 'fiscal' (factura), 'nota',
+// 'dif35' (documento de diferencia del 35%, numero termina en "."),
+// 'nota_dif35' (ambos) o 'sin_clasificar' (ningun documento se encuentra ya
+// en cuentas por cobrar y no se puede saber si era nota o factura).
+function tipoDocumentosPagoCobro(p){
+  var fiscal=false, nota=false, dif=false;
+  (p.documentos||[]).forEach(function(d){
+    var num=String(d.numero||'');
+    var doc=null;
+    for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(CUENTAS_COBRAR[i].numero===d.numero){ doc=CUENTAS_COBRAR[i]; break; } }
+    if(doc && doc.origenBase==='fiscal') fiscal=true;
+    else if((doc && doc.origenBase==='diferencia') || num.slice(-1)==='.') dif=true;
+    else if(doc) nota=true;
+  });
+  if(fiscal) return 'fiscal';
+  if(nota && dif) return 'nota_dif35';
+  if(dif) return 'dif35';
+  if(nota) return 'nota';
+  return 'sin_clasificar';
+}
+
+function abrirEstadisticaNotas35(){
+  if(!puedeVerEstadisticaNotas35()) return;
+  document.getElementById('est35Desde').value=document.getElementById('filtroCobroDesde').value||'';
+  document.getElementById('est35Hasta').value=document.getElementById('filtroCobroHasta').value||'';
+  var estPant=document.getElementById('filtroCobroEstado').value;
+  document.getElementById('est35Estado').value=(estPant==='confirmado'||estPant==='pendiente')?estPant:'validos';
+  var selV=document.getElementById('est35Vendedor'), selVP=document.getElementById('filtroCobroVendedor');
+  var wrapVP=document.getElementById('filtroCobroVendWrap');
+  var hayV=!!(wrapVP && wrapVP.style.display!=='none' && selVP);
+  if(hayV){ selV.innerHTML=selVP.innerHTML; selV.value=selVP.value||'todos'; }
+  document.getElementById('est35VendWrap').style.display=hayV?'block':'none';
+  document.getElementById('mEstadisticaNotas35').classList.add('open');
+  calcularEstadisticaNotas35();
+}
+
+function calcularEstadisticaNotas35(){
+  if(!puedeVerEstadisticaNotas35()) return;
+  var desde=document.getElementById('est35Desde').value;
+  var hasta=document.getElementById('est35Hasta').value;
+  var estadoF=document.getElementById('est35Estado').value;
+  var bancoExc=document.getElementById('est35Banco').value;
+  var wrapV=document.getElementById('est35VendWrap');
+  var vendF=(wrapV && wrapV.style.display!=='none')?document.getElementById('est35Vendedor').value:'todos';
+  var nombreBanco=function(b){ return BANCOS_COBRO[b]||b||'(sin banco)'; };
+  var R={desde:desde, hasta:hasta, bancoExcluido:bancoExc, cobros:0, depositos:0, usd:0, bs:0,
+    porTipo:{nota:0, dif35:0, nota_dif35:0}, porBanco:{}, filas:[],
+    excluidosFiscal:0, sinClasificar:0, sinTransferencia:0, soloBancoExcluido:0};
+  PAGOS_COBRANZA.forEach(function(p){
+    if(estadoF==='validos'){ if(p.estado!=='pendiente' && p.estado!=='confirmado') return; }
+    else if(p.estado!==estadoF) return;
+    var fProc=fechaProcesoPagoCobranza(p);
+    if(desde && fProc<desde) return;
+    if(hasta && fProc>hasta) return;
+    if(vendF && vendF!=='todos' && p.vendedor!==vendF) return;
+    var tipo=tipoDocumentosPagoCobro(p);
+    if(tipo==='fiscal'){ R.excluidosFiscal++; return; }
+    if(tipo==='sin_clasificar'){ R.sinClasificar++; return; }
+    var transf=(p.depositos||[]).filter(function(d){ return d.formaPago==='transferencia'; });
+    if(transf.length===0){ R.sinTransferencia++; return; }
+    var validos=transf.filter(function(d){ return !bancoExc || d.banco!==bancoExc; });
+    if(validos.length===0){ R.soloBancoExcluido++; return; }
+    R.cobros++;
+    R.porTipo[tipo]++;
+    var usdP=0, bsP=0, bancos={};
+    validos.forEach(function(d){
+      R.depositos++;
+      usdP+=(d.montoUSD||0); bsP+=(d.monto||0);
+      var nb=nombreBanco(d.banco);
+      bancos[nb]=true;
+      if(!R.porBanco[nb]) R.porBanco[nb]={depositos:0, usd:0, bs:0};
+      R.porBanco[nb].depositos++; R.porBanco[nb].usd+=(d.montoUSD||0); R.porBanco[nb].bs+=(d.monto||0);
+    });
+    R.usd+=usdP; R.bs+=bsP;
+    R.filas.push({fecha:fProc, cliente:p.clienteNombre, codigo:p.clienteId, vendedor:'VEND '+p.vendedor,
+      docs:(p.documentos||[]).map(function(d){return d.numero;}).join(', '),
+      tipo:tipo==='nota'?'Nota':(tipo==='dif35'?'Diferencia 35%':'Nota + Dif. 35%'),
+      banco:Object.keys(bancos).join(' / '), bs:bsP, usd:usdP, estado:p.estado});
+  });
+  R.filas.sort(function(a,b){ return a.fecha<b.fecha?-1:(a.fecha>b.fecha?1:0); });
+  ULTIMA_EST_NOTAS35=R;
+
+  var M=function(n){ return formatearNumeroConMiles(n,2); };
+  var html='<div style="background:var(--azul-c);border-radius:10px;padding:12px;margin-top:8px;text-align:center">'+
+    '<div style="font-size:30px;font-weight:800;color:var(--azul)">'+R.cobros+'</div>'+
+    '<div style="font-size:12px;color:#555">cobros de Notas / 35% por transferencia'+(bancoExc?' (sin banco '+nombreBanco(bancoExc)+')':'')+'</div>'+
+    '<div style="font-size:12px;margin-top:4px">'+R.depositos+' transferencia(s) &nbsp;|&nbsp; <strong>$'+M(R.usd)+'</strong> &nbsp;|&nbsp; <strong>Bs '+M(R.bs)+'</strong></div></div>';
+  html+='<div style="font-size:12px;margin-top:8px">'+
+    '<div>Solo Nota: <strong>'+R.porTipo.nota+'</strong> &nbsp;|&nbsp; Solo Diferencia 35%: <strong>'+R.porTipo.dif35+'</strong> &nbsp;|&nbsp; Nota + 35%: <strong>'+R.porTipo.nota_dif35+'</strong></div></div>';
+  var bks=Object.keys(R.porBanco);
+  if(bks.length){
+    html+='<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px"><tr style="color:#888"><th style="text-align:left;padding:3px">Banco</th><th style="text-align:right;padding:3px">Transf.</th><th style="text-align:right;padding:3px">$</th><th style="text-align:right;padding:3px">Bs</th></tr>';
+    bks.forEach(function(b){ var x=R.porBanco[b]; html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:3px">'+b+'</td><td style="padding:3px;text-align:right">'+x.depositos+'</td><td style="padding:3px;text-align:right">$'+M(x.usd)+'</td><td style="padding:3px;text-align:right">Bs '+M(x.bs)+'</td></tr>'; });
+    html+='</table>';
+  }
+  var notas=[];
+  if(R.excluidosFiscal) notas.push(R.excluidosFiscal+' cobro(s) de facturas (fiscales) no se cuentan');
+  if(R.soloBancoExcluido) notas.push(R.soloBancoExcluido+' cobro(s) solo por el banco excluido no se cuentan');
+  if(R.sinTransferencia) notas.push(R.sinTransferencia+' cobro(s) sin transferencia (efectivo/divisas) no se cuentan');
+  if(R.sinClasificar) notas.push('<strong>'+R.sinClasificar+' cobro(s) no se pudieron clasificar</strong> (sus documentos ya no estan en cuentas por cobrar)');
+  if(notas.length) html+='<div style="font-size:11px;color:#888;margin-top:8px">'+notas.join('<br>')+'</div>';
+  if(R.filas.length){
+    html+='<div style="overflow-x:auto;margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="color:#888"><th style="text-align:left;padding:3px">Fecha</th><th style="text-align:left;padding:3px">Cliente</th><th style="text-align:left;padding:3px">Doc.</th><th style="text-align:left;padding:3px">Tipo</th><th style="text-align:left;padding:3px">Banco</th><th style="text-align:right;padding:3px">$</th></tr>';
+    R.filas.forEach(function(f){ html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:3px">'+f.fecha+'</td><td style="padding:3px">'+f.cliente+'</td><td style="padding:3px">'+f.docs+'</td><td style="padding:3px">'+f.tipo+'</td><td style="padding:3px">'+f.banco+'</td><td style="padding:3px;text-align:right">$'+M(f.usd)+'</td></tr>'; });
+    html+='</table></div>';
+  }
+  document.getElementById('est35Resultado').innerHTML=html;
+}
+
+function descargarExcelEstadisticaNotas35(){
+  if(!puedeVerEstadisticaNotas35()) return;
+  var R=ULTIMA_EST_NOTAS35;
+  if(!R || R.filas.length===0){ toast('No hay cobros para exportar'); return; }
+  var rows=[['Cobros de Notas / 35% por transferencia'+(R.bancoExcluido?' (sin banco '+(BANCOS_COBRO[R.bancoExcluido]||R.bancoExcluido)+')':'')],
+    ['Periodo: '+(R.desde||'inicio')+' al '+(R.hasta||'hoy')],
+    ['Cobros', R.cobros, 'Transferencias', R.depositos, 'Total $', Math.round(R.usd*100)/100, 'Total Bs', Math.round(R.bs*100)/100],
+    [],['Fecha registro','Cliente','Cod cliente','Vendedor','Documentos','Tipo','Banco','Monto Bs','Monto $','Estado']];
+  R.filas.forEach(function(f){ rows.push([f.fecha,f.cliente,f.codigo,f.vendedor,f.docs,f.tipo,f.banco,Math.round(f.bs*100)/100,Math.round(f.usd*100)/100,f.estado]); });
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:12},{wch:28},{wch:10},{wch:20},{wch:18},{wch:16},{wch:16},{wch:14},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Notas y 35%');
+  XLSX.writeFile(wb, 'cobros_notas_35_transferencia.xlsx');
+  toast('Excel generado');
+}
+
 // ═══ Detalle completo de un cobro (se abre al tocar el cobro en la lista) ═══
 function abrirDetallePagoCobro(pagoId, ev){
   // Si el toque fue sobre un boton, enlace o imagen, que haga lo suyo y no abra el detalle
@@ -15876,6 +16046,8 @@ function abrirDetallePagoCobro(pagoId, ev){
 }
 
 function renderHistorialCobros(){
+  var btnEst35=document.getElementById('btnEstadisticaNotas35');
+  if(btnEst35) btnEst35.style.display=puedeVerEstadisticaNotas35()?'inline-block':'none';
   var lista=getPagosCobranzaFiltrados();
   var total=0, pendientes=0, montoConfirmado=0;
   for(var i=0;i<lista.length;i++){
@@ -16953,7 +17125,7 @@ function cerrarSesion(){
 // archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
 // y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
 // el publicado es distinto, la app se recarga sola con la version nueva.
-var APP_VERSION='2026-10-24-2037';
+var APP_VERSION='2026-10-24-2100';
 function revisarVersionApp(){
   try{
     if(typeof fetch!=='function') return;
