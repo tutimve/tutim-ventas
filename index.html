@@ -2058,6 +2058,16 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
+<!-- MODAL DETALLE DE UN COBRO -->
+<div class="modal-bg" id="mDetallePagoCobro">
+  <div class="modal" style="max-height:90vh;overflow-y:auto">
+    <h3>Detalle del cobro</h3>
+    <div id="detallePagoCobroContenido"></div>
+    <div id="detallePagoCobroAcciones" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"></div>
+    <button class="btn btn-s" style="margin-top:10px;width:100%" onclick="cerrarModal('mDetallePagoCobro')">Cerrar</button>
+  </div>
+</div>
+
 <!-- MODAL RECHAZAR PAGO -->
 <div class="modal-bg" id="mRechazarPago">
   <div class="modal">
@@ -2241,8 +2251,29 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="field" style="flex:1"><label>Desde</label><input type="date" id="excelCobrosDesde"></div>
       <div class="field" style="flex:1"><label>Hasta</label><input type="date" id="excelCobrosHasta"></div>
     </div>
+    <div style="font-size:11px;color:#888;margin-bottom:8px">Estos filtros se copian de la pantalla de Cobros; puedes cambiarlos aqui antes de exportar.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="field" style="flex:1;min-width:130px">
+        <label>Estado</label>
+        <select id="excelCobrosEstado">
+          <option value="todos">Todos</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="confirmado">Confirmado</option>
+          <option value="rechazado">Rechazado</option>
+          <option value="anulado">Anulado</option>
+        </select>
+      </div>
+      <div class="field" id="excelCobrosVendWrap" style="display:none;flex:1;min-width:130px">
+        <label>Vendedor</label>
+        <select id="excelCobrosVendedor"><option value="todos">Todos</option></select>
+      </div>
+    </div>
     <div class="field">
-      <label>Pagos anulados</label>
+      <label>Cliente (nombre o codigo)</label>
+      <input type="text" id="excelCobrosCliente" placeholder="Todos los clientes">
+    </div>
+    <div class="field">
+      <label>Pagos anulados (solo si Estado = Todos)</label>
       <select id="excelCobrosAnulados">
         <option value="excluir">Excluir anulados</option>
         <option value="incluir">Incluir anulados</option>
@@ -2945,23 +2976,22 @@ function verDetalleComisionVendedor(id){
   var moneda=r.moneda||'ambas'; // reportes viejos sin este campo se muestran en ambas, como antes
   var verUSD=(moneda==='ambas'||moneda==='usd');
   var verBS=(moneda==='ambas'||moneda==='bs');
-  function montoTxt(usd, bs){
-    var partes=[];
-    if(verUSD) partes.push('$'+formatearNumeroConMiles(usd,2));
-    if(verBS) partes.push('Bs '+formatearNumeroConMiles(bs,2));
-    return partes.join(' / ');
+  var hayDivDet=verBS&&(r.detallePagos||[]).some(function(x){ return (x.comisionDivisaUSD||0)>0.004; });
+  // div = parte que se paga en $ por cobros en divisas (no se convierte a Bs)
+  function montoTxt(usd, bs, div){
+    return textoMontoMoneda(usd, bs, verUSD, verBS, div||0);
   }
   var html='<div style="font-size:13px">'+
     '<div style="margin-bottom:8px"><strong>Vendedor:</strong> VEND '+r.vendedorId+' - '+r.vendedorNombre+'</div>'+
     '<div style="margin-bottom:8px"><strong>Periodo:</strong> '+r.desde+' al '+r.hasta+'</div>'+
     '<div style="margin-bottom:8px"><strong>Monto cobrado (base):</strong> '+montoTxt(r.montoCobradoUSD, r.montoCobradoBS)+'</div>'+
     '<div style="margin-bottom:8px"><strong>% de comision:</strong> '+r.pctPropio+'%</div>'+
-    '<div style="margin-bottom:8px"><strong>Comision propia:</strong> '+montoTxt(r.comisionPropiaUSD, Math.round(r.comisionPropiaUSD*r.tasaPromedio*100)/100)+'</div>';
+    '<div style="margin-bottom:8px"><strong>Comision propia:</strong> '+montoTxt(r.comisionPropiaUSD, comisionPropiaBSComision(r), comisionPropiaDivisaComision(r))+'</div>';
   if(r.esSupervisor && r.detalleSupervisados && r.detalleSupervisados.length>0){
-    html+='<div style="margin-bottom:8px"><strong>Comision por equipo ('+r.pctSupervisor+'%):</strong> '+montoTxt(r.comisionSupervisorUSD, comisionSupervisorBSComision(r))+
+    html+='<div style="margin-bottom:8px"><strong>Comision por equipo ('+r.pctSupervisor+'%):</strong> '+montoTxt(r.comisionSupervisorUSD, comisionSupervisorBSComision(r), comisionSupervisorDivisaComision(r))+
       '<div style="font-size:12px;color:#666;margin-top:4px">'+detalleSupervisadosTexto(r, verUSD, verBS, '<br>')+'</div></div>';
   }
-  html+='<div style="margin-bottom:8px;padding-top:8px;border-top:1px solid var(--borde)"><strong style="font-size:15px;color:var(--verde)">Total: '+montoTxt(r.comisionTotalUSD, r.comisionTotalBS)+'</strong></div>';
+  html+='<div style="margin-bottom:8px;padding-top:8px;border-top:1px solid var(--borde)"><strong style="font-size:15px;color:var(--verde)">Total: '+montoTxt(r.comisionTotalUSD, r.comisionTotalBS, r.comisionTotalDivisaUSD||0)+'</strong></div>';
   if(r.detallePagos && r.detallePagos.length>0){
     html+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--borde)">'+
       '<strong style="font-size:12px">Detalle por cobro</strong>'+
@@ -2972,6 +3002,7 @@ function verDetalleComisionVendedor(id){
           '<th style="padding:3px;text-align:right">%</th>'+
           (verUSD?'<th style="padding:3px;text-align:right">Comision $</th>':'')+
           (verBS?'<th style="padding:3px;text-align:right">Comision Bs</th>':'')+
+          (hayDivDet?'<th style="padding:3px;text-align:right">Comision divisas $</th>':'')+
         '</tr>'+
         r.detallePagos.map(function(pg){
           return '<tr style="border-top:1px solid var(--borde)"><td style="padding:3px">'+pg.clienteNombre+'</td><td style="padding:3px">'+pg.fecha+'</td><td style="padding:3px;text-align:right">'+(pg.diasCobro!==null&&pg.diasCobro!==undefined?pg.diasCobro:'-')+'</td>'+
@@ -2979,7 +3010,8 @@ function verDetalleComisionVendedor(id){
             (verBS?'<td style="padding:3px;text-align:right">Bs '+formatearNumeroConMiles(pg.montoBS,2)+'</td>':'')+
             '<td style="padding:3px;text-align:right">'+pg.pctAplicado+'%</td>'+
             (verUSD?'<td style="padding:3px;text-align:right">$'+formatearNumeroConMiles(pg.comisionUSD,2)+'</td>':'')+
-            (verBS?'<td style="padding:3px;text-align:right">Bs '+formatearNumeroConMiles(pg.comisionBS,2)+'</td>':'')+
+            (verBS?'<td style="padding:3px;text-align:right">'+((pg.comisionBS||0)>0.004||!((pg.comisionDivisaUSD||0)>0.004)?'Bs '+formatearNumeroConMiles(pg.comisionBS,2):'-')+'</td>':'')+
+            (hayDivDet?'<td style="padding:3px;text-align:right">'+((pg.comisionDivisaUSD||0)>0.004?'$'+formatearNumeroConMiles(pg.comisionDivisaUSD,2):'-')+'</td>':'')+
           '</tr>';
         }).join('')+
       '</table></div>'+
@@ -9241,11 +9273,12 @@ function calcularComisiones(){
     for(var i=0;i<confirmados.length;i++){
       var p=confirmados[i];
       var vid=p.vendedor||'??';
-      if(!porVend[vid]) porVend[vid]={montoUSD:0, montoComisionableUSD:0, montoBS:0, montoUSDTransferencia:0, pagos:[]};
+      if(!porVend[vid]) porVend[vid]={montoUSD:0, montoComisionableUSD:0, montoBS:0, montoUSDTransferencia:0, comisionableBS:0, comisionableDivisaUSD:0, comisionableSinTasaUSD:0, pagos:[]};
       porVend[vid].montoUSD+=p.montoUSD||0;
-      var montoBSpago=0, montoUSDTransfPago=0;
+      var montoBSpago=0, montoUSDTransfPago=0, montoUSDTotalDeps=0;
       var deps=p.depositos||[];
       for(var j=0;j<deps.length;j++){
+        montoUSDTotalDeps+=(deps[j].montoUSD||0);
         if(deps[j].formaPago==='transferencia'){
           montoBSpago+=(deps[j].monto||0);
           montoUSDTransfPago+=(deps[j].montoUSD||0);
@@ -9253,6 +9286,16 @@ function calcularComisiones(){
       }
       porVend[vid].montoBS+=montoBSpago;
       porVend[vid].montoUSDTransferencia+=montoUSDTransfPago;
+      // Como se cobro este pago: parte por transferencia (tiene su propia
+      // tasa en Bs) y parte en divisas/efectivo en $ (sin tasa, la
+      // comision de esa parte se queda en $). fracTransf = proporcion del
+      // pago que entro por transferencia. Un pago viejo sin depositos
+      // guardados no se puede clasificar: se marca para usar la tasa
+      // promedio del vendedor como antes.
+      var tasaPagoPropia=montoUSDTransfPago>0?(montoBSpago/montoUSDTransfPago):0;
+      var fracTransf=0, sinDetalleDeps=false;
+      if(montoUSDTotalDeps>0.0001){ fracTransf=Math.min(1, montoUSDTransfPago/montoUSDTotalDeps); }
+      else { fracTransf=1; sinDetalleDeps=true; }
       // Dias entre la emision del/los documento(s) que cubre este pago y
       // la fecha real del pago (no la de registro) - si el pago cubre
       // varios documentos, se promedia. La emision se busca primero en el
@@ -9277,15 +9320,24 @@ function calcularComisiones(){
       //   unicamente ese 25%, no el 75%.
       // En ambos casos el resultado final es el mismo: queda solo el
       // monto neto (sin ningun IVA) como base de la comision.
-      var ivaDelPago=0;
-      for(var jd=0;jd<docsPago.length;jd++){ ivaDelPago+=(docsPago[jd].iva||0); }
-      var ivaExcluidoUSD=Math.round((p.retencionIVA?ivaDelPago*0.25:ivaDelPago)*100)/100;
+      // En un pago PARCIAL solo se descuenta la parte del IVA que
+      // corresponde a lo que ese pago realmente cubre del documento (ver
+      // ivaNoComisionablePago), no el IVA completo del documento.
+      var ivaExcluidoUSD=ivaNoComisionablePago(p);
       var montoComisionablePago=Math.round(((p.montoUSD||0)-ivaExcluidoUSD)*100)/100;
       porVend[vid].montoComisionableUSD+=montoComisionablePago;
+      // Base comisionable repartida segun como se cobro: la parte por
+      // transferencia se expresa en Bs con la tasa de ESTE pago, y la parte
+      // en divisas queda en $.
+      var baseTransfPago=montoComisionablePago*fracTransf;
+      porVend[vid].comisionableDivisaUSD+=montoComisionablePago-baseTransfPago;
+      if(sinDetalleDeps) porVend[vid].comisionableSinTasaUSD+=montoComisionablePago;
+      else porVend[vid].comisionableBS+=baseTransfPago*tasaPagoPropia;
       porVend[vid].pagos.push({
         id:p.id, clienteNombre:p.clienteNombre||'', clienteId:p.clienteId||'', fecha:(p.fechaRegistroISO||'').substring(0,10),
         montoUSD:Math.round((p.montoUSD||0)*100)/100, montoComisionable:montoComisionablePago, ivaRetenido:ivaExcluidoUSD,
-        montoBS:Math.round(montoBSpago*100)/100, diasCobro:diasCobroProm
+        montoBS:Math.round(montoBSpago*100)/100, diasCobro:diasCobroProm,
+        tasaPago:Math.round(tasaPagoPropia*10000)/10000, fracTransf:Math.round(fracTransf*1000000)/1000000, sinDetalleDeps:sinDetalleDeps
       });
     }
     var vendedoresACalcular=vendSel==='todos'?VENDEDORES.slice()
@@ -9294,9 +9346,8 @@ function calcularComisiones(){
     var resultado=[];
     for(var i=0;i<vendedoresACalcular.length;i++){
       var v=vendedoresACalcular[i];
-      var datos=porVend[v.id]||{montoUSD:0, montoComisionableUSD:0, montoBS:0, montoUSDTransferencia:0, pagos:[]};
+      var datos=porVend[v.id]||{montoUSD:0, montoComisionableUSD:0, montoBS:0, montoUSDTransferencia:0, comisionableBS:0, comisionableDivisaUSD:0, comisionableSinTasaUSD:0, pagos:[]};
       var pct=v.comisionPct||0;
-      var comisionPropiaUSD=Math.round(datos.montoComisionableUSD*pct/100*100)/100;
       // Tasa promedio real, ponderada por lo que efectivamente cobro este
       // vendedor por transferencia en el periodo (viene de los depositos
       // reales, no de una tasa externa)
@@ -9305,10 +9356,15 @@ function calcularComisiones(){
       // cada uno segun el % del vendedor (se recalcula si el % se edita).
       // La comision se calcula sobre el monto COMISIONABLE (ya sin el IVA
       // retenido), no sobre el monto cobrado completo.
+      // Cada cobro convierte su comision a Bs con SU PROPIA tasa (la de sus
+      // transferencias); lo cobrado en divisas/efectivo queda en $.
       var detallePagos=datos.pagos.map(function(pg){
-        var comUSD=Math.round(pg.montoComisionable*pct/100*100)/100;
-        return {id:pg.id, clienteNombre:nombreClienteConCodigoProfit(pg.clienteId, pg.clienteNombre), fecha:pg.fecha, montoUSD:pg.montoUSD, montoComisionable:pg.montoComisionable, ivaRetenido:pg.ivaRetenido, montoBS:pg.montoBS, pctAplicado:pct, comisionUSD:comUSD, comisionBS:Math.round(comUSD*tasaProm*100)/100, diasCobro:pg.diasCobro};
+        var lin={id:pg.id, clienteNombre:nombreClienteConCodigoProfit(pg.clienteId, pg.clienteNombre), fecha:pg.fecha, montoUSD:pg.montoUSD, montoComisionable:pg.montoComisionable, ivaRetenido:pg.ivaRetenido, montoBS:pg.montoBS, diasCobro:pg.diasCobro, tasaPago:pg.tasaPago, fracTransf:pg.fracTransf, sinDetalleDeps:pg.sinDetalleDeps};
+        recalcularLineaComision(lin, pct, tasaProm);
+        return lin;
       }).sort(function(a,b){ return a.fecha<b.fecha?-1:(a.fecha>b.fecha?1:0); });
+      var sumaPropia=sumarLineasComision(detallePagos);
+      var comisionPropiaUSD=sumaPropia.usd;
 
       var esSuper=!!v.esSupervisor;
       var pctSuper=v.comisionPctSupervisor||0;
@@ -9326,7 +9382,9 @@ function calcularComisiones(){
             var vObjS=null;
             for(var vi=0;vi<VENDEDORES.length;vi++){ if(VENDEDORES[vi].id===sid){ vObjS=VENDEDORES[vi]; break; } }
             var tasaS=datosS.montoUSDTransferencia>0?(datosS.montoBS/datosS.montoUSDTransferencia):0;
-            detalleSupervisados.push({id:sid, nombre:vObjS?vObjS.nombre:sid, montoUSD:Math.round(datosS.montoComisionableUSD*100)/100, tasa:Math.round(tasaS*100)/100, _tasaRaw:tasaS});
+            detalleSupervisados.push({id:sid, nombre:vObjS?vObjS.nombre:sid, montoUSD:Math.round(datosS.montoComisionableUSD*100)/100, tasa:Math.round(tasaS*100)/100, _tasaRaw:tasaS,
+              _bsPropio:datosS.comisionableBS||0, _sinTasaUSD:datosS.comisionableSinTasaUSD||0,
+              montoDivisaUSD:Math.round((datosS.comisionableDivisaUSD||0)*100)/100});
             montoSupervisadoTotalUSD+=datosS.montoComisionableUSD;
             equipoBS+=datosS.montoBS;
             equipoUSDTransf+=datosS.montoUSDTransferencia;
@@ -9337,12 +9395,16 @@ function calcularComisiones(){
       // Si un supervisado no cobro por transferencia (sin tasa propia), se
       // le aplica la tasa del equipo para expresar su aporte en Bs
       var tasaParaBS=tasaEquipo>0?tasaEquipo:tasaProm;
-      var montoSupervisadoBS=0;
+      // Del equipo, lo cobrado por transferencia se expresa en Bs con la
+      // tasa de cada cobro (suma de lo ya convertido por pago), y lo cobrado
+      // en divisas/efectivo se queda en $.
+      var montoSupervisadoBS=0, montoSupervisadoDivisaUSD=0;
       detalleSupervisados.forEach(function(sd){
         var tasaUsar=sd._tasaRaw>0?sd._tasaRaw:tasaParaBS;
-        sd.montoBS=Math.round(sd.montoUSD*tasaUsar*100)/100;
+        sd.montoBS=Math.round((sd._bsPropio+sd._sinTasaUSD*tasaUsar)*100)/100;
         montoSupervisadoBS+=sd.montoBS;
-        delete sd._tasaRaw;
+        montoSupervisadoDivisaUSD+=sd.montoDivisaUSD;
+        delete sd._tasaRaw; delete sd._bsPropio; delete sd._sinTasaUSD;
       });
       var comisionSupervisorUSD=Math.round(montoSupervisadoTotalUSD*pctSuper/100*100)/100;
       var comisionTotalUSD=Math.round((comisionPropiaUSD+comisionSupervisorUSD)*100)/100;
@@ -9357,9 +9419,11 @@ function calcularComisiones(){
         tasaPromedio:Math.round(tasaProm*100)/100,
         tasaEquipo:Math.round(tasaEquipo*100)/100,
         pctPropio:pct, comisionPropiaUSD:comisionPropiaUSD,
+        comisionPropiaBS:sumaPropia.bs, comisionPropiaDivisaUSD:sumaPropia.divisa,
         esSupervisor:esSuper, pctSupervisor:pctSuper, detalleSupervisados:detalleSupervisados,
         montoSupervisadoUSD:Math.round(montoSupervisadoTotalUSD*100)/100,
         montoSupervisadoBS:Math.round(montoSupervisadoBS*100)/100,
+        montoSupervisadoDivisaUSD:Math.round(montoSupervisadoDivisaUSD*100)/100,
         comisionSupervisorUSD:comisionSupervisorUSD,
         comisionTotalUSD:comisionTotalUSD,
         detallePagos:detallePagos, verDetalle:false
@@ -9382,7 +9446,112 @@ function tasaEquipoComision(r){
   return (r.tasaEquipo>0)?r.tasaEquipo:(r.tasaPromedio||0);
 }
 function comisionPropiaBSComision(r){
+  // Reportes nuevos: suma de la comision en Bs de cada cobro, cada uno con
+  // su propia tasa. Reportes viejos guardados: una sola tasa promedio.
+  if(r.comisionPropiaBS!==undefined && r.comisionPropiaBS!==null) return r.comisionPropiaBS;
   return Math.round((r.comisionPropiaUSD||0)*(r.tasaPromedio||0)*100)/100;
+}
+// Parte de la comision propia que se paga en $ (cobros en divisas/efectivo)
+function comisionPropiaDivisaComision(r){
+  return Math.round((r.comisionPropiaDivisaUSD||0)*100)/100;
+}
+function comisionSupervisorDivisaComision(r){
+  if(r.montoSupervisadoDivisaUSD!==undefined && r.montoSupervisadoDivisaUSD!==null){
+    return Math.round(r.montoSupervisadoDivisaUSD*(r.pctSupervisor||0)/100*100)/100;
+  }
+  return 0;
+}
+function montoSupervisadoDivisaComision(r){
+  return Math.round((r.montoSupervisadoDivisaUSD||0)*100)/100;
+}
+// Calcula UNA linea (un cobro) del detalle de comision con el % indicado:
+// - comisionUSD: comision total del cobro, en $ equivalente
+// - comisionBS: la parte cobrada por transferencia, convertida con la tasa
+//   de ESE cobro (tasaPago)
+// - comisionDivisaUSD: la parte cobrada en divisas/efectivo, que se queda
+//   en $ (no se convierte a Bs)
+// tasaRespaldo (promedio del vendedor) solo se usa en reportes viejos sin
+// tasa por cobro, o en cobros sin detalle de depositos.
+function recalcularLineaComision(pg, pct, tasaRespaldo){
+  pg.pctAplicado=pct;
+  pg.comisionUSD=Math.round(pg.montoComisionable*pct/100*100)/100;
+  if(pg.tasaPago===undefined || pg.tasaPago===null){
+    // Reporte guardado antes de este cambio
+    pg.comisionBS=Math.round(pg.comisionUSD*(tasaRespaldo||0)*100)/100;
+    pg.comisionDivisaUSD=0;
+    return;
+  }
+  var frac=(pg.fracTransf===undefined||pg.fracTransf===null)?1:pg.fracTransf;
+  var tasa=pg.sinDetalleDeps?(tasaRespaldo||0):pg.tasaPago;
+  if(tasa<=0){
+    // Sin tasa conocida para convertir: la comision se queda en $
+    pg.comisionBS=0;
+    pg.comisionDivisaUSD=pg.comisionUSD;
+    return;
+  }
+  var parteTransf=pg.comisionUSD*frac;
+  pg.comisionBS=Math.round(parteTransf*tasa*100)/100;
+  pg.comisionDivisaUSD=Math.round((pg.comisionUSD-parteTransf)*100)/100;
+}
+function sumarLineasComision(lineas){
+  var usd=0, bs=0, divisa=0;
+  for(var i=0;i<lineas.length;i++){
+    usd+=lineas[i].comisionUSD||0; bs+=lineas[i].comisionBS||0; divisa+=lineas[i].comisionDivisaUSD||0;
+  }
+  return {usd:Math.round(usd*100)/100, bs:Math.round(bs*100)/100, divisa:Math.round(divisa*100)/100};
+}
+// IVA que NO genera comision dentro del dinero de un pago (en $).
+// - Pago total: todo el IVA de los documentos (sin retencion), o solo el
+//   25% que entro en dinero (con retencion, el 75% lo cubre el comprobante).
+// - Pago PARCIAL: solo la parte del IVA que corresponde a lo que el pago
+//   cubre de cada documento (monto abonado a ese documento / total del
+//   documento x IVA del documento).
+// - Si hay retencion, del IVA cubierto se resta lo que cubrio la retencion
+//   (no fue dinero); y si hubo descuento, el IVA dentro del dinero se reduce
+//   en la misma proporcion que el dinero.
+function ivaNoComisionablePago(p){
+  var docs=p.documentos||[];
+  var abonado;
+  if(p.montoAbonado!==undefined && p.montoAbonado!==null){
+    abonado=p.montoAbonado;
+  } else {
+    // Pago viejo sin "monto abonado" guardado: se reconstruye con el dinero
+    // (mas el descuento) y, si hubo retencion, el 75% del IVA de los docs
+    var ivaDocsTodos=0;
+    for(var q=0;q<docs.length;q++){ ivaDocsTodos+=(docs[q].iva||0); }
+    abonado=(p.montoUSD||0)/(1-Math.min(p.descuentoPct||0,99.99)/100)+(p.retencionIVA?ivaDocsTodos*0.75:0);
+  }
+  var restante=abonado;
+  var ivaCubierto=0;
+  for(var i=0;i<docs.length;i++){
+    var d=docs[i];
+    var saldoDoc=Math.max(0, d.saldo||0);
+    // Lo que este pago abona a este documento (se llenan en orden, igual
+    // que al aplicar el pago a las cuentas por cobrar)
+    var aplicado=Math.min(Math.max(restante,0), saldoDoc);
+    restante-=aplicado;
+    var iva=d.iva||0;
+    if(iva<=0 || saldoDoc<=0) continue;
+    var totalDoc=saldoDoc;
+    if(typeof CUENTAS_COBRAR!=='undefined'){
+      for(var k=0;k<CUENTAS_COBRAR.length;k++){
+        if(CUENTAS_COBRAR[k].numero===d.numero){ if((CUENTAS_COBRAR[k].neto||0)>totalDoc) totalDoc=CUENTAS_COBRAR[k].neto; break; }
+      }
+    }
+    // Sin importar el saldo, el IVA de un documento nunca es mayor que su total
+    var parteIva=Math.min(1, aplicado/totalDoc);
+    ivaCubierto+=iva*parteIva;
+  }
+  var sinDatosAbono=(p.montoAbonado===undefined||p.montoAbonado===null)&&(p.ivaRetenidoMonto===undefined||p.ivaRetenidoMonto===null);
+  var ivaRet=0;
+  if(p.retencionIVA){
+    // Pagos viejos sin el dato de lo retenido: se asume el 75% del IVA, como antes
+    ivaRet=sinDatosAbono?ivaCubierto*0.75:Math.min(ivaCubierto, ivaRetenidoDePago(p));
+  }
+  var ivaEnDinero=ivaCubierto-ivaRet;
+  var dineroBase=abonado-ivaRet;
+  if(!sinDatosAbono && dineroBase>0.009 && (p.montoUSD||0)<dineroBase) ivaEnDinero=ivaEnDinero*((p.montoUSD||0)/dineroBase);
+  return Math.round(Math.max(0, Math.min(ivaEnDinero, p.montoUSD||0))*100)/100;
 }
 function comisionSupervisorBSComision(r){
   // Con el monto del equipo en Bs (cada supervisado a su propia tasa), la
@@ -9400,21 +9569,32 @@ function montoSupervisadoBSComision(r){
 // Re-arma los totales ($ y Bs) de un vendedor a partir de sus dos partes
 function recalcularTotalesComision(r){
   r.comisionSupervisorBS=comisionSupervisorBSComision(r);
+  r.comisionSupervisorDivisaUSD=comisionSupervisorDivisaComision(r);
   r.comisionTotalUSD=Math.round(((r.comisionPropiaUSD||0)+(r.comisionSupervisorUSD||0))*100)/100;
   r.comisionTotalBS=Math.round((comisionPropiaBSComision(r)+r.comisionSupervisorBS)*100)/100;
+  // Parte de la comision total que se paga en $ (cobros en divisas)
+  r.comisionTotalDivisaUSD=Math.round((comisionPropiaDivisaComision(r)+r.comisionSupervisorDivisaUSD)*100)/100;
 }
-// Texto "$X" / "Bs Y" / "$X / Bs Y" segun la moneda elegida
-function textoMontoMoneda(usd, bs, verUSD, verBS){
+// Texto "$X" / "Bs Y" / "$X / Bs Y" segun la moneda elegida. Si hay una
+// parte en divisas (divUSD), en la vista en Bs se muestra aparte en $:
+// "Bs Y + $Z en divisas" (la comision de divisas no se convierte a Bs).
+function textoMontoMoneda(usd, bs, verUSD, verBS, divUSD){
   var partes=[];
   if(verUSD) partes.push('$'+formatearNumeroConMiles(usd,2));
-  if(verBS) partes.push('Bs '+formatearNumeroConMiles(bs,2));
+  if(verBS){
+    var hayDiv=(divUSD||0)>0.004;
+    var trozos=[];
+    if(bs>0.004 || !hayDiv) trozos.push('Bs '+formatearNumeroConMiles(bs,2));
+    if(hayDiv) trozos.push('$'+formatearNumeroConMiles(divUSD,2)+' en divisas');
+    partes.push(trozos.join(' + '));
+  }
   return partes.join(' / ');
 }
 // Detalle del equipo supervisado en la(s) moneda(s) elegida(s)
 function detalleSupervisadosTexto(r, verUSD, verBS, separador){
   return (r.detalleSupervisados||[]).map(function(s){
     var sBS=(s.montoBS!==undefined&&s.montoBS!==null)?s.montoBS:Math.round(s.montoUSD*tasaEquipoComision(r)*100)/100;
-    return 'VEND '+s.id+' - '+s.nombre+': '+textoMontoMoneda(s.montoUSD, sBS, verUSD, verBS);
+    return 'VEND '+s.id+' - '+s.nombre+': '+textoMontoMoneda(s.montoUSD, sBS, verUSD, verBS, s.montoDivisaUSD||0);
   }).join(separador);
 }
 
@@ -9432,6 +9612,13 @@ function renderResultadosComisiones(){
   var moneda=document.getElementById('comMonedaSelect')?document.getElementById('comMonedaSelect').value:'ambas';
   var verUSD=(moneda==='ambas'||moneda==='usd');
   var verBS=(moneda==='ambas'||moneda==='bs');
+  // Columna extra con lo que se paga en $ por cobros en divisas/efectivo
+  // (esa comision no se convierte a Bs); solo aparece si hay algo y si se
+  // esta viendo la parte en Bs
+  var hayDivisas=false;
+  for(var iD=0;iD<d.lista.length;iD++){ if((d.lista[iD].comisionTotalDivisaUSD||0)>0.004) hayDivisas=true; }
+  var verDiv=(verBS && hayDivisas);
+  var nColsRes=3+(verUSD?3:0)+(verBS?3:0)+(verDiv?1:0);
   var html=avisoOmitidos+'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:600px">'+
     '<tr style="background:var(--azul-c);color:var(--azul)">'+
       '<th style="padding:5px;text-align:left">Vendedor</th>'+
@@ -9442,37 +9629,41 @@ function renderResultadosComisiones(){
       (verBS?'<th style="padding:5px;text-align:right">Comision Bs</th>':'')+
       (verUSD?'<th style="padding:5px;text-align:right">Total $</th>':'')+
       (verBS?'<th style="padding:5px;text-align:right">Total Bs</th>':'')+
+      (verDiv?'<th style="padding:5px;text-align:right" title="Comision de cobros hechos en divisas/efectivo: se paga en $, no en Bs">En divisas $</th>':'')+
       '<th style="padding:5px"></th>'+
     '</tr>';
-  var totalGeneralUSD=0, totalGeneralBS=0;
+  var totalGeneralUSD=0, totalGeneralBS=0, totalGeneralDiv=0;
   for(var i=0;i<d.lista.length;i++){
     var r=d.lista[i];
     totalGeneralUSD+=r.comisionTotalUSD;
     totalGeneralBS+=r.comisionTotalBS;
+    totalGeneralDiv+=(r.comisionTotalDivisaUSD||0);
     html+='<tr style="border-bottom:1px solid var(--borde)">'+
       '<td style="padding:5px"><strong>VEND '+r.vendedorId+'</strong> - '+r.vendedorNombre+(r.esSupervisor?' <span class="tag tag-a" style="font-size:9px">Supervisor</span>':'')+'</td>'+
       '<td style="padding:5px;text-align:right"><input type="number" min="0" max="100" step="0.01" value="'+r.pctPropio+'" onchange="actualizarPctComisionVendedor('+i+',this.value)" style="width:50px;text-align:right;padding:2px 4px;border:1px solid var(--borde);border-radius:4px;font-size:12px">%</td>'+
       (verUSD?'<td style="padding:5px;text-align:right">$'+formatearNumeroConMiles(r.montoCobradoUSD,2)+'</td>':'')+
       (verBS?'<td style="padding:5px;text-align:right">Bs '+formatearNumeroConMiles(r.montoCobradoBS,2)+'</td>':'')+
       (verUSD?'<td style="padding:5px;text-align:right">$'+formatearNumeroConMiles(r.comisionPropiaUSD,2)+'</td>':'')+
-      (verBS?'<td style="padding:5px;text-align:right">Bs '+formatearNumeroConMiles(Math.round(r.comisionPropiaUSD*r.tasaPromedio*100)/100,2)+'</td>':'')+
+      (verBS?'<td style="padding:5px;text-align:right">Bs '+formatearNumeroConMiles(comisionPropiaBSComision(r),2)+'</td>':'')+
       (verUSD?'<td style="padding:5px;text-align:right;font-weight:700;color:var(--verde)">$'+formatearNumeroConMiles(r.comisionTotalUSD,2)+'</td>':'')+
       (verBS?'<td style="padding:5px;text-align:right;font-weight:700;color:var(--verde)">Bs '+formatearNumeroConMiles(r.comisionTotalBS,2)+'</td>':'')+
+      (verDiv?'<td style="padding:5px;text-align:right;font-weight:700;color:var(--verde)">'+((r.comisionTotalDivisaUSD||0)>0.004?'$'+formatearNumeroConMiles(r.comisionTotalDivisaUSD,2):'-')+'</td>':'')+
       '<td style="padding:5px"><button class="btn btn-s btn-sm" style="padding:3px 8px;font-size:11px" onclick="toggleDetalleComisionVendedor('+i+')">'+(r.verDetalle?'Ocultar':'Ver detalle')+'</button></td>'+
     '</tr>';
     if(r.esSupervisor){
       var pctSupHtml='<input type="number" min="0" max="100" step="0.01" value="'+r.pctSupervisor+'" onchange="actualizarPctSupervisorComision('+i+',this.value)" style="width:44px;text-align:right;padding:2px 4px;border:1px solid var(--borde);border-radius:4px;font-size:11px">%';
-      html+='<tr style="background:#f8f9fc"><td colspan="'+(3+(verUSD?2:0)+(verBS?2:0))+'" style="padding:5px 5px 5px 20px;font-size:11px;color:#666">'+
-        'Comision por equipo ('+pctSupHtml+' de '+textoMontoMoneda(r.montoSupervisadoUSD, montoSupervisadoBSComision(r), verUSD, verBS)+' cobrado por su equipo) = <strong>'+textoMontoMoneda(r.comisionSupervisorUSD, comisionSupervisorBSComision(r), verUSD, verBS)+'</strong>'+
+      html+='<tr style="background:#f8f9fc"><td colspan="'+nColsRes+'" style="padding:5px 5px 5px 20px;font-size:11px;color:#666">'+
+        'Comision por equipo ('+pctSupHtml+' de '+textoMontoMoneda(r.montoSupervisadoUSD, montoSupervisadoBSComision(r), verUSD, verBS, montoSupervisadoDivisaComision(r))+' cobrado por su equipo) = <strong>'+textoMontoMoneda(r.comisionSupervisorUSD, comisionSupervisorBSComision(r), verUSD, verBS, comisionSupervisorDivisaComision(r))+'</strong>'+
         (r.detalleSupervisados.length>0?'<div style="margin-top:3px">'+detalleSupervisadosTexto(r, verUSD, verBS, ' | ')+'</div>':'<div style="margin-top:3px;color:#aaa">Su equipo no tuvo cobros en este periodo</div>')+
       '</td></tr>';
     }
     if(r.verDetalle){
-      html+='<tr><td colspan="'+(3+(verUSD?2:0)+(verBS?2:0))+'" style="padding:0">'+
+      html+='<tr><td colspan="'+nColsRes+'" style="padding:0">'+
         '<div style="padding:8px 8px 8px 20px;background:#fafbfd;border-left:3px solid var(--azul)">';
       if(r.detallePagos.length===0){
         html+='<div style="font-size:12px;color:#aaa">Sin cobros propios en este periodo</div>';
       } else {
+        var hayDivDetR=verBS&&r.detallePagos.some(function(x){ return (x.comisionDivisaUSD||0)>0.004; });
         html+='<table style="width:100%;border-collapse:collapse;font-size:11px">'+
           '<tr style="color:#888"><th style="padding:3px;text-align:left">Cliente</th><th style="padding:3px;text-align:left">Fecha</th><th style="padding:3px;text-align:right">Dias</th>'+
             (verUSD?'<th style="padding:3px;text-align:right">Cobrado $</th>':'')+
@@ -9480,6 +9671,7 @@ function renderResultadosComisiones(){
             '<th style="padding:3px;text-align:right">%</th>'+
             (verUSD?'<th style="padding:3px;text-align:right">Comision $</th>':'')+
             (verBS?'<th style="padding:3px;text-align:right">Comision Bs</th>':'')+
+            (hayDivDetR?'<th style="padding:3px;text-align:right" title="Parte cobrada en divisas/efectivo: la comision se queda en $">Comision divisas $</th>':'')+
           '</tr>';
         for(var k=0;k<r.detallePagos.length;k++){
           var pg=r.detallePagos[k];
@@ -9488,7 +9680,8 @@ function renderResultadosComisiones(){
             (verBS?'<td style="padding:3px;text-align:right">Bs '+formatearNumeroConMiles(pg.montoBS,2)+'</td>':'')+
             '<td style="padding:3px;text-align:right"><input type="number" min="0" max="100" step="0.01" value="'+pg.pctAplicado+'" onchange="actualizarPctComisionDetalle('+i+','+k+',this.value)" style="width:44px;text-align:right;padding:1px 3px;border:1px solid var(--borde);border-radius:3px;font-size:11px">%</td>'+
             (verUSD?'<td style="padding:3px;text-align:right">$'+formatearNumeroConMiles(pg.comisionUSD,2)+'</td>':'')+
-            (verBS?'<td style="padding:3px;text-align:right">Bs '+formatearNumeroConMiles(pg.comisionBS,2)+'</td>':'')+
+            (verBS?'<td style="padding:3px;text-align:right">'+((pg.comisionBS||0)>0.004||!((pg.comisionDivisaUSD||0)>0.004)?'Bs '+formatearNumeroConMiles(pg.comisionBS,2):'-')+(pg.tasaPago>0&&(pg.comisionBS||0)>0.004?'<div style="font-size:9px;color:#888">tasa '+formatearNumeroConMiles(pg.tasaPago,2)+'</div>':'')+'</td>':'')+
+            (hayDivDetR?'<td style="padding:3px;text-align:right">'+((pg.comisionDivisaUSD||0)>0.004?'$'+formatearNumeroConMiles(pg.comisionDivisaUSD,2):'-')+'</td>':'')+
           '</tr>';
         }
         html+='</table>';
@@ -9499,6 +9692,7 @@ function renderResultadosComisiones(){
   html+='<tr style="border-top:2px solid var(--azul)"><td colspan="'+(2+(verUSD?2:0)+(verBS?2:0))+'" style="padding:6px;text-align:right;font-weight:700">TOTAL GENERAL</td>'+
     (verUSD?'<td style="padding:6px;text-align:right;font-weight:700;color:var(--verde)">$'+formatearNumeroConMiles(totalGeneralUSD,2)+'</td>':'')+
     (verBS?'<td style="padding:6px;text-align:right;font-weight:700;color:var(--verde)">Bs '+formatearNumeroConMiles(totalGeneralBS,2)+'</td>':'')+
+    (verDiv?'<td style="padding:6px;text-align:right;font-weight:700;color:var(--verde)">$'+formatearNumeroConMiles(totalGeneralDiv,2)+'</td>':'')+
     '<td></td></tr>';
   html+='</table></div>';
   cont.innerHTML=html;
@@ -9516,13 +9710,12 @@ function actualizarPctComisionDetalle(vendIdx, pagoIdx, nuevoValor){
   if(isNaN(pct)||pct<0) pct=0;
   var r=ULTIMO_CALCULO_COMISIONES.lista[vendIdx];
   var pg=r.detallePagos[pagoIdx];
-  pg.pctAplicado=pct;
-  pg.comisionUSD=Math.round(pg.montoComisionable*pct/100*100)/100;
-  pg.comisionBS=Math.round(pg.comisionUSD*r.tasaPromedio*100)/100;
+  recalcularLineaComision(pg, pct, r.tasaPromedio);
   // Re-sumar la comision propia del vendedor a partir de sus lineas
-  var sumaComisionUSD=0;
-  for(var k=0;k<r.detallePagos.length;k++){ sumaComisionUSD+=r.detallePagos[k].comisionUSD; }
-  r.comisionPropiaUSD=Math.round(sumaComisionUSD*100)/100;
+  var sumaLin=sumarLineasComision(r.detallePagos);
+  r.comisionPropiaUSD=sumaLin.usd;
+  r.comisionPropiaBS=sumaLin.bs;
+  r.comisionPropiaDivisaUSD=sumaLin.divisa;
   // El "% Propio" de arriba pasa a reflejar el promedio ponderado real
   // (sobre el monto comisionable, ya sin la retencion de IVA)
   r.pctPropio=r.montoComisionableUSD>0?Math.round(r.comisionPropiaUSD/r.montoComisionableUSD*10000)/100:0;
@@ -9535,14 +9728,18 @@ function actualizarPctComisionVendedor(idx, nuevoValor){
   if(isNaN(pct)||pct<0) pct=0;
   var r=ULTIMO_CALCULO_COMISIONES.lista[idx];
   r.pctPropio=pct;
-  r.comisionPropiaUSD=Math.round(r.montoComisionableUSD*pct/100*100)/100;
-  recalcularTotalesComision(r);
   for(var k=0;k<r.detallePagos.length;k++){
-    var pg=r.detallePagos[k];
-    pg.pctAplicado=pct;
-    pg.comisionUSD=Math.round(pg.montoComisionable*pct/100*100)/100;
-    pg.comisionBS=Math.round(pg.comisionUSD*r.tasaPromedio*100)/100;
+    recalcularLineaComision(r.detallePagos[k], pct, r.tasaPromedio);
   }
+  if(r.detallePagos.length>0){
+    var sumaLin=sumarLineasComision(r.detallePagos);
+    r.comisionPropiaUSD=sumaLin.usd;
+    r.comisionPropiaBS=sumaLin.bs;
+    r.comisionPropiaDivisaUSD=sumaLin.divisa;
+  } else {
+    r.comisionPropiaUSD=Math.round(r.montoComisionableUSD*pct/100*100)/100;
+  }
+  recalcularTotalesComision(r);
   renderResultadosComisiones();
 }
 
@@ -9587,6 +9784,9 @@ function guardarReporteComisiones(){
     existente.comisionSupervisorUSD=r.comisionSupervisorUSD;
     existente.tasaEquipo=r.tasaEquipo; existente.montoSupervisadoBS=r.montoSupervisadoBS; existente.comisionSupervisorBS=r.comisionSupervisorBS;
     existente.comisionTotalUSD=r.comisionTotalUSD; existente.comisionTotalBS=r.comisionTotalBS;
+    existente.comisionPropiaBS=r.comisionPropiaBS; existente.comisionPropiaDivisaUSD=r.comisionPropiaDivisaUSD;
+    existente.montoSupervisadoDivisaUSD=r.montoSupervisadoDivisaUSD; existente.comisionSupervisorDivisaUSD=r.comisionSupervisorDivisaUSD;
+    existente.comisionTotalDivisaUSD=r.comisionTotalDivisaUSD;
     existente.detallePagos=r.detallePagos;
     existente.moneda=monedaActual;
     existente.fechaCalculo=new Date().toISOString();
@@ -9609,6 +9809,9 @@ function guardarReporteComisiones(){
       comisionSupervisorUSD:r.comisionSupervisorUSD,
       tasaEquipo:r.tasaEquipo, montoSupervisadoBS:r.montoSupervisadoBS, comisionSupervisorBS:r.comisionSupervisorBS,
       comisionTotalUSD:r.comisionTotalUSD, comisionTotalBS:r.comisionTotalBS,
+      comisionPropiaBS:r.comisionPropiaBS, comisionPropiaDivisaUSD:r.comisionPropiaDivisaUSD,
+      montoSupervisadoDivisaUSD:r.montoSupervisadoDivisaUSD, comisionSupervisorDivisaUSD:r.comisionSupervisorDivisaUSD,
+      comisionTotalDivisaUSD:r.comisionTotalDivisaUSD,
       detallePagos:r.detallePagos,
       moneda:monedaActual,
       estado:'pendiente',
@@ -9668,6 +9871,9 @@ function construirCalculoDesdeGuardado(id){
     montoSupervisadoUSD:r.montoSupervisadoUSD, comisionSupervisorUSD:r.comisionSupervisorUSD,
     tasaEquipo:r.tasaEquipo, montoSupervisadoBS:r.montoSupervisadoBS, comisionSupervisorBS:r.comisionSupervisorBS,
     comisionTotalUSD:r.comisionTotalUSD, comisionTotalBS:r.comisionTotalBS,
+    comisionPropiaBS:r.comisionPropiaBS, comisionPropiaDivisaUSD:r.comisionPropiaDivisaUSD,
+    montoSupervisadoDivisaUSD:r.montoSupervisadoDivisaUSD, comisionSupervisorDivisaUSD:r.comisionSupervisorDivisaUSD,
+    comisionTotalDivisaUSD:r.comisionTotalDivisaUSD,
     detallePagos:r.detallePagos||[], verDetalle:true
   }]};
 }
@@ -9787,43 +9993,59 @@ function descargarExcelComisiones(){
   var verUSD=(moneda==='ambas'||moneda==='usd');
   var verBS=(moneda==='ambas'||moneda==='bs');
 
+  // Si algun vendedor tiene comision por cobros en divisas, en la vista en Bs
+  // se agregan columnas aparte en $ (esa comision no se convierte a Bs)
+  var hayDivisasX=false;
+  for(var iD=0;iD<d.lista.length;iD++){ if((d.lista[iD].comisionTotalDivisaUSD||0)>0.004) hayDivisasX=true; }
+  var verDivX=(verBS && hayDivisasX);
   // Hoja 1: Resumen por vendedor
   var encabezado=['Vendedor','% Propio'];
   if(verUSD) encabezado.push('Cobrado $','Comision Propia $');
   if(verBS) encabezado.push('Cobrado Bs','Comision Propia Bs');
+  if(verDivX) encabezado.push('Comision Propia en divisas $');
   encabezado.push('% Supervisor');
   if(verUSD) encabezado.push('Cobrado por Equipo $');
   if(verBS) encabezado.push('Cobrado por Equipo Bs');
+  if(verDivX) encabezado.push('Cobrado por Equipo en divisas $');
   if(verUSD) encabezado.push('Comision Supervisor $');
   if(verBS) encabezado.push('Comision Supervisor Bs');
+  if(verDivX) encabezado.push('Comision Supervisor en divisas $');
   if(verUSD) encabezado.push('Comision Total $');
   if(verBS) encabezado.push('Comision Total Bs');
+  if(verDivX) encabezado.push('Comision Total en divisas $');
   var filas=[['Reporte de Comisiones'],['Del '+d.desde+' al '+d.hasta],[],encabezado];
-  var totalUSD=0, totalBS=0;
+  var totalUSD=0, totalBS=0, totalDivX=0;
   for(var i=0;i<d.lista.length;i++){
     var r=d.lista[i];
-    totalUSD+=r.comisionTotalUSD; totalBS+=r.comisionTotalBS;
+    totalUSD+=r.comisionTotalUSD; totalBS+=r.comisionTotalBS; totalDivX+=(r.comisionTotalDivisaUSD||0);
     var fila=['VEND '+r.vendedorId+' - '+r.vendedorNombre, r.pctPropio+'%'];
     if(verUSD) fila.push(r.montoCobradoUSD, r.comisionPropiaUSD);
-    if(verBS) fila.push(r.montoCobradoBS, Math.round(r.comisionPropiaUSD*r.tasaPromedio*100)/100);
+    if(verBS) fila.push(r.montoCobradoBS, comisionPropiaBSComision(r));
+    if(verDivX) fila.push(comisionPropiaDivisaComision(r));
     fila.push(r.esSupervisor?(r.pctSupervisor+'%'):'');
     if(verUSD) fila.push(r.esSupervisor?r.montoSupervisadoUSD:'');
     if(verBS) fila.push(r.esSupervisor?montoSupervisadoBSComision(r):'');
+    if(verDivX) fila.push(r.esSupervisor?montoSupervisadoDivisaComision(r):'');
     if(verUSD) fila.push(r.esSupervisor?r.comisionSupervisorUSD:'');
     if(verBS) fila.push(r.esSupervisor?comisionSupervisorBSComision(r):'');
+    if(verDivX) fila.push(r.esSupervisor?comisionSupervisorDivisaComision(r):'');
     if(verUSD) fila.push(r.comisionTotalUSD);
     if(verBS) fila.push(r.comisionTotalBS);
+    if(verDivX) fila.push(r.comisionTotalDivisaUSD||0);
     filas.push(fila);
   }
   filas.push([]);
   var filaTotal=['TOTAL GENERAL',''];
   if(verUSD) filaTotal.push('','');
   if(verBS) filaTotal.push('','');
+  if(verDivX) filaTotal.push('');    // Comision Propia en divisas $
   filaTotal.push(''); // % Supervisor
   if(verUSD) filaTotal.push('','');  // Cobrado por Equipo $ y Comision Supervisor $
   if(verBS) filaTotal.push('','');   // Cobrado por Equipo Bs y Comision Supervisor Bs
+  if(verDivX) filaTotal.push('','');  // Cobrado por Equipo y Comision Supervisor en divisas $
   if(verUSD) filaTotal.push(Math.round(totalUSD*100)/100);
   if(verBS) filaTotal.push(Math.round(totalBS*100)/100);
+  if(verDivX) filaTotal.push(Math.round(totalDivX*100)/100);
   filas.push(filaTotal);
 
   // Hoja 2: Detalle cliente por cliente, SEPARADO por vendedor (cada uno
@@ -9835,6 +10057,8 @@ function descargarExcelComisiones(){
   encabezadoDet.push('%');
   if(verUSD) encabezadoDet.push('Comision $');
   if(verBS) encabezadoDet.push('Comision Bs');
+  if(verDivX) encabezadoDet.push('Comision en divisas $');
+  if(verBS) encabezadoDet.push('Tasa del cobro');
   var filasDet=[['Detalle de Comisiones por Cobro'],['Del '+d.desde+' al '+d.hasta]];
   var mergesDet=[
     {s:{r:0,c:0},e:{r:0,c:encabezadoDet.length-1}},
@@ -9856,6 +10080,8 @@ function descargarExcelComisiones(){
       filaDet.push(pg.pctAplicado+'%');
       if(verUSD) filaDet.push(pg.comisionUSD);
       if(verBS) filaDet.push(pg.comisionBS);
+      if(verDivX) filaDet.push(pg.comisionDivisaUSD||0);
+      if(verBS) filaDet.push((pg.tasaPago>0&&(pg.comisionBS||0)>0.004)?pg.tasaPago:'');
       filasDet.push(filaDet);
     }
   }
@@ -9886,6 +10112,10 @@ function descargarPDFComisiones(){
   // layout automatico (el default de HTML), el navegador calcula el ancho
   // de cada columna segun su contenido real - los numeros quedan justos
   // pero completos, y "Vendedor"/"Cliente" se llevan el espacio que sobra.
+  // Columnas extra en $ para la comision de cobros en divisas (no se convierte a Bs)
+  var hayDivisasP=false;
+  for(var iD=0;iD<d.lista.length;iD++){ if((d.lista[iD].comisionTotalDivisaUSD||0)>0.004) hayDivisasP=true; }
+  var verDivP=(verBS && hayDivisasP);
   var html='<html><head><meta charset="UTF-8"><title>Comisiones</title><style>'+
     '@page{size:landscape;margin:12mm}'+
     'body{font-family:Arial,sans-serif;color:#222;padding:10px;font-size:11px}'+
@@ -9914,27 +10144,30 @@ function descargarPDFComisiones(){
       (verBS?'<th class="num">Comision Bs</th>':'')+
       (verUSD?'<th class="num">Total $</th>':'')+
       (verBS?'<th class="num">Total Bs</th>':'')+
+      (verDivP?'<th class="num">En divisas $</th>':'')+
     '</tr>';
-  var totalUSD=0, totalBS=0;
-  var numCols=2+(verUSD?3:0)+(verBS?3:0);
+  var totalUSD=0, totalBS=0, totalDivP=0;
+  var numCols=2+(verUSD?3:0)+(verBS?3:0)+(verDivP?1:0);
   for(var i=0;i<d.lista.length;i++){
     var r=d.lista[i];
-    totalUSD+=r.comisionTotalUSD; totalBS+=r.comisionTotalBS;
+    totalUSD+=r.comisionTotalUSD; totalBS+=r.comisionTotalBS; totalDivP+=(r.comisionTotalDivisaUSD||0);
     html+='<tr><td class="wrap">VEND '+r.vendedorId+' - '+r.vendedorNombre+(r.esSupervisor?' (Supervisor)':'')+'</td><td class="num">'+r.pctPropio+'%</td>'+
       (verUSD?'<td class="num">$'+formatearNumeroConMiles(r.montoCobradoUSD,2)+'</td>':'')+
       (verBS?'<td class="num">Bs '+formatearNumeroConMiles(r.montoCobradoBS,2)+'</td>':'')+
       (verUSD?'<td class="num">$'+formatearNumeroConMiles(r.comisionPropiaUSD,2)+'</td>':'')+
-      (verBS?'<td class="num">Bs '+formatearNumeroConMiles(Math.round(r.comisionPropiaUSD*r.tasaPromedio*100)/100,2)+'</td>':'')+
+      (verBS?'<td class="num">Bs '+formatearNumeroConMiles(comisionPropiaBSComision(r),2)+'</td>':'')+
       (verUSD?'<td class="num"><strong>$'+formatearNumeroConMiles(r.comisionTotalUSD,2)+'</strong></td>':'')+
       (verBS?'<td class="num"><strong>Bs '+formatearNumeroConMiles(r.comisionTotalBS,2)+'</strong></td>':'')+
+      (verDivP?'<td class="num"><strong>'+((r.comisionTotalDivisaUSD||0)>0.004?'$'+formatearNumeroConMiles(r.comisionTotalDivisaUSD,2):'-')+'</strong></td>':'')+
     '</tr>';
     if(r.esSupervisor){
-      html+='<tr><td colspan="'+numCols+'" class="wrap" style="font-size:10.5px;color:#666">Comision por equipo ('+r.pctSupervisor+'% de '+textoMontoMoneda(r.montoSupervisadoUSD, montoSupervisadoBSComision(r), verUSD, verBS)+') = '+textoMontoMoneda(r.comisionSupervisorUSD, comisionSupervisorBSComision(r), verUSD, verBS)+(r.detalleSupervisados.length>0?' — '+detalleSupervisadosTexto(r, verUSD, verBS, ', '):'')+'</td></tr>';
+      html+='<tr><td colspan="'+numCols+'" class="wrap" style="font-size:10.5px;color:#666">Comision por equipo ('+r.pctSupervisor+'% de '+textoMontoMoneda(r.montoSupervisadoUSD, montoSupervisadoBSComision(r), verUSD, verBS, montoSupervisadoDivisaComision(r))+') = '+textoMontoMoneda(r.comisionSupervisorUSD, comisionSupervisorBSComision(r), verUSD, verBS, comisionSupervisorDivisaComision(r))+(r.detalleSupervisados.length>0?' — '+detalleSupervisadosTexto(r, verUSD, verBS, ', '):'')+'</td></tr>';
     }
   }
-  html+='<tr class="total-row"><td colspan="'+(numCols-(verUSD?1:0)-(verBS?1:0))+'" class="num">TOTAL GENERAL</td>'+
+  html+='<tr class="total-row"><td colspan="'+(numCols-(verUSD?1:0)-(verBS?1:0)-(verDivP?1:0))+'" class="num">TOTAL GENERAL</td>'+
     (verUSD?'<td class="num">$'+formatearNumeroConMiles(totalUSD,2)+'</td>':'')+
     (verBS?'<td class="num">Bs '+formatearNumeroConMiles(totalBS,2)+'</td>':'')+
+    (verDivP?'<td class="num">$'+formatearNumeroConMiles(totalDivP,2)+'</td>':'')+
   '</tr>';
   html+='</table>';
   // Detalle cliente por cliente, separado por vendedor
@@ -9945,7 +10178,7 @@ function descargarPDFComisiones(){
     html+='<div class="vend"><div class="vend-title">VEND '+r.vendedorId+' - '+r.vendedorNombre+'</div>'+
       '<table class="detalle"><tr><th>Cliente</th><th>Fecha</th><th class="num">Dias</th>'+
         (verUSD?'<th class="num">Cobrado $</th><th class="num">IVA (no comisiona) $</th>':'')+(verBS?'<th class="num">Cobrado Bs</th>':'')+
-        '<th class="num">%</th>'+(verUSD?'<th class="num">Comision $</th>':'')+(verBS?'<th class="num">Comision Bs</th>':'')+
+        '<th class="num">%</th>'+(verUSD?'<th class="num">Comision $</th>':'')+(verBS?'<th class="num">Comision Bs</th>':'')+(verDivP?'<th class="num">Comision divisas $</th>':'')+
       '</tr>';
     for(var k=0;k<r.detallePagos.length;k++){
       var pg=r.detallePagos[k];
@@ -9954,7 +10187,8 @@ function descargarPDFComisiones(){
         (verBS?'<td class="num">Bs '+formatearNumeroConMiles(pg.montoBS,2)+'</td>':'')+
         '<td class="num">'+pg.pctAplicado+'%</td>'+
         (verUSD?'<td class="num">$'+formatearNumeroConMiles(pg.comisionUSD,2)+'</td>':'')+
-        (verBS?'<td class="num">Bs '+formatearNumeroConMiles(pg.comisionBS,2)+'</td>':'')+
+        (verBS?'<td class="num">'+((pg.comisionBS||0)>0.004||!((pg.comisionDivisaUSD||0)>0.004)?'Bs '+formatearNumeroConMiles(pg.comisionBS,2):'-')+'</td>':'')+
+        (verDivP?'<td class="num">'+((pg.comisionDivisaUSD||0)>0.004?'$'+formatearNumeroConMiles(pg.comisionDivisaUSD,2):'-')+'</td>':'')+
       '</tr>';
     }
     html+='</table></div>';
@@ -15534,7 +15768,7 @@ function renderPagoCobroCard(p){
       (p.observacionAjuste?' — '+p.observacionAjuste:'')+
     '</div>';
   }
-  return '<div class="card" style="margin-bottom:8px;border-left:3px solid '+borderColor+';'+cardOpacity+'">'+
+  return '<div class="card" style="margin-bottom:8px;border-left:3px solid '+borderColor+';cursor:pointer;'+cardOpacity+'" onclick="abrirDetallePagoCobro(&quot;'+p.id+'&quot;, event)">'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
       '<div>'+
         '<strong style="font-size:14px;'+(anuladoEstilo?'text-decoration:line-through;color:#aaa':'')+'">'+p.clienteNombre+'</strong>'+
@@ -15550,8 +15784,95 @@ function renderPagoCobroCard(p){
     saldoAjustLine+
     (p.estado==='rechazado' && p.motivoRechazo?'<div style="font-size:12px;color:var(--rojo);margin-top:4px">Motivo: '+p.motivoRechazo+'</div>':'')+
     (comprobHtml?'<div style="margin-top:8px">'+comprobHtml+'</div>':'')+
+    '<div style="font-size:11px;color:var(--azul);margin-top:6px">Toca para ver el detalle completo</div>'+
     acciones+
   '</div>';
+}
+
+// ═══ Detalle completo de un cobro (se abre al tocar el cobro en la lista) ═══
+function abrirDetallePagoCobro(pagoId, ev){
+  // Si el toque fue sobre un boton, enlace o imagen, que haga lo suyo y no abra el detalle
+  if(ev && ev.target && ev.target.closest && ev.target.closest('button, a, img')) return;
+  var p=PAGOS_COBRANZA.find(function(x){return x.id===pagoId;});
+  if(!p){ toast('Pago no encontrado'); return; }
+  var $=function(n){ return '$'+formatearNumeroConMiles(n||0,2); };
+  var fila=function(etq, val){ return '<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px solid #f0f0f0"><span style="color:#888">'+etq+'</span><span style="text-align:right;font-weight:600">'+val+'</span></div>'; };
+  var titulo=function(t){ return '<div style="font-size:12px;font-weight:700;color:var(--azul);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.3px">'+t+'</div>'; };
+  var html='<div style="font-size:13px">';
+  html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
+    '<div><strong style="font-size:15px">'+p.clienteNombre+'</strong>'+
+    '<div style="font-size:11px;color:var(--azul);font-weight:600">Cod: '+p.clienteId+'</div>'+
+    '<div style="font-size:11px;color:#888">VEND '+p.vendedor+' - '+(p.vendedorNombre||'')+'</div></div>'+
+    badgeEstadoCobro(p.estado)+'</div>';
+
+  // Fechas e historial
+  html+=titulo('Fechas');
+  html+=fila('Fecha del pago', p.fecha||'-');
+  html+=fila('Registrado en el sistema', p.fechaRegistroISO||'-');
+  if(p.fechaReporte) html+=fila('Reportado', p.fechaReporte);
+  if(p.editadoPor) html+=fila('Corregido por', p.editadoPor+(p.fechaEdicion?' ('+p.fechaEdicion+')':''));
+  if(p.confirmadoPor) html+=fila('Confirmado por', p.confirmadoPor+(p.fechaConfirmacion?' ('+p.fechaConfirmacion+')':''));
+  else if(p.fechaConfirmacion) html+=fila('Ultimo cambio de estado', p.fechaConfirmacion);
+
+  // Documentos
+  html+=titulo('Documentos que cubre');
+  html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'+
+    '<tr style="color:#888"><th style="text-align:left;padding:3px">Doc.</th><th style="text-align:left;padding:3px">Emision</th><th style="text-align:left;padding:3px">Vence</th><th style="text-align:right;padding:3px">IVA</th><th style="text-align:right;padding:3px">Saldo al reportar</th></tr>';
+  (p.documentos||[]).forEach(function(d){
+    html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:3px">'+d.numero+'</td><td style="padding:3px">'+(d.emision||'-')+'</td><td style="padding:3px">'+(d.vencimiento||'-')+'</td><td style="padding:3px;text-align:right">'+((d.iva||0)>0?$(d.iva):'-')+'</td><td style="padding:3px;text-align:right">'+$(d.saldo)+'</td></tr>';
+    if((d.saldo||0)<0) html+='<tr><td colspan="5" style="padding:2px 3px 4px;font-size:10px;color:var(--verde);font-style:italic">Este documento tenia un saldo a favor y se aplico como abono.</td></tr>';
+  });
+  html+='</table></div>';
+
+  // Depositos
+  html+=titulo('Depositos / formas de pago');
+  var deps=(p.depositos&&p.depositos.length)?p.depositos:[];
+  if(deps.length===0) html+='<div style="font-size:12px;color:#aaa">Sin depositos registrados</div>';
+  deps.forEach(function(d,idx){
+    var esT=d.formaPago==='transferencia';
+    html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:8px;margin-bottom:6px;font-size:12px">'+
+      '<div style="font-weight:700;margin-bottom:2px">'+(deps.length>1?('Deposito '+(idx+1)+' - '):'')+(esT?'Transferencia':(d.formaPago==='efectivo'?'Efectivo':'Divisas'))+'</div>'+
+      fila('Fecha', d.fecha||p.fecha||'-')+
+      (esT?fila('Banco', BANCOS_COBRO[d.banco]||d.banco||'-')+fila('Referencia', d.referencia||'-')+fila('Monto en Bs', 'Bs '+formatearNumeroConMiles(d.monto||0,2))+fila('Tasa BCV usada', formatearNumeroConMiles(d.tasa||0,2)):fila('Monto', $(d.monto)))+
+      fila('Equivalente en $', $(d.montoUSD))+
+      (esT?htmlDiferenciaTasaPago(d, p.fecha):'')+
+    '</div>';
+  });
+
+  // Montos
+  html+=titulo('Montos');
+  var abonado=(p.montoAbonado!==undefined&&p.montoAbonado!==null)?p.montoAbonado:p.montoEsperado;
+  html+=fila('Total depositado', $(p.montoUSD));
+  if(p.descuentoPct) html+=fila('Descuento', p.descuentoPct+'%');
+  var ivaRet=ivaRetenidoDePago(p);
+  html+=fila('Retencion de IVA', p.retencionIVA?('Si'+(ivaRet>0.009?' ('+$(ivaRet)+' sin depositar)':'')):'No');
+  html+=fila('Se abona a los documentos', $(abonado));
+  if(p.sumaDocsOriginal!==undefined&&p.sumaDocsOriginal!==null) html+=fila('Total de los documentos', $(p.sumaDocsOriginal));
+  var saldoPend=(p.saldoPendienteAjustado!==undefined&&p.saldoPendienteAjustado!==null)?p.saldoPendienteAjustado:Math.round(((p.montoEsperado||0)-(p.montoUSD||0))*100)/100;
+  html+=fila(saldoPend<0?'Saldo a favor del cliente':'Saldo pendiente', saldoPend<0?'('+$(Math.abs(saldoPend))+')':$(saldoPend));
+  if(p.observacionAjuste) html+=fila('Observacion del ajuste', p.observacionAjuste);
+  if(p.estado==='rechazado' && p.motivoRechazo) html+='<div style="font-size:12px;color:var(--rojo);margin-top:8px">Motivo del rechazo: '+p.motivoRechazo+'</div>';
+
+  // Comprobantes
+  if(p.comprobantesUrls && p.comprobantesUrls.length){
+    html+=titulo('Comprobantes ('+p.comprobantesUrls.length+')');
+    html+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
+    p.comprobantesUrls.forEach(function(u){
+      html+='<a href="'+u+'" target="_blank"><img src="'+u+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1.5px solid var(--borde)"></a>';
+    });
+    html+='</div>';
+  }
+  html+='<div style="font-size:10px;color:#bbb;margin-top:10px">ID: '+p.id+'</div></div>';
+  document.getElementById('detallePagoCobroContenido').innerHTML=html;
+
+  // Acciones rapidas para los pendientes (solo quien puede aprobar)
+  var acc='';
+  if(p.estado==='pendiente' && puedeAprobarPagosCobranza()){
+    acc='<button class="btn" style="flex:1;background:var(--verde-c);color:var(--verde);font-weight:600" onclick="cerrarModal(&quot;mDetallePagoCobro&quot;);abrirConfirmarPago(&quot;'+p.id+'&quot;)">Confirmar</button>'+
+        '<button class="btn" style="flex:1;background:var(--rojo-c);color:var(--rojo);font-weight:600" onclick="cerrarModal(&quot;mDetallePagoCobro&quot;);abrirRechazarPago(&quot;'+p.id+'&quot;)">Rechazar</button>';
+  }
+  document.getElementById('detallePagoCobroAcciones').innerHTML=acc;
+  document.getElementById('mDetallePagoCobro').classList.add('open');
 }
 
 function renderHistorialCobros(){
@@ -15999,6 +16320,16 @@ function abrirExportarCobrosExcel(){
   document.getElementById('excelCobrosDesde').value=desdeActual||'';
   document.getElementById('excelCobrosHasta').value=hastaActual||'';
   document.getElementById('excelCobrosAnulados').value='excluir';
+  // Copiar los demas filtros de la pantalla (estado, vendedor, cliente)
+  document.getElementById('excelCobrosEstado').value=document.getElementById('filtroCobroEstado').value||'todos';
+  var selVendPant=document.getElementById('filtroCobroVendedor');
+  var selVendExc=document.getElementById('excelCobrosVendedor');
+  var wrapVendPant=document.getElementById('filtroCobroVendWrap');
+  var hayFiltroVend=!!(wrapVendPant && wrapVendPant.style.display!=='none' && selVendPant);
+  if(hayFiltroVend){ selVendExc.innerHTML=selVendPant.innerHTML; selVendExc.value=selVendPant.value||'todos'; }
+  document.getElementById('excelCobrosVendWrap').style.display=hayFiltroVend?'block':'none';
+  var cliPant=document.getElementById('filtroCobroCliente');
+  document.getElementById('excelCobrosCliente').value=cliPant?cliPant.value:'';
   var verTodosExcel=esVistaMultiVendedor();
   document.getElementById('excelCobrosSepararWrap').style.display=verTodosExcel?'block':'none';
   document.getElementById('excelCobrosSepararVendedor').checked=false;
@@ -16129,21 +16460,56 @@ function construirHojaCobros(lista, tituloHoja){
   return ws;
 }
 
+// Pagos que se van a exportar: aplica TODOS los filtros del modal (rango de
+// fecha de registro, estado, vendedor, cliente y regla de anulados)
+function filtrarPagosParaExportar(){
+  var desde=document.getElementById('excelCobrosDesde').value;
+  var hasta=document.getElementById('excelCobrosHasta').value;
+  var modoAnulados=document.getElementById('excelCobrosAnulados').value;
+  var estadoF=document.getElementById('excelCobrosEstado').value||'todos';
+  var wrapV=document.getElementById('excelCobrosVendWrap');
+  var vendF=(wrapV && wrapV.style.display!=='none')?document.getElementById('excelCobrosVendedor').value:'todos';
+  var cliF=(document.getElementById('excelCobrosCliente').value||'').trim().toLowerCase();
+  return PAGOS_COBRANZA.filter(function(p){
+    var fProc=fechaProcesoPagoCobranza(p);
+    if(desde && fProc<desde) return false;
+    if(hasta && fProc>hasta) return false;
+    if(estadoF!=='todos'){
+      if(p.estado!==estadoF) return false;
+    } else {
+      if(modoAnulados==='excluir' && p.estado==='anulado') return false;
+      if(modoAnulados==='solo' && p.estado!=='anulado') return false;
+    }
+    if(vendF && vendF!=='todos' && p.vendedor!==vendF) return false;
+    if(cliF){
+      var nom=(p.clienteNombre||'').toLowerCase(), cod=(p.clienteId||'').toLowerCase();
+      if(nom.indexOf(cliF)<0 && cod.indexOf(cliF)<0) return false;
+    }
+    return true;
+  });
+}
+// Texto corto con los filtros aplicados, para el titulo del reporte
+function textoFiltrosExportarCobros(){
+  var partes=[];
+  var est=document.getElementById('excelCobrosEstado').value;
+  if(est && est!=='todos') partes.push('Estado: '+est);
+  var wrapV=document.getElementById('excelCobrosVendWrap');
+  if(wrapV && wrapV.style.display!=='none' && document.getElementById('excelCobrosVendedor').value!=='todos') partes.push('VEND '+document.getElementById('excelCobrosVendedor').value);
+  var cli=(document.getElementById('excelCobrosCliente').value||'').trim();
+  if(cli) partes.push('Cliente: '+cli);
+  return partes.join(' | ');
+}
+
 function ejecutarExportarCobrosExcel(){
   var desde=document.getElementById('excelCobrosDesde').value;
   var hasta=document.getElementById('excelCobrosHasta').value;
   var modoAnulados=document.getElementById('excelCobrosAnulados').value;
   var separarPorVendedor=document.getElementById('excelCobrosSepararVendedor').checked;
   var periodoTxt=desde?(desde===hasta?desde:('Del '+desde+' al '+hasta)):'Todo el periodo';
+  var filtrosTxt=textoFiltrosExportarCobros();
+  if(filtrosTxt) periodoTxt+=' ('+filtrosTxt+')';
 
-  var lista=PAGOS_COBRANZA.filter(function(p){
-    var fProc=fechaProcesoPagoCobranza(p);
-    if(desde && fProc<desde) return false;
-    if(hasta && fProc>hasta) return false;
-    if(modoAnulados==='excluir' && p.estado==='anulado') return false;
-    if(modoAnulados==='solo' && p.estado!=='anulado') return false;
-    return true;
-  });
+  var lista=filtrarPagosParaExportar();
 
   if(lista.length===0){ toast('No hay pagos para exportar con estos filtros'); return; }
 
@@ -16183,15 +16549,10 @@ function ejecutarExportarCobrosExcelEstilo(){
   var modoAnulados=document.getElementById('excelCobrosAnulados').value;
   var separarPorVendedor=document.getElementById('excelCobrosSepararVendedor').checked;
   var periodoTxt=desde?(desde===hasta?desde:('Del '+desde+' al '+hasta)):'Todo el periodo';
+  var filtrosTxt=textoFiltrosExportarCobros();
+  if(filtrosTxt) periodoTxt+=' ('+filtrosTxt+')';
 
-  var lista=PAGOS_COBRANZA.filter(function(p){
-    var fProc=fechaProcesoPagoCobranza(p);
-    if(desde && fProc<desde) return false;
-    if(hasta && fProc>hasta) return false;
-    if(modoAnulados==='excluir' && p.estado==='anulado') return false;
-    if(modoAnulados==='solo' && p.estado!=='anulado') return false;
-    return true;
-  });
+  var lista=filtrarPagosParaExportar();
   if(lista.length===0){ toast('No hay pagos para exportar con estos filtros'); return; }
 
   // Un pago se considera "Fiscal" si AL MENOS UNO de sus documentos viene
@@ -16592,7 +16953,7 @@ function cerrarSesion(){
 // archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
 // y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
 // el publicado es distinto, la app se recarga sola con la version nueva.
-var APP_VERSION='2026-10-15-2335';
+var APP_VERSION='2026-10-24-2037';
 function revisarVersionApp(){
   try{
     if(typeof fetch!=='function') return;
