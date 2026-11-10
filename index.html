@@ -801,6 +801,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <button class="btn btn-s btn-sm" onclick="buscarPedidosProvisionalesHuerfanos()">Reparar pedidos con codigo provisional</button>
           <button class="btn btn-s btn-sm" onclick="limpiarPedidosDuplicadosEntreVendedores()">Eliminar pedidos duplicados</button>
           <button class="btn btn-s btn-sm" onclick="abrirPedidosDeCliente()">Ver pedidos de un cliente</button>
+          <button class="btn btn-s btn-sm" onclick="abrirUbicacionClientes()">Estado / Ciudad de clientes</button>
         </div>
       </div>
     </div>
@@ -971,6 +972,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <input type="text" id="cxcBusqDoc" placeholder="Buscar por cliente, codigo o RIF..." oninput="renderListaCxCAdmin()">
         </div>
         <button class="btn btn-s btn-sm" style="margin-bottom:10px" onclick="descargarExcelCxCActual()">Descargar CxC actual (Excel)</button>
+        <button class="btn btn-s btn-sm" id="btnVerCrucesCxC" style="margin-bottom:10px;display:none" onclick="abrirHistorialCruces()">Ver cruces de documentos</button>
         <div id="cxcListaCompleta"></div>
       </div>
       <div class="card" id="cxcVerificadorCard" style="display:none">
@@ -1295,6 +1297,18 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
       <div id="rptCardResumen-body" style="padding:0 16px 16px">
         <div id="rptResumen"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
+      </div>
+    </div>
+
+    <!-- Ventas por Estado y Ciudad -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div onclick="toggleRptCard('rptCardUbicacion')" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        <span class="card-title" style="margin:0">Ventas por Estado y Ciudad</span>
+        <span id="rptCardUbicacion-arrow" style="color:#aaa;font-size:11px">▲</span>
+      </div>
+      <div id="rptCardUbicacion-body" style="padding:0 16px 16px">
+        <p style="font-size:11px;color:#888;margin:0 0 10px">Agrupa las ventas por el Estado y la Ciudad del cliente. Respeta el periodo y los filtros de vendedor y cliente de arriba.</p>
+        <div id="rptUbicacion"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
       </div>
     </div>
 
@@ -1991,6 +2005,33 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
   </div>
 </div>
 
+<!-- MODAL CRUZAR DOS DOCUMENTOS CXC (uno positivo y uno negativo, sin pago) -->
+<div class="modal-bg" id="mCruzarDocs">
+  <div class="modal" style="max-height:90vh;overflow-y:auto">
+    <h3 style="color:var(--azul)">Cruzar documentos (sin pago)</h3>
+    <p style="font-size:12px;color:#888;margin-bottom:10px">Compensa un documento que el cliente debe (positivo) contra un saldo a favor (negativo) del MISMO cliente. No es un pago: no registra dinero, no genera comision y no pasa por confirmacion. Queda registrado con tu nombre y se puede anular.</p>
+    <div id="cruzarDocA" style="font-size:13px;background:#f7f8fb;border-radius:8px;padding:10px;margin-bottom:10px"></div>
+    <div class="field"><label>Cruzar con</label><select id="cruzarDocB" onchange="actualizarPreviewCruce(true)"></select></div>
+    <div class="field"><label>Monto a cruzar (US$)</label><input type="number" step="0.01" min="0" id="cruzarMonto" oninput="actualizarPreviewCruce(false)">
+      <div id="cruzarMaximo" style="font-size:11px;color:#888;margin-top:2px"></div></div>
+    <div id="cruzarPreview" style="font-size:12px;background:var(--azul-c);border-radius:8px;padding:8px 10px;margin-bottom:10px"></div>
+    <div class="field"><label>Motivo (obligatorio)</label><textarea id="cruzarMotivo" rows="2" placeholder="Ej: nota de credito aplicada a la factura, devolucion, ajuste solicitado por administracion..."></textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="background:var(--azul);color:#fff;font-weight:600" onclick="ejecutarCruceDocs()">Cruzar documentos</button>
+      <button class="btn btn-s" onclick="cerrarModal('mCruzarDocs')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL HISTORIAL DE CRUCES DE DOCUMENTOS -->
+<div class="modal-bg" id="mHistorialCruces">
+  <div class="modal" style="max-height:90vh;overflow-y:auto">
+    <h3>Cruces de documentos</h3>
+    <div id="historialCrucesLista"></div>
+    <button class="btn btn-s" style="margin-top:10px;width:100%" onclick="cerrarModal('mHistorialCruces')">Cerrar</button>
+  </div>
+</div>
+
 <!-- MODAL EDITAR SALDO DE UN DOCUMENTO CXC -->
 <div class="modal-bg" id="mEditarSaldoCxC">
   <div class="modal">
@@ -2332,6 +2373,29 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 </div>
 
 <!-- MODAL CONFIRMAR -->
+<div class="modal-bg" id="mUbicacionClientes">
+  <div class="modal" style="max-width:640px">
+    <h3>Estado / Ciudad de clientes</h3>
+    <div style="font-size:11px;color:#888;margin-bottom:8px">El Estado y la Ciudad se deducen del campo Ciudad/Direccion que viene de Profit. Aqui puedes corregir los que no se detectaron o quedaron por confirmar. Lo que guardes se conserva aunque cargues de nuevo los clientes de Profit.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <select id="ubicFiltro" onchange="renderUbicacionClientes()" style="flex:1;min-width:150px">
+        <option value="revisar">Por revisar (sin ubicación o por confirmar)</option>
+        <option value="sin">Solo sin ubicación</option>
+        <option value="manual">Corregidos a mano</option>
+        <option value="auto">Detectados automáticamente</option>
+        <option value="todos">Todos</option>
+      </select>
+      <input type="text" id="ubicBusq" placeholder="Buscar cliente, código o dirección" oninput="renderUbicacionClientes()" style="flex:2;min-width:150px">
+    </div>
+    <datalist id="ubicCiudadesLista"></datalist>
+    <div id="ubicLista" style="max-height:55vh;overflow-y:auto"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-g btn-sm" onclick="descargarExcelUbicacionClientes()">Descargar Excel</button>
+      <button class="btn btn-s" onclick="cerrarModal('mUbicacionClientes')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="mConfirmar">
   <div class="modal">
     <h3>Confirmar pedido</h3>
@@ -7762,6 +7826,312 @@ function bultosEquivalentesBonif(ped){
   return total;
 }
 
+// ═══ UBICACION DE CLIENTES: base interna Ciudad -> Estado ═══
+// Profit no trae el estado. La app lo deduce del texto de la direccion/ciudad
+// del cliente (campo "dir", casi siempre del estilo "CIUDAD - ESTADO") usando
+// esta base interna. Se puede corregir a mano cliente por cliente (Admin ->
+// Clientes -> "Estado / Ciudad de clientes"); esas correcciones y las ciudades
+// nuevas que se agreguen quedan guardadas en config/ubicaciones.
+var ESTADOS_VE=['Amazonas','Anzoátegui','Apure','Aragua','Barinas','Bolívar','Carabobo','Cojedes','Delta Amacuro','Distrito Capital','Falcón','Guárico','La Guaira','Lara','Mérida','Miranda','Monagas','Nueva Esparta','Portuguesa','Sucre','Táchira','Trujillo','Yaracuy','Zulia'];
+// Palabras que identifican un estado dentro del texto (ya normalizado: sin tildes, minusculas)
+var ESTADO_PALABRAS_VE=[
+  ['Distrito Capital',/\b(d+t+o+|d+i+s+t+r+i+t+o)\s+capital\b/],
+  ['Miranda',/\bmiranda\b|\bmirandinos?\b/],
+  ['Carabobo',/\bcarabobo\b/],['Aragua',/\baragua\b/],['Táchira',/\btachira\b/],['Zulia',/\bzulia\b/],
+  ['Anzoátegui',/\banzoategui\b/],['Lara',/\blara\b/],['Barinas',/\bbarinas\b/],['Guárico',/\bguarico\b/],
+  ['Nueva Esparta',/\bnueva esparta\b/],['Yaracuy',/\byaracuy\b/],['Falcón',/\bfalcon\b/],['Monagas',/\bmonagas\b/],
+  ['Bolívar',/\bbolivar\b/],['Portuguesa',/\bportuguesa\b/],['Trujillo',/\btrujillo\b/],['Mérida',/\bmerida\b/],
+  ['La Guaira',/\bvargas?\b|\bla guaira\b/],['Sucre',/\bsucre\b/],['Cojedes',/\bcojedes\b/],['Apure',/\bapure\b/],
+  ['Amazonas',/\bamazonas\b/],['Delta Amacuro',/\bdelta amacuro\b/]
+];
+// Formato: Ciudad|Estado|alias1,alias2 (el nombre de la ciudad cuenta como alias)
+var CIUDADES_VE_TXT=[
+'Puerto Ayacucho|Amazonas|','San Fernando de Atabapo|Amazonas|',
+'Barcelona|Anzoátegui|','Puerto La Cruz|Anzoátegui|pto la cruz,puerto la cruz,sotillo','Lechería|Anzoátegui|lecheria','El Tigre|Anzoátegui|','Anaco|Anzoátegui|','Cantaura|Anzoátegui|','Guanta|Anzoátegui|','Clarines|Anzoátegui|','Boca de Uchire|Anzoátegui|','Puerto Píritu|Anzoátegui|puerto piritu,piritu','Aragua de Barcelona|Anzoátegui|','Pariaguán|Anzoátegui|pariaguan','San Tomé|Anzoátegui|san tome',
+'San Fernando de Apure|Apure|san fernando','Guasdualito|Apure|','Achaguas|Apure|','Biruaca|Apure|','Elorza|Apure|','Mantecal|Apure|',
+'Maracay|Aragua|','Turmero|Aragua|','Cagua|Aragua|','La Victoria|Aragua|','Villa de Cura|Aragua|','Santa Cruz|Aragua|','San Mateo|Aragua|','El Limón|Aragua|el limon','Palo Negro|Aragua|','Las Tejerías|Aragua|las tejerias,tejerias','Santa Rita|Aragua|','Ocumare de la Costa|Aragua|','San Casimiro|Aragua|','Barbacoas|Aragua|','Colonia Tovar|Aragua|','El Consejo|Aragua|','Magdaleno|Aragua|','San Sebastián|Aragua|san sebastian','Mariara|Aragua|',
+'Barinas|Barinas|','Barinitas|Barinas|','Socopó|Barinas|socopo','Santa Bárbara de Barinas|Barinas|santa barbara de barinas','Ciudad Bolivia|Barinas|','Libertad|Barinas|','Sabaneta|Barinas|',
+'Ciudad Bolívar|Bolívar|ciudad bolivar','Ciudad Guayana|Bolívar|puerto ordaz,pto ordaz,san felix,guayana,ordaz,matanzas','El Callao|Bolívar|','Upata|Bolívar|','Tumeremo|Bolívar|','El Dorado|Bolívar|','Santa Elena de Uairén|Bolívar|santa elena de uairen','Caicara del Orinoco|Bolívar|','Guasipati|Bolívar|','El Palmar|Bolívar|','Maripa|Bolívar|',
+'Valencia|Carabobo|','Naguanagua|Carabobo|','San Diego|Carabobo|','Guacara|Carabobo|','Los Guayos|Carabobo|','Puerto Cabello|Carabobo|','Tocuyito|Carabobo|','Mariara Carabobo|Carabobo|','Bejuma|Carabobo|','Morón|Carabobo|moron','San Joaquín|Carabobo|san joaquin','Montalbán|Carabobo|montalban','Canoabo|Carabobo|','Güigüe|Carabobo|guigue',
+'San Carlos|Cojedes|','Tinaquillo|Cojedes|','Tinaco|Cojedes|','El Pao|Cojedes|',
+'Tucupita|Delta Amacuro|',
+'Caracas|Distrito Capital|cararacas,cararcas,cararacs,caraca,catia,altagracia,el valle,santa monica,la florida,el paraiso,san bernardino,sabana grande,el junquito,antimano,la candelaria,la pastora,23 de enero,los chaguaramos,coche,el recreo,bello monte,las acacias,caricuao,macarao,la vega,propatria,los rosales,san martin',
+'Coro|Falcón|','Punto Fijo|Falcón|','Tucacas|Falcón|','La Vela de Coro|Falcón|','Churuguara|Falcón|','Dabajuro|Falcón|','Judibana|Falcón|','Mene de Mauroa|Falcón|','Pueblo Nuevo|Falcón|',
+'San Juan de los Morros|Guárico|','Valle de la Pascua|Guárico|pascua','Calabozo|Guárico|','Altagracia de Orituco|Guárico|','Zaraza|Guárico|','Tucupido|Guárico|','El Sombrero|Guárico|','Ortiz|Guárico|','Las Mercedes del Llano|Guárico|',
+'La Guaira|La Guaira|','Catia La Mar|La Guaira|','Maiquetía|La Guaira|maiquetia','Macuto|La Guaira|','Naiguatá|La Guaira|naiguata','Caraballeda|La Guaira|','Carayaca|La Guaira|',
+'Barquisimeto|Lara|','Cabudare|Lara|','Carora|Lara|','El Tocuyo|Lara|','Quíbor|Lara|quibor','Duaca|Lara|','Sarare|Lara|','Sanare|Lara|','Siquisique|Lara|',
+'Mérida|Mérida|merida','El Vigía|Mérida|el vigia','Ejido|Mérida|','Tovar|Mérida|','Lagunillas|Mérida|','Santa Cruz de Mora|Mérida|','Timotes|Mérida|','Tabay|Mérida|','Mucuchíes|Mérida|mucuchies','Bailadores|Mérida|','Zea|Mérida|',
+'Los Teques|Miranda|','Guarenas|Miranda|','Guatire|Miranda|','Petare|Miranda|el marques,boleita,los dos caminos,la urbina,la carlota,palo verde','Chacao|Miranda|la castellana,los palos grandes,el rosal,altamira,la floresta,campo alegre','Baruta|Miranda|las mercedes,el cafetal,la trinidad,la guairita,santa paula,las minas,prados del este,colinas de bello monte,el peñon,el penon,santa fe','El Hatillo|Miranda|la boyera','San Antonio de los Altos|Miranda|san antonio','Carrizal|Miranda|','Charallave|Miranda|','Ocumare del Tuy|Miranda|','Santa Teresa del Tuy|Miranda|','Cúa|Miranda|cua','Higuerote|Miranda|','Río Chico|Miranda|rio chico','Santa Lucía|Miranda|santa lucia','Mariche|Miranda|','Paracotos|Miranda|','San Francisco de Yare|Miranda|',
+'Maturín|Monagas|maturin','Punta de Mata|Monagas|','Caripe|Monagas|','Caripito|Monagas|','Temblador|Monagas|','Aragua de Maturín|Monagas|aragua de maturin','Barrancas del Orinoco|Monagas|',
+'Porlamar|Nueva Esparta|','Pampatar|Nueva Esparta|','La Asunción|Nueva Esparta|la asuncion','Juan Griego|Nueva Esparta|','Punta de Piedras|Nueva Esparta|','San Juan Bautista|Nueva Esparta|','Boca de Río|Nueva Esparta|boca de rio,boca del rio','Los Robles|Nueva Esparta|',
+'Guanare|Portuguesa|','Acarigua|Portuguesa|','Araure|Portuguesa|','Turén|Portuguesa|turen','Guanarito|Portuguesa|','Ospino|Portuguesa|','Biscucuy|Portuguesa|','Villa Bruzual|Portuguesa|','Acarigua-Araure|Portuguesa|','Acaricua|Portuguesa|',
+'Cumaná|Sucre|cumana','Carúpano|Sucre|carupano','Cumanacoa|Sucre|','Güiria|Sucre|guiria','Río Caribe|Sucre|rio caribe','Araya|Sucre|','Cariaco|Sucre|','Irapa|Sucre|','Casanay|Sucre|',
+'San Cristóbal|Táchira|san cristobal','Táriba|Táchira|tariba','Rubio|Táchira|','San Antonio del Táchira|Táchira|san antonio del tachira','Ureña|Táchira|urena','La Fría|Táchira|la fria','Colón|Táchira|colon','Capacho|Táchira|','Palmira|Táchira|','San Josecito|Táchira|','La Grita|Táchira|','Lobatera|Táchira|',
+'Valera|Trujillo|','Trujillo|Trujillo|','Boconó|Trujillo|bocono','Betijoque|Trujillo|','Escuque|Trujillo|','Sabana de Mendoza|Trujillo|','Motatán|Trujillo|motatan',
+'San Felipe|Yaracuy|','Chivacoa|Yaracuy|','Yaritagua|Yaracuy|','Aroa|Yaracuy|','Nirgua|Yaracuy|','Cocorote|Yaracuy|','Urachiche|Yaracuy|',
+'Maracaibo|Zulia|','San Francisco|Zulia|','Cabimas|Zulia|','Ciudad Ojeda|Zulia|','Santa Bárbara del Zulia|Zulia|santa barbara del zulia','Machiques|Zulia|','La Concepción|Zulia|la concepcion','Mene Grande|Zulia|','San Carlos del Zulia|Zulia|','Bachaquero|Zulia|','Villa del Rosario|Zulia|','Sinamaica|Zulia|','Paraguaipoa|Zulia|','La Cañada de Urdaneta|Zulia|la canada de urdaneta'
+];
+
+var UBICACIONES={clientes:{}, ciudades:[]};   // correcciones manuales + ciudades agregadas
+var UBICACIONES_CARGADAS=false;
+var UBIC_INDICE=null;                          // indice de busqueda, se arma 1 vez (y al agregar ciudades)
+
+function normalizarTextoUbic(t){
+  return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+}
+function construirIndiceUbic(){
+  var idx=[];
+  function agregar(ciudad, estado, aliasLista){
+    var vistos={};
+    [ciudad].concat(aliasLista||[]).forEach(function(a){
+      var n=normalizarTextoUbic(a);
+      if(n && !vistos[n]){ vistos[n]=1; idx.push({alias:n, ciudad:ciudad, estado:estado}); }
+    });
+  }
+  CIUDADES_VE_TXT.forEach(function(linea){
+    var p=linea.split('|');
+    agregar(p[0], p[1], p[2]?p[2].split(','):[]);
+  });
+  (UBICACIONES.ciudades||[]).forEach(function(c){ agregar(c.ciudad, c.estado, c.alias||[]); });
+  UBIC_INDICE=idx;
+}
+function estadoPorPalabraUbic(norm){
+  for(var i=0;i<ESTADO_PALABRAS_VE.length;i++){
+    if(ESTADO_PALABRAS_VE[i][1].test(norm)) return ESTADO_PALABRAS_VE[i][0];
+  }
+  return '';
+}
+function capitalizarUbic(t){
+  return t.split(' ').map(function(w){ return (w==='de'||w==='del'||w==='la'||w==='los'||w==='las')?w:(w.charAt(0).toUpperCase()+w.slice(1)); }).join(' ');
+}
+// Deduce {ciudad, estado, origen} a partir del texto de direccion/ciudad.
+// origen: 'auto' (ciudad conocida en la base) | 'inferida' (ciudad deducida del
+// texto pero que no esta en la base: conviene revisarla) | null si no se pudo.
+function detectarUbicacionTexto(texto){
+  var norm=normalizarTextoUbic(texto);
+  if(!norm || /^[0-9 ]+$/.test(norm)) return null;
+  if(!UBIC_INDICE) construirIndiceUbic();
+  var estadoKw=estadoPorPalabraUbic(norm);
+  var padded=' '+norm+' ';
+  var mejor=null, mejorNoCaracas=null;
+  for(var i=0;i<UBIC_INDICE.length;i++){
+    var e=UBIC_INDICE[i];
+    var pos=padded.indexOf(' '+e.alias+' ');
+    if(pos<0) continue;
+    var cand={pos:pos, len:e.alias.length, e:e};
+    var mejorQue=function(a,b){ return !b || a.pos<b.pos || (a.pos===b.pos && a.len>b.len); };
+    if(mejorQue(cand,mejor)) mejor=cand;
+    if(e.ciudad!=='Caracas' && mejorQue(cand,mejorNoCaracas)) mejorNoCaracas=cand;
+  }
+  // "Caracas" es generico: si hay una zona mas especifica (Petare, Chacao...), manda esa
+  var elegido=(mejor && mejor.e.ciudad==='Caracas' && mejorNoCaracas)?mejorNoCaracas:mejor;
+  if(elegido){
+    return {ciudad:elegido.e.ciudad, estado:estadoKw||elegido.e.estado, origen:'auto'};
+  }
+  if(estadoKw){
+    // Hay estado pero la ciudad no esta en la base: se toma el primer tramo del texto
+    var tramo=norm;
+    ESTADO_PALABRAS_VE.forEach(function(x){ tramo=tramo.replace(new RegExp(x[1].source,'g'),' '); });
+    tramo=tramo.replace(/\b(edo|estado)\b/g,' ').replace(/\s+/g,' ').trim();
+    if(tramo && tramo.split(' ').length<=4) return {ciudad:capitalizarUbic(tramo), estado:estadoKw, origen:'inferida'};
+    return {ciudad:'', estado:estadoKw, origen:'inferida'};
+  }
+  return null;
+}
+// Ubicacion final de un cliente: correccion manual > deteccion automatica
+function ubicacionDeCliente(cli){
+  if(!cli) return {ciudad:'', estado:'', origen:null};
+  var m=UBICACIONES.clientes[cli.id];
+  if(m && (m.ciudad||m.estado)) return {ciudad:m.ciudad||'', estado:m.estado||'', origen:'manual'};
+  var d=detectarUbicacionTexto(cli.dir||'');
+  return d||{ciudad:'', estado:'', origen:null};
+}
+function cargarUbicaciones(callback){
+  if(UBICACIONES_CARGADAS){ if(callback) callback(); return; }
+  db.collection('config').doc('ubicaciones').get().then(function(doc){
+    if(doc.exists && doc.data().data){
+      try{ var d=JSON.parse(doc.data().data); UBICACIONES={clientes:d.clientes||{}, ciudades:d.ciudades||[]}; }catch(e){}
+    }
+    UBICACIONES_CARGADAS=true; UBIC_INDICE=null;
+    if(callback) callback();
+  }).catch(function(){ if(callback) callback(); });
+}
+function guardarUbicaciones(callback){
+  db.collection('config').doc('ubicaciones').set({
+    data:JSON.stringify(UBICACIONES), actualizado:new Date().toISOString()
+  }).then(function(){ if(callback) callback(true); }).catch(function(){ if(callback) callback(false); });
+}
+// Todos los clientes conocidos por id (Profit + provisionales)
+function mapaClientesUbic(){
+  var m={};
+  (typeof CLIENTES_PROFIT!=='undefined'?CLIENTES_PROFIT:[]).forEach(function(c){ m[c.id]=c; });
+  (typeof CLIENTES!=='undefined'?CLIENTES:[]).forEach(function(c){ if(!m[c.id]) m[c.id]=c; });
+  (typeof NUEVOS_TODOS_CACHE!=='undefined'?NUEVOS_TODOS_CACHE:[]).forEach(function(c){ if(!m[c.id]) m[c.id]=c; });
+  return m;
+}
+
+// ═══ Reporte: ventas por Estado y Ciudad ═══
+var ULTIMO_RPT_UBIC=null;
+function renderRptUbicacion(lista){
+  var el=document.getElementById('rptUbicacion');
+  if(!el) return;
+  if(!UBICACIONES_CARGADAS){
+    el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando...</div>';
+    cargarUbicaciones(function(){ renderRptUbicacion(lista); });
+    return;
+  }
+  var mapa=mapaClientesUbic();
+  var SIN='(Sin ubicación)';
+  var estados={}, totMonto=0, totBultos=0, totPedidos=0, sinUbic={};
+  lista.forEach(function(p){
+    var cli=mapa[p.cliente.id]||p.cliente;
+    var u=ubicacionDeCliente(cli);
+    var est=u.estado||SIN, ciu=u.ciudad||(u.estado?'(Sin ciudad)':SIN);
+    if(!u.estado) sinUbic[p.cliente.id]=p.cliente.nombre;
+    if(!estados[est]) estados[est]={nombre:est, pedidos:0, bultos:0, monto:0, clientes:{}, ciudades:{}};
+    var E=estados[est];
+    if(!E.ciudades[ciu]) E.ciudades[ciu]={nombre:ciu, pedidos:0, bultos:0, monto:0, clientes:{}};
+    var C=E.ciudades[ciu];
+    [E,C].forEach(function(x){ x.pedidos++; x.bultos+=p.bultos; x.monto+=p.monto; x.clientes[p.cliente.id]=1; });
+    totMonto+=p.monto; totBultos+=p.bultos; totPedidos++;
+  });
+  var lst=Object.keys(estados).map(function(k){ return estados[k]; });
+  // Mayor venta primero; "Sin ubicación" siempre al final
+  lst.sort(function(a,b){ if(a.nombre===SIN) return 1; if(b.nombre===SIN) return -1; return b.monto-a.monto; });
+  ULTIMO_RPT_UBIC={estados:lst, totMonto:totMonto, totBultos:totBultos, totPedidos:totPedidos};
+  if(lst.length===0){ el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin datos en este periodo</div>'; return; }
+  var pct=function(m){ return totMonto>0?(Math.round(m/totMonto*1000)/10)+'%':'-'; };
+  var html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:420px">'+
+    '<tr style="color:#888"><th style="text-align:left;padding:4px">Estado / Ciudad</th><th style="text-align:right;padding:4px">Pedidos</th><th style="text-align:right;padding:4px">Bultos</th><th style="text-align:right;padding:4px">Monto</th><th style="text-align:right;padding:4px">%</th><th style="text-align:right;padding:4px">Clientes</th></tr>';
+  lst.forEach(function(E){
+    html+='<tr style="background:var(--azul-c);font-weight:700"><td style="padding:5px">'+E.nombre+'</td><td style="padding:5px;text-align:right">'+E.pedidos+'</td><td style="padding:5px;text-align:right">'+E.bultos+'</td><td style="padding:5px;text-align:right;color:var(--verde)">$'+formatearNumeroConMiles(E.monto,0)+'</td><td style="padding:5px;text-align:right">'+pct(E.monto)+'</td><td style="padding:5px;text-align:right">'+Object.keys(E.clientes).length+'</td></tr>';
+    var ciudades=Object.keys(E.ciudades).map(function(k){ return E.ciudades[k]; }).sort(function(a,b){ return b.monto-a.monto; });
+    if(!(ciudades.length===1 && E.nombre===SIN)){
+      ciudades.forEach(function(C){
+        html+='<tr style="border-bottom:1px solid var(--borde)"><td style="padding:3px 5px 3px 20px;color:#555">'+C.nombre+'</td><td style="padding:3px 5px;text-align:right">'+C.pedidos+'</td><td style="padding:3px 5px;text-align:right">'+C.bultos+'</td><td style="padding:3px 5px;text-align:right">$'+formatearNumeroConMiles(C.monto,0)+'</td><td style="padding:3px 5px;text-align:right;color:#888">'+pct(C.monto)+'</td><td style="padding:3px 5px;text-align:right">'+Object.keys(C.clientes).length+'</td></tr>';
+      });
+    }
+  });
+  html+='<tr style="font-weight:700;border-top:2px solid var(--borde)"><td style="padding:5px">TOTAL</td><td style="padding:5px;text-align:right">'+totPedidos+'</td><td style="padding:5px;text-align:right">'+totBultos+'</td><td style="padding:5px;text-align:right">$'+formatearNumeroConMiles(totMonto,0)+'</td><td></td><td></td></tr></table></div>';
+  var nSin=Object.keys(sinUbic).length;
+  if(nSin>0){
+    html+='<div style="font-size:11px;color:var(--ambar);margin-top:8px">'+nSin+' cliente(s) con ventas no tienen Estado asignado.'+((VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?' <a href="#" onclick="abrirUbicacionClientes(\'sin\');return false" style="color:var(--azul)">Revisar</a>':'')+'</div>';
+  }
+  html+='<button class="btn btn-g btn-sm" style="margin-top:10px" onclick="descargarExcelRptUbicacion()">Descargar Excel</button>';
+  el.innerHTML=html;
+}
+function descargarExcelRptUbicacion(){
+  var R=ULTIMO_RPT_UBIC;
+  if(!R || R.estados.length===0){ toast('No hay datos para exportar'); return; }
+  var desde=document.getElementById('rptDesde').value||'inicio', hasta=document.getElementById('rptHasta').value||'hoy';
+  var rows=[['Ventas por Estado y Ciudad'],['Periodo: '+desde+' al '+hasta],[],['Estado','Ciudad','Pedidos','Bultos','Monto $','% del total','Clientes']];
+  R.estados.forEach(function(E){
+    rows.push([E.nombre,'(TOTAL ESTADO)',E.pedidos,E.bultos,Math.round(E.monto*100)/100,R.totMonto>0?Math.round(E.monto/R.totMonto*10000)/10000:0,Object.keys(E.clientes).length]);
+    Object.keys(E.ciudades).map(function(k){return E.ciudades[k];}).sort(function(a,b){return b.monto-a.monto;}).forEach(function(C){
+      rows.push([E.nombre,C.nombre,C.pedidos,C.bultos,Math.round(C.monto*100)/100,R.totMonto>0?Math.round(C.monto/R.totMonto*10000)/10000:0,Object.keys(C.clientes).length]);
+    });
+  });
+  rows.push(['TOTAL','',R.totPedidos,R.totBultos,Math.round(R.totMonto*100)/100,1,'']);
+  var wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:20},{wch:26},{wch:10},{wch:10},{wch:14},{wch:12},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Por Estado y Ciudad');
+  XLSX.writeFile(wb, 'ventas_por_estado_ciudad.xlsx');
+}
+
+// ═══ Herramienta (01/20): revisar y corregir Estado / Ciudad de cada cliente ═══
+function puedeEditarUbicaciones(){ return !!VEND && (VEND.codigo==='01'||VEND.codigo==='20'); }
+function abrirUbicacionClientes(filtroInicial){
+  if(!puedeEditarUbicaciones()) return;
+  var sel=document.getElementById('ubicFiltro'); if(sel) sel.value=filtroInicial||'revisar';
+  document.getElementById('ubicBusq').value='';
+  var dl='';
+  var vistos={};
+  CIUDADES_VE_TXT.forEach(function(l){ var c=l.split('|')[0]; if(!vistos[c]){ vistos[c]=1; dl+='<option value="'+c+'">'; } });
+  (UBICACIONES.ciudades||[]).forEach(function(c){ if(!vistos[c.ciudad]){ vistos[c.ciudad]=1; dl+='<option value="'+c.ciudad+'">'; } });
+  document.getElementById('ubicCiudadesLista').innerHTML=dl;
+  document.getElementById('mUbicacionClientes').classList.add('open');
+  document.getElementById('ubicLista').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando...</div>';
+  cargarUbicaciones(renderUbicacionClientes);
+}
+function renderUbicacionClientes(){
+  if(!UBIC_INDICE) construirIndiceUbic();
+  var filtro=document.getElementById('ubicFiltro').value;
+  var q=normalizarTextoUbic(document.getElementById('ubicBusq').value);
+  var todos=(typeof CLIENTES_PROFIT!=='undefined'?CLIENTES_PROFIT:[]).slice();
+  (typeof NUEVOS_TODOS_CACHE!=='undefined'?NUEVOS_TODOS_CACHE:[]).forEach(function(c){ todos.push(c); });
+  var cont={auto:0, inferida:0, manual:0, sin:0};
+  var filas=[];
+  todos.forEach(function(c){
+    var u=ubicacionDeCliente(c);
+    var k=u.origen||'sin'; cont[k]++;
+    var ok=filtro==='todos' || (filtro==='sin'&&k==='sin') || (filtro==='revisar'&&(k==='sin'||k==='inferida')) || (filtro==='manual'&&k==='manual') || (filtro==='auto'&&k==='auto');
+    if(!ok) return;
+    if(q && normalizarTextoUbic(c.nombre+' '+c.id+' '+(c.dir||'')).indexOf(q)<0) return;
+    filas.push({c:c,u:u,k:k});
+  });
+  var LIM=60;
+  var html='<div style="font-size:12px;color:#555;margin-bottom:8px">Total '+todos.length+' clientes: <strong>'+cont.auto+'</strong> detectados, <strong>'+cont.manual+'</strong> corregidos a mano, <strong style="color:var(--ambar)">'+cont.inferida+'</strong> con ciudad por confirmar, <strong style="color:var(--rojo)">'+cont.sin+'</strong> sin ubicación.</div>';
+  if(filas.length===0) html+='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Nada que mostrar con este filtro</div>';
+  filas.slice(0,LIM).forEach(function(f){
+    var opts='<option value="">(Estado)</option>'+ESTADOS_VE.map(function(e){ return '<option value="'+e+'"'+(e===f.u.estado?' selected':'')+'>'+e+'</option>'; }).join('');
+    var etq=f.k==='manual'?'<span class="tag tag-v" style="font-size:9px">Manual</span>':(f.k==='inferida'?'<span class="tag" style="background:#FFF3CD;color:#856404;font-size:9px">Por confirmar</span>':(f.k==='auto'?'<span class="tag" style="font-size:9px">Detectado</span>':'<span class="tag" style="background:#fde8e8;color:var(--rojo);font-size:9px">Sin ubicación</span>'));
+    html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:8px;margin-bottom:6px;font-size:12px">'+
+      '<div style="font-weight:600">'+f.c.nombre+' <span style="font-weight:400;color:#888">(Cod: '+f.c.id+')</span> '+etq+'</div>'+
+      '<div style="color:#888;margin-bottom:4px">Dirección en Profit: '+(f.c.dir?f.c.dir:'<em>vacía</em>')+'</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        '<input type="text" list="ubicCiudadesLista" id="ubC_'+f.c.id+'" value="'+(f.u.ciudad||'').replace(/"/g,'&quot;')+'" placeholder="Ciudad" style="flex:1;min-width:120px;padding:6px;font-size:12px" onchange="autoEstadoUbic(\''+f.c.id+'\')">'+
+        '<select id="ubE_'+f.c.id+'" style="flex:1;min-width:120px;padding:6px;font-size:12px">'+opts+'</select>'+
+        '<button class="btn btn-p btn-sm" onclick="guardarUbicacionCliente(\''+f.c.id+'\')">Guardar</button>'+
+        (f.k==='manual'?'<button class="btn btn-s btn-sm" onclick="quitarUbicacionManual(\''+f.c.id+'\')">Quitar</button>':'')+
+      '</div></div>';
+  });
+  if(filas.length>LIM) html+='<div style="font-size:11px;color:#888;text-align:center">Mostrando '+LIM+' de '+filas.length+'. Usa el buscador para ubicar otros.</div>';
+  document.getElementById('ubicLista').innerHTML=html;
+}
+// Si la ciudad escrita ya es conocida, rellena su estado
+function autoEstadoUbic(id){
+  var d=detectarUbicacionTexto(document.getElementById('ubC_'+id).value);
+  if(d && d.origen==='auto' && d.estado) document.getElementById('ubE_'+id).value=d.estado;
+}
+function guardarUbicacionCliente(id){
+  if(!puedeEditarUbicaciones()) return;
+  var ciudad=document.getElementById('ubC_'+id).value.trim();
+  var estado=document.getElementById('ubE_'+id).value;
+  if(!estado){ toast('Elige el Estado'); return; }
+  UBICACIONES.clientes[id]={ciudad:ciudad, estado:estado};
+  // Si la ciudad no estaba en la base, se aprende: el proximo cliente con ese texto se detecta solo
+  if(ciudad){
+    var conocida=detectarUbicacionTexto(ciudad);
+    if(!conocida || conocida.origen!=='auto'){
+      UBICACIONES.ciudades.push({ciudad:ciudad, estado:estado, alias:[]});
+      UBIC_INDICE=null;
+    }
+  }
+  guardarUbicaciones(function(ok){
+    toast(ok?'Ubicación guardada':'Error guardando, intenta de nuevo');
+    renderUbicacionClientes();
+  });
+}
+function quitarUbicacionManual(id){
+  if(!puedeEditarUbicaciones()) return;
+  delete UBICACIONES.clientes[id];
+  guardarUbicaciones(function(ok){ toast(ok?'Corrección manual eliminada':'Error guardando'); renderUbicacionClientes(); });
+}
+function descargarExcelUbicacionClientes(){
+  if(!puedeEditarUbicaciones()) return;
+  var todos=(typeof CLIENTES_PROFIT!=='undefined'?CLIENTES_PROFIT:[]).slice();
+  (typeof NUEVOS_TODOS_CACHE!=='undefined'?NUEVOS_TODOS_CACHE:[]).forEach(function(c){ todos.push(c); });
+  var rows=[['Codigo','Cliente','RIF','Vendedor','Direccion (Profit)','Ciudad','Estado','Origen']];
+  todos.forEach(function(c){
+    var u=ubicacionDeCliente(c);
+    rows.push([c.id,c.nombre,c.rif||'',c.vendedor||'',c.dir||'',u.ciudad,u.estado,u.origen==='manual'?'Manual':(u.origen==='auto'?'Detectado':(u.origen==='inferida'?'Por confirmar':'Sin ubicacion'))]);
+  });
+  var wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:8},{wch:40},{wch:16},{wch:9},{wch:30},{wch:22},{wch:18},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
+  XLSX.writeFile(wb, 'clientes_estado_ciudad.xlsx');
+}
+
 function renderReportes(){
   var lista=rptGetPedidosFiltrados();
   var vendSel=document.getElementById('rptVendedor').value;
@@ -7801,6 +8171,9 @@ function renderReportes(){
     '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(montoTxt,22)+';color:var(--verde)">'+montoTxt+'</div><div class="lbl">Monto total</div></div>'+
     '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(clientesRepeat,22)+';color:var(--ambar)">'+clientesRepeat+'</div><div class="lbl">Clientes con Recompra</div></div>'+
     '</div>';
+
+  // Reporte: ventas por Estado y Ciudad
+  try{ renderRptUbicacion(lista); }catch(eU){ console.error('renderRptUbicacion',eU); }
 
   // Reporte 2: Por vendedor
   // Agrupar por vendedor (usando la lista YA filtrada por cliente, si aplica)
@@ -14138,6 +14511,179 @@ function ejecutarEditarSaldoCxC(){
   });
 }
 
+// ═══ CRUCE DE DOCUMENTOS SIN PAGO (uno positivo contra uno negativo, mismo cliente) ═══
+// Solo 01/20. Reduce el saldo positivo y "consume" el saldo a favor por el
+// mismo monto. No es un pago: no mueve dinero, no genera comision. Cada cruce
+// queda guardado en config/cruces_cxc (quien, cuando, motivo, saldos antes y
+// despues) y se puede anular.
+var CRUCES_CXC=[];
+var cruceDocANumero=null;
+var cruceCandidatos=[];
+
+function puedeCruzarDocsCxC(){ return !!VEND && (VEND.codigo==='01' || VEND.codigo==='20'); }
+function buscarDocCxCPorNumero(numero){
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(CUENTAS_COBRAR[i].numero===numero) return CUENTAS_COBRAR[i]; }
+  return null;
+}
+function cargarCrucesCxC(callback){
+  db.collection('config').doc('cruces_cxc').get().then(function(doc){
+    var arr=[];
+    if(doc.exists && doc.data().data){ try{ arr=JSON.parse(doc.data().data)||[]; }catch(e){ arr=[]; } }
+    CRUCES_CXC=arr;
+    callback(true);
+  }).catch(function(){ callback(false); });
+}
+function guardarCrucesCxC(callback){
+  db.collection('config').doc('cruces_cxc').set({
+    data:JSON.stringify(CRUCES_CXC),
+    actualizado:new Date().toISOString()
+  }).then(function(){ callback(true); }).catch(function(){ callback(false); });
+}
+
+function abrirCruzarDocs(numero){
+  if(!puedeCruzarDocsCxC()) return;
+  var docA=buscarDocCxCPorNumero(numero);
+  if(!docA){ toast('No se encontro el documento'); return; }
+  if(Math.abs(docA.saldo)<=0.009){ toast('Este documento no tiene saldo'); return; }
+  var signoA=docA.saldo>0?1:-1;
+  cruceCandidatos=CUENTAS_COBRAR.filter(function(d){
+    return d.clienteId===docA.clienteId && d.numero!==docA.numero && Math.abs(d.saldo)>0.009 && (d.saldo>0?1:-1)!==signoA;
+  });
+  if(cruceCandidatos.length===0){
+    toast(signoA>0?'Este cliente no tiene ningun documento con saldo a favor (negativo) para cruzar':'Este cliente no tiene ningun documento con saldo pendiente (positivo) para cruzar');
+    return;
+  }
+  cruceDocANumero=numero;
+  document.getElementById('cruzarDocA').innerHTML='<strong>Doc.'+docA.numero+'</strong> — '+docA.clienteNombre+' (Cod: '+docA.clienteId+')<br>Saldo: <strong style="color:'+(signoA<0?'var(--verde)':'var(--azul)')+'">'+(signoA<0?'($'+formatearNumeroConMiles(Math.abs(docA.saldo),2)+') a favor':'$'+formatearNumeroConMiles(docA.saldo,2)+' por cobrar')+'</strong>';
+  var opts='';
+  cruceCandidatos.forEach(function(d,i){
+    opts+='<option value="'+i+'">Doc.'+d.numero+' — '+(d.saldo<0?'($'+formatearNumeroConMiles(Math.abs(d.saldo),2)+') a favor':'$'+formatearNumeroConMiles(d.saldo,2)+' por cobrar')+(d.emision?' — emision '+d.emision:'')+'</option>';
+  });
+  document.getElementById('cruzarDocB').innerHTML=opts;
+  document.getElementById('cruzarMotivo').value='';
+  actualizarPreviewCruce(true);
+  document.getElementById('mCruzarDocs').classList.add('open');
+}
+
+function datosCruceActual(){
+  var docA=buscarDocCxCPorNumero(cruceDocANumero);
+  var docB=cruceCandidatos[parseInt(document.getElementById('cruzarDocB').value,10)];
+  if(!docA||!docB) return null;
+  var pos=docA.saldo>0?docA:docB, neg=docA.saldo>0?docB:docA;
+  var maximo=Math.round(Math.min(pos.saldo, Math.abs(neg.saldo))*100)/100;
+  return {pos:pos, neg:neg, maximo:maximo};
+}
+function actualizarPreviewCruce(reiniciarMonto){
+  var c=datosCruceActual();
+  var prev=document.getElementById('cruzarPreview');
+  if(!c){ prev.innerHTML=''; return; }
+  if(reiniciarMonto) document.getElementById('cruzarMonto').value=c.maximo.toFixed(2);
+  document.getElementById('cruzarMaximo').textContent='Maximo que se puede cruzar: $'+formatearNumeroConMiles(c.maximo,2)+' (el menor entre lo que se debe y el saldo a favor)';
+  var monto=parseFloat(document.getElementById('cruzarMonto').value)||0;
+  var posDesp=Math.round((c.pos.saldo-monto)*100)/100, negDesp=Math.round((c.neg.saldo+monto)*100)/100;
+  var f=function(n){ return n<0?'($'+formatearNumeroConMiles(Math.abs(n),2)+')':'$'+formatearNumeroConMiles(n,2); };
+  prev.innerHTML='Doc.'+c.pos.numero+': '+f(c.pos.saldo)+' &rarr; <strong>'+f(posDesp)+'</strong><br>Doc.'+c.neg.numero+': '+f(c.neg.saldo)+' &rarr; <strong>'+f(negDesp)+'</strong>';
+}
+
+function ejecutarCruceDocs(){
+  if(!puedeCruzarDocsCxC()){ cerrarModal('mCruzarDocs'); return; }
+  var c=datosCruceActual();
+  if(!c){ toast('Selecciona el documento con el que se cruza'); return; }
+  var monto=Math.round((parseFloat(document.getElementById('cruzarMonto').value)||0)*100)/100;
+  if(monto<=0){ toast('Indica un monto mayor a 0'); return; }
+  if(monto>c.maximo+0.005){ toast('El monto no puede ser mayor a $'+formatearNumeroConMiles(c.maximo,2)); return; }
+  var motivo=document.getElementById('cruzarMotivo').value.trim();
+  if(!motivo){ toast('El motivo es obligatorio'); return; }
+  if(!confirm('Cruzar $'+formatearNumeroConMiles(monto,2)+' entre el Doc.'+c.pos.numero+' (por cobrar) y el Doc.'+c.neg.numero+' (a favor)?')) return;
+  // Cargar primero los cruces guardados, para no pisar los de otra persona
+  cargarCrucesCxC(function(ok){
+    if(!ok){ toast('No se pudo leer el registro de cruces, intenta de nuevo'); return; }
+    var ahora=new Date();
+    var fechaTxt=ahora.toLocaleString('es-VE');
+    var cruce={
+      id:'CRUCE-'+Date.now(), fecha:fechaTxt, fechaISO:ahora.toISOString().substring(0,10),
+      clienteId:c.pos.clienteId, clienteNombre:c.pos.clienteNombre,
+      docPositivo:c.pos.numero, docNegativo:c.neg.numero, monto:monto,
+      saldoPositivoAntes:c.pos.saldo, saldoNegativoAntes:c.neg.saldo,
+      saldoPositivoDespues:Math.round((c.pos.saldo-monto)*100)/100, saldoNegativoDespues:Math.round((c.neg.saldo+monto)*100)/100,
+      motivo:motivo, realizadoPor:VEND.nombre+' (VEND '+VEND.codigo+')', estado:'activo'
+    };
+    c.pos.saldo=cruce.saldoPositivoDespues;
+    c.neg.saldo=cruce.saldoNegativoDespues;
+    // abonadoEnApp: si una carga nueva de Excel todavia trae el saldo viejo
+    // del documento positivo, se respeta el saldo ya cruzado aqui
+    c.pos.abonadoEnApp=true; c.neg.abonadoEnApp=true;
+    if(!c.pos.cruces) c.pos.cruces=[];
+    if(!c.neg.cruces) c.neg.cruces=[];
+    c.pos.cruces.push({id:cruce.id, con:c.neg.numero, monto:monto, fecha:cruce.fechaISO});
+    c.neg.cruces.push({id:cruce.id, con:c.pos.numero, monto:monto, fecha:cruce.fechaISO});
+    CRUCES_CXC.push(cruce);
+    db.collection('config').doc('cuentas_cobrar').set({
+      data:JSON.stringify(CUENTAS_COBRAR),
+      actualizado:new Date().toISOString()
+    }).then(function(){
+      guardarCrucesCxC(function(ok2){
+        cerrarModal('mCruzarDocs');
+        toast(ok2?('Cruce de $'+formatearNumeroConMiles(monto,2)+' registrado'):'Cruce aplicado, pero no se pudo guardar el registro del cruce');
+        renderResumenCxC();
+      });
+    }).catch(function(){
+      // No se guardo: se deshace en memoria para no dejar la lista distinta a Firebase
+      c.pos.saldo=cruce.saldoPositivoAntes; c.neg.saldo=cruce.saldoNegativoAntes;
+      c.pos.cruces.pop(); c.neg.cruces.pop(); CRUCES_CXC.pop();
+      toast('Error guardando en Firebase, el cruce NO se aplico');
+    });
+  });
+}
+
+function abrirHistorialCruces(){
+  if(!puedeCruzarDocsCxC()) return;
+  document.getElementById('historialCrucesLista').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando...</div>';
+  document.getElementById('mHistorialCruces').classList.add('open');
+  cargarCrucesCxC(function(ok){
+    if(!ok){ document.getElementById('historialCrucesLista').innerHTML='<div style="color:var(--rojo);font-size:13px;text-align:center;padding:12px">No se pudo cargar el registro de cruces</div>'; return; }
+    renderHistorialCruces();
+  });
+}
+function renderHistorialCruces(){
+  var el=document.getElementById('historialCrucesLista');
+  var lista=CRUCES_CXC.slice().reverse();
+  if(lista.length===0){ el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Aun no se ha cruzado ningun documento</div>'; return; }
+  var html='';
+  lista.forEach(function(c){
+    var anulado=c.estado==='anulado';
+    html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:8px;margin-bottom:8px;font-size:12px'+(anulado?';opacity:.6':'')+'">'+
+      '<div style="display:flex;justify-content:space-between;gap:8px"><strong>'+c.clienteNombre+'</strong><strong style="color:var(--azul)">$'+formatearNumeroConMiles(c.monto,2)+'</strong></div>'+
+      '<div style="color:#888">Cod: '+c.clienteId+' | Doc.'+c.docPositivo+' (por cobrar) &harr; Doc.'+c.docNegativo+' (a favor)</div>'+
+      '<div style="color:#888">'+c.fecha+' — '+c.realizadoPor+'</div>'+
+      '<div style="margin-top:2px">Motivo: '+c.motivo+'</div>'+
+      (anulado?'<div style="color:var(--rojo);margin-top:2px">Anulado por '+c.anuladoPor+' el '+c.fechaAnulacion+'</div>':
+        '<button class="btn btn-s btn-sm" style="margin-top:6px;color:var(--rojo)" onclick="anularCruceDocs(\''+c.id+'\')">Anular cruce</button>')+
+    '</div>';
+  });
+  el.innerHTML=html;
+}
+function anularCruceDocs(id){
+  if(!puedeCruzarDocsCxC()) return;
+  var c=null; for(var i=0;i<CRUCES_CXC.length;i++){ if(CRUCES_CXC[i].id===id){ c=CRUCES_CXC[i]; break; } }
+  if(!c || c.estado==='anulado'){ toast('Este cruce ya esta anulado'); return; }
+  var pos=buscarDocCxCPorNumero(c.docPositivo), neg=buscarDocCxCPorNumero(c.docNegativo);
+  var aviso=(!pos||!neg)?('\n\nOJO: '+(!pos?'el Doc.'+c.docPositivo:'el Doc.'+c.docNegativo)+' ya no esta en cuentas por cobrar (por ejemplo, por una carga nueva de Excel); solo se restituira el otro documento.'):'';
+  if(!confirm('Anular el cruce de $'+formatearNumeroConMiles(c.monto,2)+' entre Doc.'+c.docPositivo+' y Doc.'+c.docNegativo+'? Los saldos vuelven a como estaban antes del cruce.'+aviso)) return;
+  if(pos){ pos.saldo=Math.round((pos.saldo+c.monto)*100)/100; pos.cruces=(pos.cruces||[]).filter(function(x){ return x.id!==id; }); }
+  if(neg){ neg.saldo=Math.round((neg.saldo-c.monto)*100)/100; neg.cruces=(neg.cruces||[]).filter(function(x){ return x.id!==id; }); }
+  c.estado='anulado'; c.anuladoPor=VEND.nombre+' (VEND '+VEND.codigo+')'; c.fechaAnulacion=new Date().toLocaleString('es-VE');
+  db.collection('config').doc('cuentas_cobrar').set({
+    data:JSON.stringify(CUENTAS_COBRAR),
+    actualizado:new Date().toISOString()
+  }).then(function(){
+    guardarCrucesCxC(function(ok){
+      toast(ok?'Cruce anulado':'Cruce anulado, pero no se pudo guardar el registro');
+      renderHistorialCruces(); renderResumenCxC();
+    });
+  }).catch(function(){ toast('Error guardando en Firebase, intenta de nuevo'); });
+}
+
 // ═══ VERIFICADOR DE INTEGRIDAD DE COBROS ═══
 // Detecta dos tipos de problema:
 // 1) Documentos duplicados: mismo "numero" repetido en la base actual
@@ -14382,6 +14928,8 @@ function descargarExcelCxCActual(){
 function renderListaCxCAdmin(){
   var el=document.getElementById('cxcListaCompleta');
   if(!el) return;
+  var btnCr=document.getElementById('btnVerCrucesCxC');
+  if(btnCr) btnCr.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'inline-block':'none';
   var qEl=document.getElementById('cxcBusqDoc');
   var q=qEl?qEl.value.toLowerCase():'';
   var docs=CUENTAS_COBRAR.filter(function(d){ return Math.abs(d.saldo)>0.009; });
@@ -14437,6 +14985,9 @@ function renderListaCxCAdmin(){
       if(d.ajusteManual){
         origenTxt+=' <span class="tag" style="background:#FFF3CD;color:#856404;font-size:9px" title="'+(d.ajusteManual.realizadoPor||'')+' - '+(d.ajusteManual.fecha||'')+' - '+(d.ajusteManual.motivo||'').replace(/"/g,'&quot;')+'">Ajustado</span>';
       }
+      if(d.cruces && d.cruces.length){
+        origenTxt+=' <span class="tag" style="background:#E3F2FD;color:#1565C0;font-size:9px" title="'+d.cruces.map(function(c){ return 'Cruce de $'+c.monto+' con Doc.'+c.con+' ('+c.fecha+')'; }).join(' | ').replace(/"/g,'&quot;')+'">Cruce interno</span>';
+      }
       var puedeBorrarDoc=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'));
       html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:13px">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
@@ -14445,7 +14996,7 @@ function renderListaCxCAdmin(){
         '<div style="font-size:11px;color:#888">Doc.'+d.numero+' | VEND '+d.vendedor+' | Vence: '+d.vencimiento+diasTxt+'</div>'+
         '<div style="font-size:13px;font-weight:700;color:'+(esCredito?'var(--verde)':'var(--azul)')+'">'+(esCredito?'($'+formatearNumeroConMiles(Math.abs(d.saldo),2)+')':'$'+formatearNumeroConMiles(d.saldo,2))+'</div>'+
         '</div>'+
-        (puedeBorrarDoc?'<div style="display:flex;gap:6px;flex-shrink:0"><button class="btn btn-s btn-sm" style="color:var(--azul)" onclick="confirmarEditarSaldoCxC(\''+d.numero+'\')">Editar saldo</button><button class="btn btn-s btn-sm" style="color:var(--rojo)" onclick="confirmarEliminarDocCxC(\''+d.numero+'\')">Eliminar</button></div>':'')+
+        (puedeBorrarDoc?'<div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end"><button class="btn btn-s btn-sm" style="color:var(--verde)" onclick="abrirCruzarDocs(\''+d.numero+'\')">Cruzar</button><button class="btn btn-s btn-sm" style="color:var(--azul)" onclick="confirmarEditarSaldoCxC(\''+d.numero+'\')">Editar saldo</button><button class="btn btn-s btn-sm" style="color:var(--rojo)" onclick="confirmarEliminarDocCxC(\''+d.numero+'\')">Eliminar</button></div>':'')+
         '</div>'+
       '</div>';
     }
@@ -15987,10 +16538,13 @@ function abrirDetallePagoCobro(pagoId, ev){
   // Documentos
   html+=titulo('Documentos que cubre');
   html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'+
-    '<tr style="color:#888"><th style="text-align:left;padding:3px">Doc.</th><th style="text-align:left;padding:3px">Emision</th><th style="text-align:left;padding:3px">Vence</th><th style="text-align:right;padding:3px">IVA</th><th style="text-align:right;padding:3px">Saldo al reportar</th></tr>';
-  (p.documentos||[]).forEach(function(d){
-    html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:3px">'+d.numero+'</td><td style="padding:3px">'+(d.emision||'-')+'</td><td style="padding:3px">'+(d.vencimiento||'-')+'</td><td style="padding:3px;text-align:right">'+((d.iva||0)>0?$(d.iva):'-')+'</td><td style="padding:3px;text-align:right">'+$(d.saldo)+'</td></tr>';
-    if((d.saldo||0)<0) html+='<tr><td colspan="5" style="padding:2px 3px 4px;font-size:10px;color:var(--verde);font-style:italic">Este documento tenia un saldo a favor y se aplico como abono.</td></tr>';
+    '<tr style="color:#888"><th style="text-align:left;padding:3px">Doc.</th><th style="text-align:left;padding:3px">Emision</th><th style="text-align:left;padding:3px">Vence</th><th style="text-align:right;padding:3px" title="Dias entre la emision del documento y la fecha del pago">Dias de cobro</th><th style="text-align:right;padding:3px">IVA</th><th style="text-align:right;padding:3px">Saldo al reportar</th></tr>';
+ (p.documentos||[]).forEach(function(d){
+    // Dias entre la emision del documento y la fecha en que se hizo el pago
+    var emisionD=d.emision||buscarEmisionDocumento(d.numero);
+    var diasD=diasEntreEmisionYPago(emisionD, p.fecha);
+    html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:3px">'+d.numero+'</td><td style="padding:3px">'+(emisionD||'-')+'</td><td style="padding:3px">'+(d.vencimiento||'-')+'</td><td style="padding:3px;text-align:right;font-weight:700;color:var(--azul)">'+(diasD!==null?(diasD+' d'):'-')+'</td><td style="padding:3px;text-align:right">'+((d.iva||0)>0?$(d.iva):'-')+'</td><td style="padding:3px;text-align:right">'+$(d.saldo)+'</td></tr>';
+    if((d.saldo||0)<0) html+='<tr><td colspan="6" style="padding:2px 3px 4px;font-size:10px;color:var(--verde);font-style:italic">Este documento tenia un saldo a favor y se aplico como abono.</td></tr>';
   });
   html+='</table></div>';
 
@@ -17125,7 +17679,7 @@ function cerrarSesion(){
 // archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
 // y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
 // el publicado es distinto, la app se recarga sola con la version nueva.
-var APP_VERSION='2026-10-24-2100';
+var APP_VERSION='2026-11-09-2200';
 function revisarVersionApp(){
   try{
     if(typeof fetch!=='function') return;
