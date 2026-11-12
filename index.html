@@ -361,6 +361,10 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <div class="divider" style="margin:12px 0"></div>
       <div class="row-sb"><span class="k">Bultos</span><span class="v" id="totBul">0</span></div>
       <div class="row-sb" style="border-top:2px solid var(--azul);margin-top:4px;padding-top:8px">
+        <span class="k">Subtotal</span><span class="v" id="totSub">$0.00</span>
+      </div>
+      <div class="row-sb" id="totIvaRow"><span class="k" id="totIvaLbl">IVA</span><span class="v" id="totIva">$0.00</span></div>
+      <div class="row-sb" style="border-top:1px solid var(--borde);padding-top:6px">
         <span style="font-weight:700;font-size:15px">TOTAL</span>
         <span style="font-size:18px;font-weight:700;color:var(--azul)" id="totMon">$0.00</span>
       </div>
@@ -377,10 +381,10 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <option value="04">Credito 30 dias</option>
         </select></div>
       <div class="field"><label>Tipo de Pedido</label>
-        <select id="fFact">
-          <option value="tipo1">Tipo 1</option>
+        <select id="fFact" onchange="actualizarTotales()">
+          <option value="tipo1" selected>Tipo 1</option>
           <option value="tipo2">Tipo 2</option>
-          <option value="tipo3" selected>Tipo 3</option>
+          <option value="tipo3">Tipo 3</option>
         </select></div>
       <div class="field"><label>Promo / bonificacion</label>
         <input type="text" id="fPromo" placeholder="Se calcula automaticamente segun bultos de bolsa"></div>
@@ -700,6 +704,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-reposicion" onclick="adminTab('reposicion')">Reposicion</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-comisiones" onclick="adminTab('comisiones')">Comisiones</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-tasas" onclick="adminTab('tasas')">Tasas BCV</button>
+      <button class="btn btn-s btn-sm admin-tab-btn" id="atab-iva" onclick="adminTab('iva')">IVA</button>
     </div>
 
     <!-- TAB INVENTARIO -->
@@ -957,6 +962,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         </div>
         <div id="cxcEstadoCarga" style="font-size:13px;margin-top:8px"></div>
         <button class="btn btn-s btn-sm" style="margin-top:8px" onclick="verHistorialCargasCxC()">Ver historial de cargas</button>
+        <button class="btn btn-s btn-sm" style="margin-top:8px" onclick="recalcularCruceCxC()">Recalcular cruce con las bases guardadas</button>
       </div>
       <div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
         <div class="metric" style="padding:8px"><div class="num" style="font-size:18px" id="cxcResumDocs">0</div><div class="lbl">Documentos pendientes</div></div>
@@ -1145,6 +1151,15 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
     </div>
 
+    <!-- TAB IVA -->
+    <div id="adminTab-iva" style="display:none">
+      <div class="card">
+        <div class="card-title">Tabla de IVA</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Tasa de IVA que se suma a los pedidos Tipo 1. Cada pedido guarda la tasa con la que se creo.</p>
+        <div id="ivaAdminContenido"></div>
+      </div>
+    </div>
+
     <!-- TAB COMISIONES -->
     <div id="adminTab-comisiones" style="display:none">
       <div class="card">
@@ -1307,7 +1322,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         <span id="rptCardUbicacion-arrow" style="color:#aaa;font-size:11px">▲</span>
       </div>
       <div id="rptCardUbicacion-body" style="padding:0 16px 16px">
-        <p style="font-size:11px;color:#888;margin:0 0 10px">Agrupa las ventas por el Estado y la Ciudad del cliente. Respeta el periodo y los filtros de vendedor y cliente de arriba.</p>
+        <p style="font-size:11px;color:#888;margin:0 0 10px">Ventas por el Estado y la Ciudad del cliente, con gráficas. Toca un Estado o Ciudad para ver sus clientes. Respeta el periodo y los filtros de arriba.</p>
         <div id="rptUbicacion"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Selecciona un periodo</div></div>
       </div>
     </div>
@@ -2373,6 +2388,17 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 </div>
 
 <!-- MODAL CONFIRMAR -->
+<div class="modal-bg" id="mUbicDetalle">
+  <div class="modal" style="max-width:640px">
+    <h3 id="ubDetTitulo"></h3>
+    <div id="ubDetCont" style="max-height:62vh;overflow-y:auto"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-g btn-sm" onclick="descargarExcelUbicDetalle()">Descargar Excel</button>
+      <button class="btn btn-s" onclick="cerrarModal('mUbicDetalle')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="mUbicacionClientes">
   <div class="modal" style="max-width:640px">
     <h3>Estado / Ciudad de clientes</h3>
@@ -3880,6 +3906,83 @@ function actualizarPreciosProductos(){
   }
 }
 
+// ═══ IVA ═══
+// La tasa vigente se edita en Admin -> IVA (config/iva). Cada pedido guarda la
+// tasa con la que se hizo (ivaPct/ivaMonto/total), asi un cambio de tasa no
+// altera pedidos viejos. "monto" del pedido sigue siendo el SUBTOTAL (sin IVA).
+// El IVA solo se aplica a pedidos Tipo 1.
+var IVA_PCT=16;
+var IVA_HISTORIAL=[];
+function ivaAplicaATipo(tipo){ return tipo==='tipo1'; }
+function calcularIvaPedido(monto,tipo){
+  var pct=ivaAplicaATipo(tipo)?IVA_PCT:0;
+  var iva=Math.round(monto*pct)/100;
+  iva=Math.round(iva*100)/100;
+  return {pct:pct, iva:iva, total:Math.round((monto+iva)*100)/100};
+}
+// IVA de un pedido ya guardado. Los pedidos anteriores a la reforma (sin ivaPct) no llevan IVA.
+function ivaInfoPedido(p){
+  var m=p.monto||0;
+  if(p && p.ivaPct>0){
+    var iva=(p.ivaMonto!==undefined&&p.ivaMonto!==null)?p.ivaMonto:Math.round(m*p.ivaPct)/100;
+    return {pct:p.ivaPct, iva:iva, total:(p.total!==undefined&&p.total!==null)?p.total:Math.round((m+iva)*100)/100};
+  }
+  return {pct:0, iva:0, total:m};
+}
+function ivaInfoLista(lista){
+  var r={monto:0, iva:0, total:0};
+  for(var i=0;i<lista.length;i++){ var x=ivaInfoPedido(lista[i]); r.monto+=lista[i].monto||0; r.iva+=x.iva; r.total+=x.total; }
+  r.monto=Math.round(r.monto*100)/100; r.iva=Math.round(r.iva*100)/100; r.total=Math.round(r.total*100)/100;
+  return r;
+}
+function cargarIvaConfig(doc){
+  try{
+    if(doc && doc.exists){
+      var d=JSON.parse(doc.data().data||'{}');
+      if(d.pct!==undefined && !isNaN(parseFloat(d.pct))) IVA_PCT=parseFloat(d.pct);
+      IVA_HISTORIAL=d.historial||[];
+    }
+  }catch(e){}
+}
+function renderAdminIva(){
+  var el=document.getElementById('ivaAdminContenido'); if(!el) return;
+  var puede=!!VEND && (VEND.codigo==='01'||VEND.codigo==='20');
+  var html='<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px"><tr style="color:#888"><th style="text-align:left;padding:4px">Concepto</th><th style="text-align:right;padding:4px">Tasa</th><th style="text-align:left;padding:4px">Aplica a</th></tr>'+
+    '<tr style="background:var(--azul-c)"><td style="padding:6px 4px;font-weight:700">IVA vigente</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:var(--azul)">'+IVA_PCT+'%</td><td style="padding:6px 4px">Pedidos Tipo 1</td></tr></table>';
+  if(puede){
+    html+='<div style="display:flex;gap:8px;align-items:flex-end"><div class="field" style="flex:1;margin-bottom:0"><label>Nueva tasa de IVA (%)</label><input type="number" id="ivaNuevoPct" min="0" max="100" step="0.01" value="'+IVA_PCT+'"></div><button class="btn btn-p btn-sm" onclick="guardarIvaPct()">Guardar</button></div>'+
+      '<div style="font-size:11px;color:#888;margin-top:6px">El cambio aplica a los pedidos nuevos. Los pedidos ya creados conservan la tasa con la que se hicieron.</div>';
+  } else {
+    html+='<div style="font-size:12px;color:#856404;background:#FFF3CD;border-radius:6px;padding:6px 8px">Solo los usuarios 01 y 20 pueden cambiar la tasa de IVA.</div>';
+  }
+  if(IVA_HISTORIAL.length){
+    html+='<div style="font-size:12px;font-weight:700;margin-top:14px;margin-bottom:4px">Historial de cambios</div><table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="color:#888"><th style="text-align:left;padding:3px">Fecha</th><th style="text-align:right;padding:3px">Antes</th><th style="text-align:right;padding:3px">Ahora</th><th style="text-align:left;padding:3px">Usuario</th></tr>';
+    IVA_HISTORIAL.slice().reverse().forEach(function(x){
+      html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:3px">'+new Date(x.fecha).toLocaleString('es-VE')+'</td><td style="padding:3px;text-align:right">'+x.antes+'%</td><td style="padding:3px;text-align:right;font-weight:700">'+x.despues+'%</td><td style="padding:3px">VEND '+(x.por||'?')+'</td></tr>';
+    });
+    html+='</table>';
+  }
+  el.innerHTML=html;
+}
+function guardarIvaPct(){
+  if(!VEND || !(VEND.codigo==='01'||VEND.codigo==='20')){ toast('Solo 01 y 20 pueden cambiar el IVA'); return; }
+  var v=parseFloat(String(document.getElementById('ivaNuevoPct').value).replace(',','.'));
+  if(isNaN(v) || v<0 || v>100){ toast('Escribe una tasa valida entre 0 y 100'); return; }
+  v=Math.round(v*100)/100;
+  if(v===IVA_PCT){ toast('Esa ya es la tasa vigente'); return; }
+  if(!confirm('Cambiar el IVA de '+IVA_PCT+'% a '+v+'%? Aplicara a los pedidos nuevos.')) return;
+  var antes=IVA_PCT;
+  var hist=IVA_HISTORIAL.concat([{fecha:new Date().toISOString(), antes:antes, despues:v, por:VEND.codigo}]);
+  db.collection('config').doc('iva').set({
+    data:JSON.stringify({pct:v, historial:hist}), actualizado:new Date().toISOString()
+  }).then(function(){
+    IVA_PCT=v; IVA_HISTORIAL=hist;
+    toast('IVA actualizado a '+v+'%');
+    renderAdminIva();
+    try{ actualizarTotales(); }catch(e){}
+  }).catch(function(){ toast('Error guardando en Firebase'); });
+}
+
 function actualizarTotales(){
   actualizarPromoCustomOverrides();
   var lp=1;
@@ -3897,8 +4000,14 @@ function actualizarTotales(){
       }
     }
   }
+  var tipoAt='tipo1'; try{ tipoAt=document.getElementById('fFact').value; }catch(e){}
+  var ivaAt=calcularIvaPedido(monto,tipoAt);
   document.getElementById('totBul').textContent=bultos;
-  document.getElementById('totMon').textContent='$'+monto.toFixed(2);
+  document.getElementById('totSub').textContent='$'+monto.toFixed(2);
+  document.getElementById('totIvaLbl').textContent='IVA ('+ivaAt.pct+'%)';
+  document.getElementById('totIva').textContent='$'+ivaAt.iva.toFixed(2);
+  document.getElementById('totIvaRow').style.display=ivaAt.pct>0?'flex':'none';
+  document.getElementById('totMon').textContent='$'+ivaAt.total.toFixed(2);
 }
 
 function irPaso3(){
@@ -4011,12 +4120,17 @@ function abrirConfirmarInterno(){
     itemsHtml+='<tr><td colspan="4" style="padding:6px 4px;text-align:right;color:var(--rojo)">Descuento general ('+descGeneralPct+'%)</td>'+
       '<td style="padding:6px 4px;text-align:right;color:var(--rojo)">-$'+montoDescGeneral.toFixed(2)+'</td></tr>';
   }
+  var ivaC=calcularIvaPedido(monto,ff);
   itemsHtml+='<tr style="border-top:2px solid var(--azul)">';
-  itemsHtml+='<td colspan="2" style="padding:8px 4px;font-weight:700;color:var(--azul)">TOTAL</td>';
+  itemsHtml+='<td colspan="2" style="padding:8px 4px;font-weight:700;color:var(--azul)">'+(ivaC.pct>0?'Subtotal':'TOTAL')+'</td>';
   itemsHtml+='<td style="padding:8px 4px;text-align:center;font-weight:700;color:var(--azul)">'+bultos+'</td>';
   itemsHtml+='<td></td>';
-  itemsHtml+='<td style="padding:8px 4px;text-align:right;font-weight:700;font-size:16px;color:var(--azul)">$'+monto.toFixed(2)+'</td>';
+  itemsHtml+='<td style="padding:8px 4px;text-align:right;font-weight:700;'+(ivaC.pct>0?'':'font-size:16px;')+'color:var(--azul)">$'+monto.toFixed(2)+'</td>';
   itemsHtml+='</tr>';
+  if(ivaC.pct>0){
+    itemsHtml+='<tr><td colspan="4" style="padding:4px;text-align:right;color:#555">IVA ('+ivaC.pct+'%)</td><td style="padding:4px;text-align:right;color:#555">$'+ivaC.iva.toFixed(2)+'</td></tr>';
+    itemsHtml+='<tr style="border-top:1px solid var(--borde)"><td colspan="4" style="padding:8px 4px;text-align:right;font-weight:700;color:var(--azul)">TOTAL</td><td style="padding:8px 4px;text-align:right;font-weight:700;font-size:16px;color:var(--azul)">$'+ivaC.total.toFixed(2)+'</td></tr>';
+  }
   itemsHtml+='</table>';
   var obsFinal=obs;
   // Agregar las observaciones manuales de las promociones personalizadas que
@@ -4028,7 +4142,7 @@ function abrirConfirmarInterno(){
   }
   if(obsFinal!==obs) document.getElementById('fObs').value=obsFinal;
   pedido.temp={fp:fp,fpL:FP_LABELS[fp]||fp,ff:ff,ffL:FF_LABELS[ff]||ff,promo:promo,obs:obsFinal,bultos:bultos,
-    monto:monto,montoBruto:montoBruto,lp:lp,
+    monto:monto,montoBruto:montoBruto,lp:lp,ivaPct:ivaC.pct,ivaMonto:ivaC.iva,total:ivaC.total,
     descuentosItem:JSON.parse(JSON.stringify(DESCUENTOS_ITEM)),descuentoGeneralPct:descGeneralPct,
     montoDescuentoGeneral:montoDescGeneral,preciosUnitarios:preciosUnitariosConf,
     bonificacionesUnidades:promosInfoConf.bonificacionesUnidades};
@@ -4081,6 +4195,7 @@ function crearObj(){
   var descGeneralPctFinal=t.descuentoGeneralPct||0;
   var montoDescGeneralFinal=Math.round(montoBrutoFinal*descGeneralPctFinal/100*100)/100;
   var montoFinal=Math.round((montoBrutoFinal-montoDescGeneralFinal)*100)/100;
+  var ivaFinal=calcularIvaPedido(montoFinal,t.ff);
   var obj={id:Date.now(),fecha:new Date().toLocaleDateString('es-VE'),
     hora:new Date().toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit'}),
     cliente:JSON.parse(JSON.stringify(pedido.cliente)),
@@ -4095,6 +4210,7 @@ function crearObj(){
     promo:t.promo,obs:t.obs,bultos:bultosFinal,
     montoBruto:montoBrutoFinal,descuentoGeneralPct:descGeneralPctFinal,
     montoDescuentoGeneral:montoDescGeneralFinal,monto:montoFinal,
+    ivaPct:ivaFinal.pct,ivaMonto:ivaFinal.iva,total:ivaFinal.total,
     descuentosItem:t.descuentosItem||{},
     // Unidades gratis por producto que otorgo una promocion tipo "unidades
     // gratis" (ej. Promo Bultos Bolsa). No se suman a "items" (que refleja
@@ -4154,7 +4270,7 @@ function construirMsgWA(){
   var partes=['PEDIDO TUTIM','---','',hoy+' - VEND '+VEND.codigo+' '+VEND.nombre+(VEND.zona?' - '+VEND.zona:''),'',
     alertaNvo,'CLIENTE: '+'Cod: '+cli.id+' | '+cli.nombre,'RIF: '+cli.rif,(cli.tel?'Tel: '+cli.tel:''),(cli.contacto?'Contacto: '+cli.contacto:''),(cli.dir?'Dir. Fiscal: '+cli.dir:''),(cli.dirEntrega&&cli.dirEntrega!==cli.dir?'*DIRECCION DE DESPACHO DIFERENTE A LA FISCAL:* '+cli.dirEntrega:''),'',
     'PRODUCTOS:',lineas.join(N),'',
-    'TOTAL: $'+t.monto.toFixed(2)+' ('+t.bultos+' bultos)',
+    (t.ivaPct>0?'Subtotal: $'+t.monto.toFixed(2)+' ('+t.bultos+' bultos)'+N+'IVA ('+t.ivaPct+'%): $'+t.ivaMonto.toFixed(2)+N+'TOTAL: $'+t.total.toFixed(2):'TOTAL: $'+t.monto.toFixed(2)+' ('+t.bultos+' bultos)'),
     'Pago: '+t.fpL+' - Fact: '+t.ffL,'Lista precio: '+lp,
     (t.promo?'Promo: '+t.promo:''),(t.obs?'Obs: '+t.obs:'')];
   return partes.join(N);
@@ -4236,7 +4352,10 @@ function genExcel(){
     '<p><b>Pago:</b> '+t.fpL+' - <b>Fact:</b> '+t.ffL+' - <b>Precio:</b> Lista '+lp+'</p>'+
     (t.promo?'<p><b>Promo:</b> '+t.promo+'</p>':'')+
     '<table><tr><th>Codigo</th><th>Producto</th><th>Bultos</th><th>Precio</th><th>% Dcto</th><th>Subtotal</th></tr>'+filas+filaDescGeneral+
-    '<tr><td colspan="5" style="text-align:right;font-weight:bold">TOTAL</td><td style="font-weight:bold;color:#1B2A6B">$'+t.monto.toFixed(2)+'</td></tr></table>'+
+    (t.ivaPct>0?'<tr><td colspan="5" style="text-align:right;font-weight:bold">Subtotal</td><td style="font-weight:bold;color:#1B2A6B">$'+t.monto.toFixed(2)+'</td></tr>'+
+      '<tr><td colspan="5" style="text-align:right">IVA ('+t.ivaPct+'%)</td><td>$'+t.ivaMonto.toFixed(2)+'</td></tr>'+
+      '<tr><td colspan="5" style="text-align:right;font-weight:bold">TOTAL</td><td style="font-weight:bold;color:#1B2A6B">$'+t.total.toFixed(2)+'</td></tr></table>'
+     :'<tr><td colspan="5" style="text-align:right;font-weight:bold">TOTAL</td><td style="font-weight:bold;color:#1B2A6B">$'+t.monto.toFixed(2)+'</td></tr></table>')+
     (t.obs?'<p><b>Obs:</b> '+t.obs+'</p>':'')+
     '</body></html>';
   descargar(xls,'application/vnd.ms-excel','pedido_'+hoy.replace(/\//g,'-')+'.xls');
@@ -4434,7 +4553,7 @@ function renderPedidoCard(p){
     '<div style="font-size:11px;color:var(--azul);font-weight:600;margin-left:24px;margin-bottom:2px">Cod: '+p.cliente.id+(p.cliente.rif?' &nbsp;|&nbsp; '+p.cliente.rif:'')+'</div>' +
     '<div style="font-size:12px;color:#666;margin-bottom:6px;margin-left:24px">'+itemsTxt+'</div>' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-left:24px;flex-wrap:wrap;gap:6px">' +
-      '<span style="font-size:15px;font-weight:700;color:'+(anulado?'#aaa':'var(--azul)')+'">$'+p.monto.toFixed(2)+' &nbsp;'+p.bultos+' btos</span>' +
+      '<span style="font-size:15px;font-weight:700;color:'+(anulado?'#aaa':'var(--azul)')+'">$'+ivaInfoPedido(p).total.toFixed(2)+' &nbsp;'+p.bultos+' btos'+(ivaInfoPedido(p).pct>0?'<span style="display:block;font-size:10px;font-weight:400;color:#888">Subtotal $'+p.monto.toFixed(2)+' + IVA '+ivaInfoPedido(p).pct+'% $'+ivaInfoPedido(p).iva.toFixed(2)+'</span>':'')+'</span>' +
       '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
         enviadoBadge+
         (anulado
@@ -4485,12 +4604,17 @@ function verDetallePedidoLista(id){
     itemsHtml+='<tr><td colspan="4" style="padding:6px 4px;text-align:right;color:var(--rojo)">Descuento general ('+ped.descuentoGeneralPct+'%)</td>'+
       '<td style="padding:6px 4px;text-align:right;color:var(--rojo)">-$'+(ped.montoDescuentoGeneral||0).toFixed(2)+'</td></tr>';
   }
+  var ivaD=ivaInfoPedido(ped);
   itemsHtml+='<tr style="border-top:2px solid var(--azul)">';
-  itemsHtml+='<td colspan="2" style="padding:8px 4px;font-weight:700;color:var(--azul)">TOTAL</td>';
+  itemsHtml+='<td colspan="2" style="padding:8px 4px;font-weight:700;color:var(--azul)">'+(ivaD.pct>0?'Subtotal':'TOTAL')+'</td>';
   itemsHtml+='<td style="padding:8px 4px;text-align:center;font-weight:700;color:var(--azul)">'+ped.bultos+'</td>';
   itemsHtml+='<td></td>';
-  itemsHtml+='<td style="padding:8px 4px;text-align:right;font-weight:700;font-size:16px;color:var(--azul)">$'+ped.monto.toFixed(2)+'</td>';
+  itemsHtml+='<td style="padding:8px 4px;text-align:right;font-weight:700;'+(ivaD.pct>0?'':'font-size:16px;')+'color:var(--azul)">$'+ped.monto.toFixed(2)+'</td>';
   itemsHtml+='</tr>';
+  if(ivaD.pct>0){
+    itemsHtml+='<tr><td colspan="4" style="padding:4px;text-align:right;color:#555">IVA ('+ivaD.pct+'%)</td><td style="padding:4px;text-align:right;color:#555">$'+ivaD.iva.toFixed(2)+'</td></tr>';
+    itemsHtml+='<tr style="border-top:1px solid var(--borde)"><td colspan="4" style="padding:8px 4px;text-align:right;font-weight:700;color:var(--azul)">TOTAL</td><td style="padding:8px 4px;text-align:right;font-weight:700;font-size:16px;color:var(--azul)">$'+ivaD.total.toFixed(2)+'</td></tr>';
+  }
   itemsHtml+='</table>';
 
   var cli=ped.cliente;
@@ -4582,16 +4706,17 @@ function renderHistorial(){
 function enviarResumenWA(){
   var pedidos = getPedidosSeleccionados();
   if(pedidos.length===0){toast('Selecciona al menos un pedido');return;}
-  var totB=0,totM=0;
+  var totB=0,totM=0,totI=0;
   var lineas=[];
   var lastVend='';
   for(var i=0;i<pedidos.length;i++){
-    var p=pedidos[i];totB+=p.bultos;totM+=p.monto;
+    var p=pedidos[i];totB+=p.bultos;totM+=p.monto;totI+=ivaInfoPedido(p).iva;
     if(verTodosWA && p.vendedor!==lastVend){
       lineas.push('--- VEND '+(p.vendedor||'?')+' '+(p.vendedorNombre||'')+'---');
       lastVend=p.vendedor;
     }
-    lineas.push('  ['+p.cliente.id+'] '+p.cliente.nombre+': '+p.bultos+' btos $'+p.monto.toFixed(2)+' ('+p.fecha+')');
+    var ivaRes=ivaInfoPedido(p);
+    lineas.push('  ['+p.cliente.id+'] '+p.cliente.nombre+': '+p.bultos+' btos $'+p.monto.toFixed(2)+(ivaRes.pct>0?' + IVA $'+ivaRes.iva.toFixed(2)+' = $'+ivaRes.total.toFixed(2):'')+' ('+p.fecha+')');
   }
   var N=nl();
   var desde=document.getElementById('filtroDesde').value;
@@ -4599,7 +4724,7 @@ function enviarResumenWA(){
   var periodo=desde?('Del '+desde+' al '+(hasta||desde)):'Todos';
   var msg=['RESUMEN PEDIDOS TUTIM','Vendedor: '+VEND.nombre+' (VEND '+VEND.codigo+')','Periodo: '+periodo,'',
     'PEDIDOS ('+pedidos.length+'):',lineas.join(N),'',
-    'Total bultos: '+totB,'Total: $'+totM.toFixed(2)].join(N);
+    'Total bultos: '+totB].concat(totI>0?['Subtotal: $'+totM.toFixed(2),'IVA: $'+totI.toFixed(2),'TOTAL: $'+(Math.round((totM+totI)*100)/100).toFixed(2)]:['Total: $'+totM.toFixed(2)]).join(N);
   window.open('https://wa.me/'+WA_RESUMEN+'?text='+encodeURIComponent(msg),'_blank');
   marcarEnviados(pedidos);
 }
@@ -4609,7 +4734,7 @@ function enviarDetalleWA(){
   if(pedHoy.length===0){toast('No hay pedidos para enviar');return;}
   var hoy=new Date().toLocaleDateString('es-VE');
   var N=nl();
-  var totB=0,totM=0;
+  var totB=0,totM=0,totI=0;
   var lineas=[];
   lineas.push('DETALLE DE PEDIDOS TUTIM - '+hoy);
   lineas.push('Vendedor: '+VEND.nombre+' (VEND '+VEND.codigo+')');
@@ -4646,21 +4771,26 @@ function enviarDetalleWA(){
     if(ped.descuentoGeneralPct){
       lineas.push('Subtotal: $'+(ped.montoBruto||ped.monto).toFixed(2)+' ('+ped.bultos+' btos)');
       lineas.push('Descuento general ('+ped.descuentoGeneralPct+'%): -$'+(ped.montoDescuentoGeneral||0).toFixed(2));
-      lineas.push('Total: $'+ped.monto.toFixed(2));
+      lineas.push((ivaInfoPedido(ped).pct>0?'Subtotal con descuento: $':'Total: $')+ped.monto.toFixed(2));
     } else {
       lineas.push('Subtotal: $'+ped.monto.toFixed(2)+' ('+ped.bultos+' btos)');
+    }
+    if(ivaInfoPedido(ped).pct>0){
+      lineas.push('IVA ('+ivaInfoPedido(ped).pct+'%): $'+ivaInfoPedido(ped).iva.toFixed(2));
+      lineas.push('TOTAL: $'+ivaInfoPedido(ped).total.toFixed(2));
     }
     lineas.push('Pago: '+(ped.formaPagoL||ped.formaPago)+' | Fact: '+(ped.tipoFactL||ped.tipoFact));
     lineas.push('Lista precio: Precio '+lp);
     if(ped.promo) lineas.push('Promo: '+ped.promo);
     if(ped.obs) lineas.push('Obs: '+ped.obs);
     lineas.push('');
-    totB+=ped.bultos; totM+=ped.monto;
+    totB+=ped.bultos; totM+=ped.monto; totI+=ivaInfoPedido(ped).iva;
   }
   lineas.push('========================');
   lineas.push('TOTAL PEDIDOS: '+pedHoy.length);
   lineas.push('TOTAL BULTOS: '+totB);
-  lineas.push('TOTAL MONTO: $'+totM.toFixed(2));
+  if(totI>0){ lineas.push('SUBTOTAL: $'+totM.toFixed(2)); lineas.push('IVA: $'+totI.toFixed(2)); lineas.push('TOTAL: $'+(Math.round((totM+totI)*100)/100).toFixed(2)); }
+  else lineas.push('TOTAL MONTO: $'+totM.toFixed(2));
   var msg=lineas.join(N);
   window.open('https://wa.me/'+WA_DETALLE+'?text='+encodeURIComponent(msg),'_blank');
   marcarEnviados(pedHoy);
@@ -4692,12 +4822,21 @@ function buildTablaHTML(ped) {
       }
     }
   }
+  var ivaT = ivaInfoPedido(ped);
+  if(ped.descuentoGeneralPct){
+    filas += '<tr><td colspan="4" style="padding:6px 8px;text-align:right;color:#A32D2D">Descuento general ('+ped.descuentoGeneralPct+'%)</td><td style="padding:6px 8px;text-align:right;color:#A32D2D">-$'+(ped.montoDescuentoGeneral||0).toFixed(2)+'</td></tr>';
+    monto = ped.monto;
+  }
   filas += '<tr style="border-top:2px solid #1B2A6B;background:#E8EBF8">' +
-    '<td colspan="2" style="padding:8px;font-weight:700;color:#1B2A6B">TOTAL</td>' +
+    '<td colspan="2" style="padding:8px;font-weight:700;color:#1B2A6B">'+(ivaT.pct>0?'Subtotal':'TOTAL')+'</td>' +
     '<td style="padding:8px;text-align:center;font-weight:700;color:#1B2A6B">'+bultos+'</td>' +
     '<td></td>' +
-    '<td style="padding:8px;text-align:right;font-weight:700;font-size:15px;color:#1B2A6B">$'+monto.toFixed(2)+'</td>' +
+    '<td style="padding:8px;text-align:right;font-weight:700;'+(ivaT.pct>0?'':'font-size:15px;')+'color:#1B2A6B">$'+monto.toFixed(2)+'</td>' +
     '</tr>';
+  if(ivaT.pct>0){
+    filas += '<tr><td colspan="4" style="padding:6px 8px;text-align:right;color:#555">IVA ('+ivaT.pct+'%)</td><td style="padding:6px 8px;text-align:right;color:#555">$'+ivaT.iva.toFixed(2)+'</td></tr>' +
+      '<tr style="background:#E8EBF8"><td colspan="4" style="padding:8px;text-align:right;font-weight:700;color:#1B2A6B">TOTAL</td><td style="padding:8px;text-align:right;font-weight:700;font-size:15px;color:#1B2A6B">$'+ivaT.total.toFixed(2)+'</td></tr>';
+  }
 
   var alertaNvo = esNvo ? '<div style="background:#FDE8F2;border-left:4px solid #E8509A;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:13px;color:#c0166c"><strong>CLIENTE NUEVO</strong> — Crear en Profit antes de facturar</div>' : '';
   var alertaDirEntrega = (ped.cliente.dirEntrega && ped.cliente.dirEntrega!==ped.cliente.dir)
@@ -4743,6 +4882,7 @@ function enviarCorreo(){
   var N=nl();
   var totB=0,totM=0;
   for(var i=0;i<pedidos.length;i++){totB+=pedidos[i].bultos;totM+=pedidos[i].monto;}
+  var ivaRep=ivaInfoLista(pedidos);
 
   var lineas=[];
   lineas.push('REPORTE DE PEDIDOS - TUTIM');
@@ -4751,7 +4891,11 @@ function enviarCorreo(){
   lineas.push('Periodo  : '+periodo);
   lineas.push('Pedidos  : '+pedidos.length);
   lineas.push('Bultos   : '+totB);
-  lineas.push('Total    : $'+totM.toFixed(2));
+  if(ivaRep.iva>0){
+    lineas.push('Subtotal : $'+totM.toFixed(2));
+    lineas.push('IVA      : $'+ivaRep.iva.toFixed(2));
+    lineas.push('TOTAL    : $'+ivaRep.total.toFixed(2));
+  } else lineas.push('Total    : $'+totM.toFixed(2));
   lineas.push('================================');
   lineas.push('');
 
@@ -4797,9 +4941,13 @@ function enviarCorreo(){
     if(ped.descuentoGeneralPct){
       lineas.push('                        SUBTOTAL'+('      '+ped.bultos).slice(-6)+'                '+'    $'+(ped.montoBruto||ped.monto).toFixed(2));
       lineas.push('                        DESCUENTO GENERAL ('+ped.descuentoGeneralPct+'%)                  -$'+(ped.montoDescuentoGeneral||0).toFixed(2));
-      lineas.push('                        TOTAL'+('      '+ped.bultos).slice(-6)+'                '+'    $'+ped.monto.toFixed(2));
+      lineas.push('                        '+(ivaInfoPedido(ped).pct>0?'SUBTOTAL CON DCTO':'TOTAL')+('      '+ped.bultos).slice(-6)+'                '+'    $'+ped.monto.toFixed(2));
     } else {
       lineas.push('                        SUBTOTAL'+('      '+ped.bultos).slice(-6)+'                '+'    $'+ped.monto.toFixed(2));
+    }
+    if(ivaInfoPedido(ped).pct>0){
+      lineas.push('                        IVA ('+ivaInfoPedido(ped).pct+'%)'+'                          '+'    $'+ivaInfoPedido(ped).iva.toFixed(2));
+      lineas.push('                        TOTAL'+'                              '+'    $'+ivaInfoPedido(ped).total.toFixed(2));
     }
     lineas.push('');
     lineas.push('Pago     : '+(ped.formaPagoL||ped.formaPago));
@@ -4811,7 +4959,7 @@ function enviarCorreo(){
   }
 
   lineas.push('================================');
-  lineas.push('TOTAL: '+pedidos.length+' pedidos | '+totB+' bultos | $'+totM.toFixed(2));
+  lineas.push('TOTAL: '+pedidos.length+' pedidos | '+totB+' bultos | $'+(ivaRep.iva>0?ivaRep.total.toFixed(2)+' (Subtotal $'+totM.toFixed(2)+' + IVA $'+ivaRep.iva.toFixed(2)+')':totM.toFixed(2)));
   lineas.push('Generado por Tutim Ventas App');
 
   var asunto='Pedidos Tutim - '+VEND.nombre+' - '+periodo;
@@ -4940,6 +5088,10 @@ function exportarExcelDia(){
       contenido+='<tr class="tot-row"><td colspan="6" style="text-align:right">TOTAL VEND '+vid2+'</td>';
       contenido+='<td style="text-align:center">'+vTotB+'</td><td></td><td></td>';
       contenido+='<td style="text-align:right;color:#1B2A6B">$'+vTotM.toFixed(2)+'</td><td></td><td colspan="4"></td></tr>';
+      var ivaVX=ivaInfoLista(pedHoy.filter(function(x){ return (x.vendedor||'??')===vid2; }));
+      if(ivaVX.iva>0){
+        contenido+='<tr class="tot-row"><td colspan="9" style="text-align:right">SUBTOTAL PEDIDOS (neto de descuentos) / IVA / TOTAL CON IVA</td><td style="text-align:right">$'+ivaVX.monto.toFixed(2)+'</td><td style="text-align:right">IVA $'+ivaVX.iva.toFixed(2)+'</td><td colspan="4" style="text-align:left;color:#1B2A6B">TOTAL $'+ivaVX.total.toFixed(2)+'</td></tr>';
+      }
       contenido+='</table>';
     }
   } else {
@@ -5005,6 +5157,10 @@ function exportarExcelDia(){
     contenido+='<tr class="tot-row"><td colspan="6" style="text-align:right">TOTAL</td>';
     contenido+='<td style="text-align:center">'+totB+'</td><td></td><td></td>';
     contenido+='<td style="text-align:right;color:#1B2A6B">$'+totM.toFixed(2)+'</td><td></td><td colspan="4"></td></tr>';
+    var ivaTX=ivaInfoLista(pedHoy);
+    if(ivaTX.iva>0){
+      contenido+='<tr class="tot-row"><td colspan="9" style="text-align:right">SUBTOTAL PEDIDOS (neto de descuentos) / IVA / TOTAL CON IVA</td><td style="text-align:right">$'+ivaTX.monto.toFixed(2)+'</td><td style="text-align:right">IVA $'+ivaTX.iva.toFixed(2)+'</td><td colspan="4" style="text-align:left;color:#1B2A6B">TOTAL $'+ivaTX.total.toFixed(2)+'</td></tr>';
+    }
     contenido+='</table>';
   }
 
@@ -6250,7 +6406,7 @@ function actualizarMetricas(){
   var ahoraM=new Date();
   var hoyISO=ahoraM.getFullYear()+'-'+String(ahoraM.getMonth()+1).padStart(2,'0')+'-'+String(ahoraM.getDate()).padStart(2,'0');
   var pedH=[],visH=[],cobH=[],cobHCount=[],bH=0,mH=0;
-  for(var i=0;i<PEDIDOS.length;i++){if(PEDIDOS[i].fecha===hoy && !PEDIDOS[i].anulado){pedH.push(PEDIDOS[i]);bH+=PEDIDOS[i].bultos;mH+=PEDIDOS[i].monto;}}
+  for(var i=0;i<PEDIDOS.length;i++){if(PEDIDOS[i].fecha===hoy && !PEDIDOS[i].anulado){pedH.push(PEDIDOS[i]);bH+=PEDIDOS[i].bultos;mH+=ivaInfoPedido(PEDIDOS[i]).total;}}
   for(var i=0;i<VISITAS.length;i++){if(VISITAS[i].fecha===hoy) visH.push(VISITAS[i]);}
   for(var i=0;i<PAGOS_COBRANZA.length;i++){
     var pc=PAGOS_COBRANZA[i];
@@ -6280,7 +6436,7 @@ function actualizarMetricas(){
     var html='';
     for(var i=0;i<pedH.length;i++){
       var p=pedH[i];
-      html+='<div class="row-sb" style="border-bottom:1px solid var(--borde)"><span style="font-size:13px;font-weight:600">'+p.cliente.nombre+'</span><span style="font-size:13px;color:var(--azul);font-weight:700">$'+p.monto.toFixed(2)+'</span></div>';
+      html+='<div class="row-sb" style="border-bottom:1px solid var(--borde)"><span style="font-size:13px;font-weight:600">'+p.cliente.nombre+'</span><span style="font-size:13px;color:var(--azul);font-weight:700">$'+ivaInfoPedido(p).total.toFixed(2)+'</span></div>';
     }
     document.getElementById('ultimosPed').innerHTML=html;
   }
@@ -6515,8 +6671,8 @@ function editarPedido(pid){
     '</div>' +
     '<div class="field"><label>Forma de pago</label>' +
     '<select id="ePago"><option value="01" '+(ped.formaPago==='01'?'selected':'')+'>Contado</option><option value="05" '+(ped.formaPago==='05'?'selected':'')+'>Prepagado</option><option value="02" '+(ped.formaPago==='02'?'selected':'')+'>Credito 7 dias</option><option value="03" '+(ped.formaPago==='03'?'selected':'')+'>Credito 15 dias</option><option value="04" '+(ped.formaPago==='04'?'selected':'')+'>Credito 30 dias</option></select></div>' +
-    '<div class="field"><label>Facturacion</label>' +
-    '<select id="eFact"><option value="fiscal" '+(ped.tipoFact==='fiscal'?'selected':'')+'>100% Fiscal</option><option value="nota" '+(ped.tipoFact==='nota'?'selected':'')+'>Solo N.Entrega</option><option value="mixto" '+(ped.tipoFact==='mixto'?'selected':'')+'>50% Fiscal / 50% N.Entrega</option></select></div>' +
+    '<div class="field"><label>Tipo de Pedido</label>' +
+    '<select id="eFact" onchange="recalcularEdicionPrecios()"><option value="tipo1" '+(ped.tipoFact==='tipo1'?'selected':'')+'>Tipo 1</option><option value="tipo2" '+(ped.tipoFact==='tipo2'?'selected':'')+'>Tipo 2</option><option value="tipo3" '+(ped.tipoFact==='tipo3'?'selected':'')+'>Tipo 3</option>'+(['tipo1','tipo2','tipo3'].indexOf(ped.tipoFact)<0?'<option value="'+ped.tipoFact+'" selected>'+(ped.tipoFactL||ped.tipoFact)+'</option>':'')+'</select></div>' +
     '<div class="field"><label>Promo</label><input type="text" id="ePromo" value="'+(ped.promo||'')+'"></div>' +
     '<div class="field"><label>Observaciones</label><textarea id="eObs" rows="2">'+(ped.obs||'')+'</textarea></div>';
 
@@ -6597,7 +6753,11 @@ function recalcularEdicionPrecios(){
   }
   var totalConDescGeneral=Math.round(total*(1-descGeneralPctEdit/100)*100)/100;
   var totalEl=document.getElementById('eTotalPreview');
-  if(totalEl) totalEl.textContent='$'+totalConDescGeneral.toFixed(2)+(descGeneralPctEdit>0?' (bruto $'+total.toFixed(2)+')':'');
+  var tipoEdPrev=''; try{ tipoEdPrev=document.getElementById('eFact').value; }catch(e){}
+  var pedPrevIva=null; for(var pi=0;pi<PEDIDOS.length;pi++){ if(String(PEDIDOS[pi].id)===String(pedidoEditandoId)){ pedPrevIva=PEDIDOS[pi]; break; } }
+  var pctPrevIva=ivaAplicaATipo(tipoEdPrev)?((pedPrevIva && pedPrevIva.ivaPct>0)?pedPrevIva.ivaPct:((pedPrevIva && pedPrevIva.ivaPct===undefined && pedPrevIva.tipoFact===tipoEdPrev)?0:IVA_PCT)):0;
+  var ivaPrev=Math.round(totalConDescGeneral*pctPrevIva)/100; ivaPrev=Math.round(ivaPrev*100)/100;
+  if(totalEl) totalEl.textContent=(pctPrevIva>0?'$'+(Math.round((totalConDescGeneral+ivaPrev)*100)/100).toFixed(2)+' (Subtotal $'+totalConDescGeneral.toFixed(2)+' + IVA '+pctPrevIva+'% $'+ivaPrev.toFixed(2)+')':'$'+totalConDescGeneral.toFixed(2))+(descGeneralPctEdit>0?' (bruto $'+total.toFixed(2)+')':'');
 }
 
 function guardarEdicion(){
@@ -6682,6 +6842,14 @@ function guardarEdicion(){
       ped.listaPrecio = lp;
       ped.formaPago = fp;
       ped.formaPagoL = FP_LABELS[fp] || fp;
+      // IVA: un pedido anterior a la reforma (sin ivaPct) sigue sin IVA salvo que se le cambie el tipo
+      var tipoPrevioEd = ped.tipoFact;
+      if(ped.ivaPct!==undefined || ff!==tipoPrevioEd){
+        var pctEd = ivaAplicaATipo(ff) ? ((ped.ivaPct>0)?ped.ivaPct:IVA_PCT) : 0;
+        ped.ivaPct = pctEd;
+        ped.ivaMonto = Math.round(Math.round(monto*pctEd)/100*100)/100;
+        ped.total = Math.round((monto+ped.ivaMonto)*100)/100;
+      }
       ped.tipoFact = ff;
       ped.tipoFactL = FF_LABELS[ff] || ff;
       if(!ped.anulado){
@@ -7970,8 +8138,19 @@ function mapaClientesUbic(){
   return m;
 }
 
-// ═══ Reporte: ventas por Estado y Ciudad ═══
+// ═══ Reporte: ventas por Estado y Ciudad (graficas + detalle por zona) ═══
 var ULTIMO_RPT_UBIC=null;
+var UBIC_METRICA='monto';          // monto | bultos | pedidos
+var UBIC_DET_ACTUAL=null;          // {ei,ci} del detalle abierto (ci=-1: estado completo)
+var UBIC_SIN='(Sin ubicación)';
+var UBIC_COLORES=['#1B2A6B','#2E8B57','#E8509A','#F0AD4E','#17A2B8','#7B5EA7','#C0392B'];
+var UBIC_COLOR_OTROS='#9AA0A6';
+function escUbic(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function ubicValor(x,m){ return m==='bultos'?x.bultos:(m==='pedidos'?x.pedidos:x.monto); }
+function ubicFmt(v,m){ return (m==='monto'?'$':'')+formatearNumeroConMiles(v,0); }
+function ubicPct(parte,total){ return total>0?(Math.round(parte/total*1000)/10):0; }
+function ubicEtiqMetrica(m){ return m==='bultos'?'Bultos':(m==='pedidos'?'Pedidos':'Monto'); }
+
 function renderRptUbicacion(lista){
   var el=document.getElementById('rptUbicacion');
   if(!el) return;
@@ -7981,60 +8160,217 @@ function renderRptUbicacion(lista){
     return;
   }
   var mapa=mapaClientesUbic();
-  var SIN='(Sin ubicación)';
-  var estados={}, totMonto=0, totBultos=0, totPedidos=0, sinUbic={};
+  var estados={}, tot={monto:0,bultos:0,pedidos:0}, sinUbic={};
+  function sumar(x,p){
+    x.pedidos++; x.bultos+=p.bultos; x.monto+=p.monto;
+    var c=x.clientes[p.cliente.id];
+    if(!c) c=x.clientes[p.cliente.id]={id:p.cliente.id,nombre:p.cliente.nombre,pedidos:0,bultos:0,monto:0};
+    c.pedidos++; c.bultos+=p.bultos; c.monto+=p.monto;
+  }
   lista.forEach(function(p){
     var cli=mapa[p.cliente.id]||p.cliente;
     var u=ubicacionDeCliente(cli);
-    var est=u.estado||SIN, ciu=u.ciudad||(u.estado?'(Sin ciudad)':SIN);
+    var est=u.estado||UBIC_SIN, ciu=u.ciudad||(u.estado?'(Sin ciudad)':UBIC_SIN);
     if(!u.estado) sinUbic[p.cliente.id]=p.cliente.nombre;
-    if(!estados[est]) estados[est]={nombre:est, pedidos:0, bultos:0, monto:0, clientes:{}, ciudades:{}};
+    if(!estados[est]) estados[est]={nombre:est,pedidos:0,bultos:0,monto:0,clientes:{},ciudades:{}};
     var E=estados[est];
-    if(!E.ciudades[ciu]) E.ciudades[ciu]={nombre:ciu, pedidos:0, bultos:0, monto:0, clientes:{}};
-    var C=E.ciudades[ciu];
-    [E,C].forEach(function(x){ x.pedidos++; x.bultos+=p.bultos; x.monto+=p.monto; x.clientes[p.cliente.id]=1; });
-    totMonto+=p.monto; totBultos+=p.bultos; totPedidos++;
+    if(!E.ciudades[ciu]) E.ciudades[ciu]={nombre:ciu,pedidos:0,bultos:0,monto:0,clientes:{}};
+    sumar(E,p); sumar(E.ciudades[ciu],p);
+    tot.monto+=p.monto; tot.bultos+=p.bultos; tot.pedidos++;
   });
-  var lst=Object.keys(estados).map(function(k){ return estados[k]; });
+  var lst=Object.keys(estados).map(function(k){
+    var E=estados[k];
+    E.lstCiudades=Object.keys(E.ciudades).map(function(c){ return E.ciudades[c]; }).sort(function(a,b){ return b.monto-a.monto; });
+    return E;
+  });
   // Mayor venta primero; "Sin ubicación" siempre al final
-  lst.sort(function(a,b){ if(a.nombre===SIN) return 1; if(b.nombre===SIN) return -1; return b.monto-a.monto; });
-  ULTIMO_RPT_UBIC={estados:lst, totMonto:totMonto, totBultos:totBultos, totPedidos:totPedidos};
+  lst.sort(function(a,b){ if(a.nombre===UBIC_SIN) return 1; if(b.nombre===UBIC_SIN) return -1; return b.monto-a.monto; });
+  ULTIMO_RPT_UBIC={estados:lst, tot:tot, totMonto:tot.monto, totBultos:tot.bultos, totPedidos:tot.pedidos, sinUbic:Object.keys(sinUbic).length};
+  pintarRptUbicacion();
+}
+function setUbicMetrica(m){ UBIC_METRICA=m; pintarRptUbicacion(); }
+
+function pintarRptUbicacion(){
+  var el=document.getElementById('rptUbicacion'), R=ULTIMO_RPT_UBIC;
+  if(!el || !R) return;
+  var lst=R.estados, m=UBIC_METRICA, totM=R.tot[m];
   if(lst.length===0){ el.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin datos en este periodo</div>'; return; }
-  var pct=function(m){ return totMonto>0?(Math.round(m/totMonto*1000)/10)+'%':'-'; };
-  var html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:420px">'+
+
+  // Estado y ciudad lideres (sin contar "Sin ubicación")
+  var conUbic=lst.filter(function(e){ return e.nombre!==UBIC_SIN; });
+  var ciudadesTodas=[];
+  lst.forEach(function(E,ei){ E.lstCiudades.forEach(function(C,ci){ if(E.nombre!==UBIC_SIN) ciudadesTodas.push({E:E,C:C,ei:ei,ci:ci}); }); });
+  var conOrden=function(arr,key){ return arr.slice().sort(function(a,b){ return ubicValor(b[key]||b,m)-ubicValor(a[key]||a,m); }); };
+  var lider=conUbic.length?conOrden(conUbic,null)[0]:null;
+  var ciudadLider=ciudadesTodas.length?ciudadesTodas.slice().sort(function(a,b){ return ubicValor(b.C,m)-ubicValor(a.C,m); })[0]:null;
+  var top3=conOrden(conUbic,null).slice(0,3).reduce(function(s,e){ return s+ubicValor(e,m); },0);
+
+  var tile=function(num,lbl,sub,color){ return '<div class="metric" style="padding:8px"><div class="num" style="font-size:18px'+(color?';color:'+color:'')+'">'+num+'</div><div class="lbl">'+lbl+'</div>'+(sub?'<div style="font-size:10px;color:#888;margin-top:2px">'+sub+'</div>':'')+'</div>'; };
+  var html='<div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px">'+
+    tile(conUbic.length,'Estados con ventas',R.sinUbic>0?R.sinUbic+' cliente(s) sin Estado':'')+
+    tile(ciudadesTodas.length,'Ciudades con ventas','')+
+    tile(lider?escUbic(lider.nombre):'-','Estado líder',lider?ubicPct(ubicValor(lider,m),totM)+'% del total':'','var(--azul)')+
+    tile(ciudadLider?escUbic(ciudadLider.C.nombre):'-','Ciudad líder',ciudadLider?ubicPct(ubicValor(ciudadLider.C,m),totM)+'% del total':'','var(--verde)')+
+    '</div>';
+  if(conUbic.length>=3) html+='<div style="font-size:11px;color:#666;margin-bottom:10px">Los 3 estados principales concentran el <strong>'+ubicPct(top3,totM)+'%</strong> de '+ubicEtiqMetrica(m).toLowerCase()+'.</div>';
+
+  // Selector de metrica
+  html+='<div style="display:flex;gap:6px;margin-bottom:12px;align-items:center;flex-wrap:wrap"><span style="font-size:11px;color:#888">Ver por:</span>'+
+    ['monto','bultos','pedidos'].map(function(k){ return '<button class="btn '+(k===m?'btn-p':'btn-s')+' btn-sm" onclick="setUbicMetrica(\''+k+'\')">'+ubicEtiqMetrica(k)+'</button>'; }).join('')+'</div>';
+
+  // Dona por estado (top 7 + otros)
+  var orden=lst.map(function(E,ei){ return {E:E,ei:ei,v:ubicValor(E,m)}; }).sort(function(a,b){
+    if(a.E.nombre===UBIC_SIN) return 1; if(b.E.nombre===UBIC_SIN) return -1; return b.v-a.v; });
+  var trozos=[], otros=0, otrosN=0;
+  orden.forEach(function(o,i){
+    if(o.E.nombre===UBIC_SIN){ trozos.push({nombre:UBIC_SIN,v:o.v,color:'#D0D3D6',ei:o.ei}); }
+    else if(trozos.filter(function(t){ return t.nombre!==UBIC_SIN; }).length<7){ trozos.push({nombre:o.E.nombre,v:o.v,color:UBIC_COLORES[trozos.filter(function(t){ return t.nombre!==UBIC_SIN; }).length],ei:o.ei}); }
+    else { otros+=o.v; otrosN++; }
+  });
+  if(otrosN>0) trozos.push({nombre:'Otros ('+otrosN+')',v:otros,color:UBIC_COLOR_OTROS,ei:-1});
+  var acum=0, grad=trozos.map(function(t){ var ini=acum; acum+=totM>0?t.v/totM*100:0; return t.color+' '+ini.toFixed(2)+'% '+acum.toFixed(2)+'%'; }).join(',');
+  html+='<div style="font-size:12px;font-weight:700;margin-bottom:6px">Participación por Estado ('+ubicEtiqMetrica(m).toLowerCase()+')</div>'+
+    '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px">'+
+      '<div style="position:relative;width:130px;height:130px;border-radius:50%;background:conic-gradient('+grad+');flex-shrink:0"><div style="position:absolute;inset:28px;border-radius:50%;background:var(--card, #fff);display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:13px;font-weight:700;color:var(--azul)">'+ubicFmt(totM,m)+'</div><div style="font-size:9px;color:#888">'+ubicEtiqMetrica(m)+'</div></div></div>'+
+      '<div style="flex:1;min-width:160px;font-size:12px">'+trozos.map(function(t){
+        return '<div '+(t.ei>=0?'onclick="abrirDetalleUbic('+t.ei+',-1)" style="cursor:pointer;':'style="')+'display:flex;align-items:center;gap:6px;padding:2px 0"><span style="width:10px;height:10px;border-radius:2px;background:'+t.color+';flex-shrink:0"></span><span style="flex:1">'+escUbic(t.nombre)+'</span><strong>'+ubicPct(t.v,totM)+'%</strong></div>';
+      }).join('')+'</div></div>';
+
+  // Barras por estado
+  var maxE=Math.max.apply(null,lst.map(function(E){ return ubicValor(E,m); }).concat([1]));
+  html+='<div style="font-size:12px;font-weight:700;margin-bottom:6px">Ranking de Estados</div>'+
+    orden.map(function(o,i){
+      var w=Math.max(2,Math.round(o.v/maxE*100));
+      return '<div onclick="abrirDetalleUbic('+o.ei+',-1)" style="cursor:pointer;margin-bottom:5px"><div style="display:flex;justify-content:space-between;font-size:11px"><span>'+(i+1)+'. '+escUbic(o.E.nombre)+'</span><span><strong>'+ubicFmt(o.v,m)+'</strong> <span style="color:#888">'+ubicPct(o.v,totM)+'%</span></span></div><div style="background:#EEF0F4;border-radius:4px;height:9px"><div style="width:'+w+'%;height:9px;border-radius:4px;background:'+(o.E.nombre===UBIC_SIN?UBIC_COLOR_OTROS:'var(--azul)')+'"></div></div></div>';
+    }).join('');
+
+  // Barras top 10 ciudades
+  var topC=ciudadesTodas.slice().sort(function(a,b){ return ubicValor(b.C,m)-ubicValor(a.C,m); }).slice(0,10);
+  if(topC.length){
+    var maxC=Math.max.apply(null,topC.map(function(x){ return ubicValor(x.C,m); }).concat([1]));
+    html+='<div style="font-size:12px;font-weight:700;margin:14px 0 6px">Top '+topC.length+' Ciudades</div>'+
+      topC.map(function(x,i){
+        var v=ubicValor(x.C,m), w=Math.max(2,Math.round(v/maxC*100));
+        return '<div onclick="abrirDetalleUbic('+x.ei+','+x.ci+')" style="cursor:pointer;margin-bottom:5px"><div style="display:flex;justify-content:space-between;font-size:11px"><span>'+(i+1)+'. '+escUbic(x.C.nombre)+' <span style="color:#888">('+escUbic(x.E.nombre)+')</span></span><span><strong>'+ubicFmt(v,m)+'</strong> <span style="color:#888">'+ubicPct(v,totM)+'%</span></span></div><div style="background:#EEF0F4;border-radius:4px;height:9px"><div style="width:'+w+'%;height:9px;border-radius:4px;background:var(--verde)"></div></div></div>';
+      }).join('');
+  }
+
+  // Tabla detalle (clickable)
+  var pct=function(v){ return ubicPct(v,R.tot.monto)+'%'; };
+  html+='<div style="font-size:12px;font-weight:700;margin:16px 0 2px">Detalle por Estado y Ciudad</div><div style="font-size:11px;color:#888;margin-bottom:6px">Toca un Estado o una Ciudad para ver los clientes que compraron.</div>'+
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:420px">'+
     '<tr style="color:#888"><th style="text-align:left;padding:4px">Estado / Ciudad</th><th style="text-align:right;padding:4px">Pedidos</th><th style="text-align:right;padding:4px">Bultos</th><th style="text-align:right;padding:4px">Monto</th><th style="text-align:right;padding:4px">%</th><th style="text-align:right;padding:4px">Clientes</th></tr>';
-  lst.forEach(function(E){
-    html+='<tr style="background:var(--azul-c);font-weight:700"><td style="padding:5px">'+E.nombre+'</td><td style="padding:5px;text-align:right">'+E.pedidos+'</td><td style="padding:5px;text-align:right">'+E.bultos+'</td><td style="padding:5px;text-align:right;color:var(--verde)">$'+formatearNumeroConMiles(E.monto,0)+'</td><td style="padding:5px;text-align:right">'+pct(E.monto)+'</td><td style="padding:5px;text-align:right">'+Object.keys(E.clientes).length+'</td></tr>';
-    var ciudades=Object.keys(E.ciudades).map(function(k){ return E.ciudades[k]; }).sort(function(a,b){ return b.monto-a.monto; });
-    if(!(ciudades.length===1 && E.nombre===SIN)){
-      ciudades.forEach(function(C){
-        html+='<tr style="border-bottom:1px solid var(--borde)"><td style="padding:3px 5px 3px 20px;color:#555">'+C.nombre+'</td><td style="padding:3px 5px;text-align:right">'+C.pedidos+'</td><td style="padding:3px 5px;text-align:right">'+C.bultos+'</td><td style="padding:3px 5px;text-align:right">$'+formatearNumeroConMiles(C.monto,0)+'</td><td style="padding:3px 5px;text-align:right;color:#888">'+pct(C.monto)+'</td><td style="padding:3px 5px;text-align:right">'+Object.keys(C.clientes).length+'</td></tr>';
+  lst.forEach(function(E,ei){
+    html+='<tr onclick="abrirDetalleUbic('+ei+',-1)" style="background:var(--azul-c);font-weight:700;cursor:pointer"><td style="padding:5px">'+escUbic(E.nombre)+' ›</td><td style="padding:5px;text-align:right">'+E.pedidos+'</td><td style="padding:5px;text-align:right">'+E.bultos+'</td><td style="padding:5px;text-align:right;color:var(--verde)">$'+formatearNumeroConMiles(E.monto,0)+'</td><td style="padding:5px;text-align:right">'+pct(E.monto)+'</td><td style="padding:5px;text-align:right">'+Object.keys(E.clientes).length+'</td></tr>';
+    if(!(E.lstCiudades.length===1 && E.nombre===UBIC_SIN)){
+      E.lstCiudades.forEach(function(C,ci){
+        html+='<tr onclick="abrirDetalleUbic('+ei+','+ci+')" style="border-bottom:1px solid var(--borde);cursor:pointer"><td style="padding:3px 5px 3px 20px;color:#555">'+escUbic(C.nombre)+' ›</td><td style="padding:3px 5px;text-align:right">'+C.pedidos+'</td><td style="padding:3px 5px;text-align:right">'+C.bultos+'</td><td style="padding:3px 5px;text-align:right">$'+formatearNumeroConMiles(C.monto,0)+'</td><td style="padding:3px 5px;text-align:right;color:#888">'+pct(C.monto)+'</td><td style="padding:3px 5px;text-align:right">'+Object.keys(C.clientes).length+'</td></tr>';
       });
     }
   });
-  html+='<tr style="font-weight:700;border-top:2px solid var(--borde)"><td style="padding:5px">TOTAL</td><td style="padding:5px;text-align:right">'+totPedidos+'</td><td style="padding:5px;text-align:right">'+totBultos+'</td><td style="padding:5px;text-align:right">$'+formatearNumeroConMiles(totMonto,0)+'</td><td></td><td></td></tr></table></div>';
-  var nSin=Object.keys(sinUbic).length;
-  if(nSin>0){
-    html+='<div style="font-size:11px;color:var(--ambar);margin-top:8px">'+nSin+' cliente(s) con ventas no tienen Estado asignado.'+((VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?' <a href="#" onclick="abrirUbicacionClientes(\'sin\');return false" style="color:var(--azul)">Revisar</a>':'')+'</div>';
+  html+='<tr style="font-weight:700;border-top:2px solid var(--borde)"><td style="padding:5px">TOTAL</td><td style="padding:5px;text-align:right">'+R.tot.pedidos+'</td><td style="padding:5px;text-align:right">'+R.tot.bultos+'</td><td style="padding:5px;text-align:right">$'+formatearNumeroConMiles(R.tot.monto,0)+'</td><td></td><td></td></tr></table></div>';
+  if(R.sinUbic>0){
+    html+='<div style="font-size:11px;color:var(--ambar);margin-top:8px">'+R.sinUbic+' cliente(s) con ventas no tienen Estado asignado.'+((VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?' <a href="#" onclick="abrirUbicacionClientes(\'sin\');return false" style="color:var(--azul)">Revisar</a>':'')+'</div>';
   }
   html+='<button class="btn btn-g btn-sm" style="margin-top:10px" onclick="descargarExcelRptUbicacion()">Descargar Excel</button>';
   el.innerHTML=html;
+}
+
+// ── Detalle de un Estado o una Ciudad: clientes que compraron ──
+function abrirDetalleUbic(ei,ci){
+  var R=ULTIMO_RPT_UBIC; if(!R || !R.estados[ei]) return;
+  UBIC_DET_ACTUAL={ei:ei,ci:ci};
+  document.getElementById('mUbicDetalle').classList.add('open');
+  pintarDetalleUbic();
+}
+function pintarDetalleUbic(){
+  var R=ULTIMO_RPT_UBIC, D=UBIC_DET_ACTUAL; if(!R||!D) return;
+  var E=R.estados[D.ei]; if(!E) return;
+  var esCiudad=D.ci>=0, C=esCiudad?E.lstCiudades[D.ci]:null;
+  var X=esCiudad?C:E;                       // zona consultada
+  var titulo=esCiudad?(escUbic(C.nombre)+' <span style="font-weight:400;color:#888">· '+escUbic(E.nombre)+'</span>'):escUbic(E.nombre);
+  document.getElementById('ubDetTitulo').innerHTML=titulo;
+  var nCli=Object.keys(X.clientes).length;
+  var tile=function(n,l,c){ return '<div class="metric" style="padding:8px"><div class="num" style="font-size:17px'+(c?';color:'+c:'')+'">'+n+'</div><div class="lbl">'+l+'</div></div>'; };
+  var html='';
+  if(esCiudad) html+='<div style="font-size:12px;margin-bottom:8px"><a href="#" onclick="abrirDetalleUbic('+D.ei+',-1);return false" style="color:var(--azul)">‹ Ver todo '+escUbic(E.nombre)+'</a></div>';
+  html+='<div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px">'+
+    tile(X.pedidos,'Pedidos')+tile(X.bultos,'Bultos')+tile('$'+formatearNumeroConMiles(X.monto,0),'Monto','var(--verde)')+tile(nCli,'Clientes')+'</div>';
+  html+='<div style="font-size:12px;background:var(--azul-c);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.6">'+
+    (esCiudad?'<div>Representa el <strong>'+ubicPct(C.monto,E.monto)+'%</strong> del monto de '+escUbic(E.nombre)+' y el <strong>'+ubicPct(C.monto,R.tot.monto)+'%</strong> del total vendido.</div>':
+              '<div>Representa el <strong>'+ubicPct(E.monto,R.tot.monto)+'%</strong> del monto total vendido ('+ubicPct(E.bultos,R.tot.bultos)+'% de los bultos).</div>')+
+    '</div>';
+
+  // Estado: ciudades que lo componen
+  if(!esCiudad && !(E.lstCiudades.length===1 && E.nombre===UBIC_SIN)){
+    var maxC=Math.max.apply(null,E.lstCiudades.map(function(c){ return c.monto; }).concat([1]));
+    html+='<div style="font-size:12px;font-weight:700;margin-bottom:6px">Ciudades de '+escUbic(E.nombre)+'</div>'+
+      E.lstCiudades.map(function(c,i){
+        return '<div onclick="abrirDetalleUbic('+D.ei+','+i+')" style="cursor:pointer;margin-bottom:5px"><div style="display:flex;justify-content:space-between;font-size:11px"><span>'+escUbic(c.nombre)+' ›</span><span>'+c.bultos+' btos · <strong>$'+formatearNumeroConMiles(c.monto,0)+'</strong> <span style="color:#888">'+ubicPct(c.monto,E.monto)+'% del estado</span></span></div><div style="background:#EEF0F4;border-radius:4px;height:8px"><div style="width:'+Math.max(2,Math.round(c.monto/maxC*100))+'%;height:8px;border-radius:4px;background:var(--verde)"></div></div></div>';
+      }).join('')+'<div style="height:6px"></div>';
+  }
+
+  // Clientes
+  var clientes=Object.keys(X.clientes).map(function(k){ return X.clientes[k]; }).sort(function(a,b){ return b.monto-a.monto; });
+  html+='<div style="font-size:12px;font-weight:700;margin-bottom:4px">Clientes que compraron ('+clientes.length+')</div>'+
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:'+(esCiudad?'480':'400')+'px">'+
+    '<tr style="color:#888"><th style="text-align:left;padding:3px">Cliente</th><th style="text-align:right;padding:3px">Ped.</th><th style="text-align:right;padding:3px">Bultos</th><th style="text-align:right;padding:3px">Monto</th>'+
+    '<th style="text-align:right;padding:3px">% '+(esCiudad?'ciudad':'estado')+'</th>'+(esCiudad?'<th style="text-align:right;padding:3px">% estado</th>':'')+'<th style="text-align:right;padding:3px">% total</th></tr>';
+  clientes.forEach(function(c){
+    html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:4px 3px"><div style="font-weight:600">'+escUbic(c.nombre)+'</div><div style="color:#888;font-size:10px">Cod: '+escUbic(c.id)+'</div></td>'+
+      '<td style="padding:4px 3px;text-align:right">'+c.pedidos+'</td><td style="padding:4px 3px;text-align:right">'+c.bultos+'</td>'+
+      '<td style="padding:4px 3px;text-align:right;font-weight:700;color:var(--verde)">$'+formatearNumeroConMiles(c.monto,0)+'</td>'+
+      '<td style="padding:4px 3px;text-align:right">'+ubicPct(c.monto,X.monto)+'%</td>'+
+      (esCiudad?'<td style="padding:4px 3px;text-align:right">'+ubicPct(c.monto,E.monto)+'%</td>':'')+
+      '<td style="padding:4px 3px;text-align:right;color:#888">'+ubicPct(c.monto,R.tot.monto)+'%</td></tr>';
+  });
+  html+='<tr style="font-weight:700;border-top:2px solid var(--borde)"><td style="padding:4px 3px">TOTAL</td><td style="padding:4px 3px;text-align:right">'+X.pedidos+'</td><td style="padding:4px 3px;text-align:right">'+X.bultos+'</td><td style="padding:4px 3px;text-align:right">$'+formatearNumeroConMiles(X.monto,0)+'</td><td style="padding:4px 3px;text-align:right">100%</td>'+(esCiudad?'<td style="padding:4px 3px;text-align:right">'+ubicPct(C.monto,E.monto)+'%</td>':'')+'<td style="padding:4px 3px;text-align:right">'+ubicPct(X.monto,R.tot.monto)+'%</td></tr></table></div>';
+  html+='<div style="font-size:10px;color:#888;margin-top:6px">Montos sin IVA. Respeta el periodo y los filtros del reporte.</div>';
+  if(E.nombre===UBIC_SIN && VEND && (VEND.codigo==='01'||VEND.codigo==='20')) html+='<div style="margin-top:8px"><a href="#" onclick="cerrarModal(\'mUbicDetalle\');abrirUbicacionClientes(\'sin\');return false" style="color:var(--azul);font-size:12px">Asignar Estado a estos clientes</a></div>';
+  document.getElementById('ubDetCont').innerHTML=html;
+  document.getElementById('ubDetCont').scrollTop=0;
+}
+function descargarExcelUbicDetalle(){
+  var R=ULTIMO_RPT_UBIC, D=UBIC_DET_ACTUAL; if(!R||!D) return;
+  var E=R.estados[D.ei], esCiudad=D.ci>=0, C=esCiudad?E.lstCiudades[D.ci]:null, X=esCiudad?C:E;
+  var desde=document.getElementById('rptDesde').value||'inicio', hasta=document.getElementById('rptHasta').value||'hoy';
+  var rows=[['Clientes de '+(esCiudad?C.nombre+' ('+E.nombre+')':E.nombre)],['Periodo: '+desde+' al '+hasta],[],
+    ['Codigo','Cliente'].concat(esCiudad?[]:['Ciudad'],['Pedidos','Bultos','Monto $',esCiudad?'% de la ciudad':'% del estado'],esCiudad?['% del estado']:[],['% del total'])];
+  var filas=[];
+  if(esCiudad) Object.keys(C.clientes).forEach(function(k){ filas.push({c:C.clientes[k],ciu:C.nombre}); });
+  else E.lstCiudades.forEach(function(ci){ Object.keys(ci.clientes).forEach(function(k){ filas.push({c:ci.clientes[k],ciu:ci.nombre}); }); });
+  filas.sort(function(a,b){ return b.c.monto-a.c.monto; }).forEach(function(f){
+    var c=f.c;
+    rows.push([c.id,c.nombre].concat(esCiudad?[]:[f.ciu],[c.pedidos,c.bultos,Math.round(c.monto*100)/100,ubicPct(c.monto,X.monto)/100],esCiudad?[ubicPct(c.monto,E.monto)/100]:[],[ubicPct(c.monto,R.tot.monto)/100]));
+  });
+  rows.push(['TOTAL',''].concat(esCiudad?[]:[''],[X.pedidos,X.bultos,Math.round(X.monto*100)/100,1],esCiudad?[ubicPct(C.monto,E.monto)/100]:[],[ubicPct(X.monto,R.tot.monto)/100]));
+  var wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:10},{wch:40},{wch:esCiudad?10:22},{wch:10},{wch:12},{wch:14},{wch:14},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
+  XLSX.writeFile(wb, 'clientes_'+(esCiudad?C.nombre:E.nombre).replace(/[^A-Za-z0-9]+/g,'_')+'.xlsx');
 }
 function descargarExcelRptUbicacion(){
   var R=ULTIMO_RPT_UBIC;
   if(!R || R.estados.length===0){ toast('No hay datos para exportar'); return; }
   var desde=document.getElementById('rptDesde').value||'inicio', hasta=document.getElementById('rptHasta').value||'hoy';
+  var T=R.tot.monto;
   var rows=[['Ventas por Estado y Ciudad'],['Periodo: '+desde+' al '+hasta],[],['Estado','Ciudad','Pedidos','Bultos','Monto $','% del total','Clientes']];
+  var rows2=[['Clientes por Estado y Ciudad'],['Periodo: '+desde+' al '+hasta],[],['Estado','Ciudad','Codigo','Cliente','Pedidos','Bultos','Monto $','% de la ciudad','% del estado','% del total']];
   R.estados.forEach(function(E){
-    rows.push([E.nombre,'(TOTAL ESTADO)',E.pedidos,E.bultos,Math.round(E.monto*100)/100,R.totMonto>0?Math.round(E.monto/R.totMonto*10000)/10000:0,Object.keys(E.clientes).length]);
-    Object.keys(E.ciudades).map(function(k){return E.ciudades[k];}).sort(function(a,b){return b.monto-a.monto;}).forEach(function(C){
-      rows.push([E.nombre,C.nombre,C.pedidos,C.bultos,Math.round(C.monto*100)/100,R.totMonto>0?Math.round(C.monto/R.totMonto*10000)/10000:0,Object.keys(C.clientes).length]);
+    rows.push([E.nombre,'(TOTAL ESTADO)',E.pedidos,E.bultos,Math.round(E.monto*100)/100,T>0?Math.round(E.monto/T*10000)/10000:0,Object.keys(E.clientes).length]);
+    E.lstCiudades.forEach(function(C){
+      rows.push([E.nombre,C.nombre,C.pedidos,C.bultos,Math.round(C.monto*100)/100,T>0?Math.round(C.monto/T*10000)/10000:0,Object.keys(C.clientes).length]);
+      Object.keys(C.clientes).map(function(k){ return C.clientes[k]; }).sort(function(a,b){ return b.monto-a.monto; }).forEach(function(c){
+        rows2.push([E.nombre,C.nombre,c.id,c.nombre,c.pedidos,c.bultos,Math.round(c.monto*100)/100,C.monto>0?Math.round(c.monto/C.monto*10000)/10000:0,E.monto>0?Math.round(c.monto/E.monto*10000)/10000:0,T>0?Math.round(c.monto/T*10000)/10000:0]);
+      });
     });
   });
-  rows.push(['TOTAL','',R.totPedidos,R.totBultos,Math.round(R.totMonto*100)/100,1,'']);
-  var wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(rows);
+  rows.push(['TOTAL','',R.tot.pedidos,R.tot.bultos,Math.round(T*100)/100,1,'']);
+  var wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(rows), ws2=XLSX.utils.aoa_to_sheet(rows2);
   ws['!cols']=[{wch:20},{wch:26},{wch:10},{wch:10},{wch:14},{wch:12},{wch:10}];
+  ws2['!cols']=[{wch:20},{wch:24},{wch:10},{wch:38},{wch:9},{wch:9},{wch:13},{wch:13},{wch:12},{wch:12}];
   XLSX.utils.book_append_sheet(wb, ws, 'Por Estado y Ciudad');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Clientes');
   XLSX.writeFile(wb, 'ventas_por_estado_ciudad.xlsx');
 }
 
@@ -8146,12 +8482,13 @@ function renderReportes(){
 
   // Reporte 1: Resumen general
   var totPedidos=lista.length;
-  var totBultos=0, totMonto=0, totBultosPromo=0;
+  var totBultos=0, totMonto=0, totBultosPromo=0, totIva=0;
   var clientesMap={};
   for(var i=0;i<lista.length;i++){
     var p=lista[i];
     totBultos+=p.bultos;
     totMonto+=p.monto;
+    totIva+=ivaInfoPedido(p).iva;
     totBultosPromo+=bultosEquivalentesBonif(p);
     var cid=p.cliente.id+'|'+p.cliente.nombre;
     if(!clientesMap[cid]) clientesMap[cid]=0;
@@ -8168,7 +8505,9 @@ function renderReportes(){
     '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(totBultos,22)+'">'+totBultos+'</div><div class="lbl">Bultos</div>'+
       (totBultosPromo>0?'<div style="font-size:12px;color:var(--ambar);margin-top:4px">+'+totBultosPromo+' promo</div><div style="font-size:13px;color:var(--azul);font-weight:700">= '+totVendido+' total vendido</div>':'')+
     '</div>'+
-    '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(montoTxt,22)+';color:var(--verde)">'+montoTxt+'</div><div class="lbl">Monto total</div></div>'+
+    '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(montoTxt,22)+';color:var(--verde)">'+montoTxt+'</div><div class="lbl">'+(totIva>0?'Subtotal (sin IVA)':'Monto total')+'</div></div>'+
+    (totIva>0?'<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica('$'+totIva.toFixed(0),22)+'">$'+totIva.toFixed(0)+'</div><div class="lbl">IVA</div></div>'+
+      '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica('$'+(totMonto+totIva).toFixed(0),22)+';color:var(--azul)">$'+(totMonto+totIva).toFixed(0)+'</div><div class="lbl">TOTAL con IVA</div></div>':'')+
     '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica(clientesRepeat,22)+';color:var(--ambar)">'+clientesRepeat+'</div><div class="lbl">Clientes con Recompra</div></div>'+
     '</div>';
 
@@ -8185,11 +8524,12 @@ function renderReportes(){
     var vObjR=null;
     for(var vri=0;vri<VENDEDORES.length;vri++){if(VENDEDORES[vri].id===vid){vObjR=VENDEDORES[vri];break;}}
     var vnom=vObjR?vObjR.nombre:('VEND '+vid);
-    if(!porVend[vid]) porVend[vid]={id:vid,nombre:vnom,pedidos:0,bultos:0,bultosPromo:0,monto:0,clientes:{}};
+    if(!porVend[vid]) porVend[vid]={id:vid,nombre:vnom,pedidos:0,bultos:0,bultosPromo:0,monto:0,iva:0,clientes:{}};
     porVend[vid].pedidos++;
     porVend[vid].bultos+=p.bultos;
     porVend[vid].bultosPromo+=bultosEquivalentesBonif(p);
     porVend[vid].monto+=p.monto;
+    porVend[vid].iva+=ivaInfoPedido(p).iva;
     var cid2=p.cliente.id;
     if(!porVend[vid].clientes[cid2]) porVend[vid].clientes[cid2]=0;
     porVend[vid].clientes[cid2]++;
@@ -8214,7 +8554,7 @@ function renderReportes(){
         '<div style="border:1px solid var(--borde);border-radius:10px;padding:12px;margin-bottom:8px">'+
         '<div style="background:var(--azul);color:#fff;border-radius:6px;padding:6px 10px;margin-bottom:8px;display:flex;justify-content:space-between">'+
           '<span style="font-weight:700">VEND '+vid2+' - '+vd.nombre+'</span>'+
-          '<span style="font-size:12px;opacity:.8">$'+vd.monto.toFixed(2)+'</span>'+
+          '<span style="font-size:12px;opacity:.8">'+(vd.iva>0?'Subt. $'+vd.monto.toFixed(2)+' + IVA $'+vd.iva.toFixed(2)+' = $'+(vd.monto+vd.iva).toFixed(2):'$'+vd.monto.toFixed(2))+'</span>'+
         '</div>'+
         '<div style="display:flex;gap:10px;margin-bottom:8px;font-size:11px;color:#666">'+
           '<span>% Bultos: <strong style="color:var(--azul)">'+pctBultosVend+'%</strong></span>'+
@@ -8803,7 +9143,7 @@ function renderReportes(){
           '<div><strong style="font-size:13px">'+p.cliente.nombre+'</strong>'+
           '<div style="font-size:11px;color:var(--azul);font-weight:600">Cod: '+p.cliente.id+'</div>'+
           '<div style="font-size:11px;color:#888">'+p.fecha+' '+p.hora+' | VEND '+(p.vendedor||'??')+'</div></div>'+
-          '<div style="text-align:right"><strong style="font-size:14px;color:var(--azul)">$'+p.monto.toFixed(2)+'</strong><div style="font-size:11px;color:#888">'+p.bultos+' btos</div></div>'+
+          '<div style="text-align:right"><strong style="font-size:14px;color:var(--azul)">$'+ivaInfoPedido(p).total.toFixed(2)+'</strong><div style="font-size:11px;color:#888">'+p.bultos+' btos'+(ivaInfoPedido(p).pct>0?' | IVA $'+ivaInfoPedido(p).iva.toFixed(2):'')+'</div></div>'+
         '</div>'+
       '</div>';
     }
@@ -8841,8 +9181,10 @@ function verDetallePedidoRpt(pedId){
     '<div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Productos</div>'+
     itemsHtml+
     '<div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:700">'+
-      '<span>Total (' +p.bultos+ ' btos)</span><span style="color:var(--azul)">$'+p.monto.toFixed(2)+'</span>'+
+      '<span>'+(ivaInfoPedido(p).pct>0?'Subtotal':'Total')+' (' +p.bultos+ ' btos)</span><span style="color:var(--azul)">$'+p.monto.toFixed(2)+'</span>'+
     '</div>'+
+    (ivaInfoPedido(p).pct>0?'<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:13px;color:#555"><span>IVA ('+ivaInfoPedido(p).pct+'%)</span><span>$'+ivaInfoPedido(p).iva.toFixed(2)+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:16px;font-weight:700;border-top:1px solid var(--borde)"><span>TOTAL</span><span style="color:var(--azul)">$'+ivaInfoPedido(p).total.toFixed(2)+'</span></div>':'')+
     '<div style="font-size:13px;color:#555;margin-top:6px">Forma de pago: <strong>'+formaPagoTxt+'</strong></div>'+
     '<div style="font-size:13px;color:#555">Facturacion: <strong>'+factTxt+'</strong></div>'+
     (p.promo?'<div style="font-size:13px;color:#555">Promo: <strong>'+p.promo+'</strong></div>':'')+
@@ -8859,6 +9201,7 @@ function rptConstruirTexto(){
   var periodo=desde?(desde==hasta?desde:'Del '+desde+' al '+hasta):'Todo el periodo';
   var N=nl();
   var totPedidos=lista.length, totBultos=0, totMonto=0;
+  var ivaLista=ivaInfoLista(lista);
   var porVend={};
   for(var i=0;i<lista.length;i++){
     var p=lista[i];
@@ -8867,22 +9210,23 @@ function rptConstruirTexto(){
     var vObjT=null;
     for(var vti=0;vti<VENDEDORES.length;vti++){if(VENDEDORES[vti].id===vid){vObjT=VENDEDORES[vti];break;}}
     var vnom=vObjT?vObjT.nombre:('VEND '+vid);
-    if(!porVend[vid]) porVend[vid]={nombre:vnom,pedidos:0,bultos:0,monto:0,clientes:{}};
+    if(!porVend[vid]) porVend[vid]={nombre:vnom,pedidos:0,bultos:0,monto:0,iva:0,clientes:{}};
     porVend[vid].pedidos++;
     porVend[vid].bultos+=p.bultos;
     porVend[vid].monto+=p.monto;
+    porVend[vid].iva+=ivaInfoPedido(p).iva;
     var cid=p.cliente.id;
     if(!porVend[vid].clientes[cid]) porVend[vid].clientes[cid]=0;
     porVend[vid].clientes[cid]++;
   }
   var lineas=['REPORTE TUTIM - '+periodo,'================================',
-    'Total pedidos: '+totPedidos,'Total bultos: '+totBultos,'Total monto: $'+totMonto.toFixed(2),''];
+    'Total pedidos: '+totPedidos,'Total bultos: '+totBultos].concat(ivaLista.iva>0?['Subtotal: $'+totMonto.toFixed(2),'IVA: $'+ivaLista.iva.toFixed(2),'TOTAL: $'+ivaLista.total.toFixed(2)]:['Total monto: $'+totMonto.toFixed(2)]).concat(['']);
   var vids=Object.keys(porVend).sort();
   for(var v=0;v<vids.length;v++){
     var vid2=vids[v]; var vd=porVend[vid2];
     var rep=Object.keys(vd.clientes).filter(function(k){return vd.clientes[k]>1;}).length;
     lineas.push('--- VEND '+vid2+' - '+vd.nombre+' ---');
-    lineas.push('  Pedidos: '+vd.pedidos+' | Bultos: '+vd.bultos+' | Monto: $'+vd.monto.toFixed(2));
+    lineas.push('  Pedidos: '+vd.pedidos+' | Bultos: '+vd.bultos+' | Monto: $'+vd.monto.toFixed(2)+(vd.iva>0?' + IVA $'+vd.iva.toFixed(2)+' = $'+(vd.monto+vd.iva).toFixed(2):''));
     lineas.push('  Clientes con Recompra: '+rep);
     lineas.push('');
   }
@@ -8900,6 +9244,7 @@ function rptExcel(){
   var hasta=document.getElementById('rptHasta').value;
   var periodo=desde?(desde==hasta?desde:'Del '+desde+' al '+hasta):'Todo';
   var totP=lista.length, totB=0, totM=0;
+  var ivaX=ivaInfoLista(lista);
   var porVend={};
   for(var i=0;i<lista.length;i++){
     var p=lista[i]; totB+=p.bultos; totM+=p.monto;
@@ -8907,8 +9252,8 @@ function rptExcel(){
     var vObjE=null;
     for(var vei=0;vei<VENDEDORES.length;vei++){if(VENDEDORES[vei].id===vid){vObjE=VENDEDORES[vei];break;}}
     var vNomE=vObjE?vObjE.nombre:('VEND '+vid);
-    if(!porVend[vid]) porVend[vid]={nombre:vNomE,pedidos:0,bultos:0,monto:0,clientes:{}};
-    porVend[vid].pedidos++;porVend[vid].bultos+=p.bultos;porVend[vid].monto+=p.monto;
+    if(!porVend[vid]) porVend[vid]={nombre:vNomE,pedidos:0,bultos:0,monto:0,iva:0,clientes:{}};
+    porVend[vid].pedidos++;porVend[vid].bultos+=p.bultos;porVend[vid].monto+=p.monto;porVend[vid].iva+=ivaInfoPedido(p).iva;
     if(!porVend[vid].clientes[p.cliente.id]) porVend[vid].clientes[p.cliente.id]=0;
     porVend[vid].clientes[p.cliente.id]++;
   }
@@ -8917,13 +9262,13 @@ function rptExcel(){
   for(var v=0;v<vids.length;v++){
     var vid2=vids[v]; var vd=porVend[vid2];
     var rep=Object.keys(vd.clientes).filter(function(k){return vd.clientes[k]>1;}).length;
-    filas+='<tr><td>VEND '+vid2+'</td><td>'+vd.nombre+'</td><td style="text-align:center">'+vd.pedidos+'</td><td style="text-align:center">'+vd.bultos+'</td><td style="text-align:right">$'+vd.monto.toFixed(2)+'</td><td style="text-align:center">'+rep+'</td></tr>';
+    filas+='<tr><td>VEND '+vid2+'</td><td>'+vd.nombre+'</td><td style="text-align:center">'+vd.pedidos+'</td><td style="text-align:center">'+vd.bultos+'</td><td style="text-align:right">$'+vd.monto.toFixed(2)+'</td><td style="text-align:right">$'+vd.iva.toFixed(2)+'</td><td style="text-align:right;font-weight:bold">$'+(vd.monto+vd.iva).toFixed(2)+'</td><td style="text-align:center">'+rep+'</td></tr>';
   }
   var xls='<html><head><meta charset="UTF-8"><style>th{background:#1B2A6B;color:#fff;padding:7px 10px}td{padding:6px 10px;border-bottom:1px solid #eee}</style></head><body>'+
     '<h2>REPORTE TUTIM - '+periodo+'</h2>'+
-    '<p><b>Total:</b> '+totP+' pedidos | '+totB+' bultos | $'+totM.toFixed(2)+'</p>'+
-    '<table><tr><th>Cod</th><th>Vendedor</th><th>Pedidos</th><th>Bultos</th><th>Monto</th><th>Cli. Recompra</th></tr>'+filas+
-    '<tr style="background:#E8EBF8"><td colspan="2" style="font-weight:bold">TOTAL</td><td style="text-align:center;font-weight:bold">'+totP+'</td><td style="text-align:center;font-weight:bold">'+totB+'</td><td style="text-align:right;font-weight:bold;color:#1B2A6B">$'+totM.toFixed(2)+'</td><td></td></tr>'+
+    '<p><b>Total:</b> '+totP+' pedidos | '+totB+' bultos | Subtotal $'+totM.toFixed(2)+' + IVA $'+ivaX.iva.toFixed(2)+' = TOTAL $'+ivaX.total.toFixed(2)+'</p>'+
+    '<table><tr><th>Cod</th><th>Vendedor</th><th>Pedidos</th><th>Bultos</th><th>Subtotal</th><th>IVA</th><th>TOTAL</th><th>Cli. Recompra</th></tr>'+filas+
+    '<tr style="background:#E8EBF8"><td colspan="2" style="font-weight:bold">TOTAL</td><td style="text-align:center;font-weight:bold">'+totP+'</td><td style="text-align:center;font-weight:bold">'+totB+'</td><td style="text-align:right;font-weight:bold;color:#1B2A6B">$'+totM.toFixed(2)+'</td><td style="text-align:right;font-weight:bold">$'+ivaX.iva.toFixed(2)+'</td><td style="text-align:right;font-weight:bold;color:#1B2A6B">$'+ivaX.total.toFixed(2)+'</td><td></td></tr>'+
     '</table></body></html>';
   var blob=new Blob([xls],{type:'application/vnd.ms-excel'});
   var url=URL.createObjectURL(blob);
@@ -9041,7 +9386,7 @@ function confirmarWAPersonalizado(){
   var pedHoy=getPedidosSeleccionados();
   var hoy=new Date().toLocaleDateString('es-VE');
   var N=nl();
-  var totB=0,totM=0;
+  var totB=0,totM=0,totI=0;
   var lineas=[];
   lineas.push('DETALLE DE PEDIDOS TUTIM - '+hoy);
   lineas.push('Enviado por: '+VEND.nombre+' (VEND '+VEND.codigo+')');
@@ -9080,18 +9425,22 @@ function confirmarWAPersonalizado(){
     if(ped.descuentoGeneralPct){
       lineas.push('Subtotal: $'+(ped.montoBruto||ped.monto).toFixed(2)+' ('+ped.bultos+' btos)');
       lineas.push('Descuento general ('+ped.descuentoGeneralPct+'%): -$'+(ped.montoDescuentoGeneral||0).toFixed(2));
-      lineas.push('Total: $'+ped.monto.toFixed(2));
+      lineas.push((ivaInfoPedido(ped).pct>0?'Subtotal con descuento: $':'Total: $')+ped.monto.toFixed(2));
     } else {
       lineas.push('Subtotal: $'+ped.monto.toFixed(2)+' ('+ped.bultos+' btos)');
+    }
+    if(ivaInfoPedido(ped).pct>0){
+      lineas.push('IVA ('+ivaInfoPedido(ped).pct+'%): $'+ivaInfoPedido(ped).iva.toFixed(2));
+      lineas.push('TOTAL: $'+ivaInfoPedido(ped).total.toFixed(2));
     }
     lineas.push('Pago: '+(ped.formaPagoL||ped.formaPago));
     if(ped.promo) lineas.push('Promo: '+ped.promo);
     if(ped.obs) lineas.push('Obs: '+ped.obs);
     lineas.push('');
-    totB+=ped.bultos; totM+=ped.monto;
+    totB+=ped.bultos; totM+=ped.monto; totI+=ivaInfoPedido(ped).iva;
   }
   lineas.push('========================');
-  lineas.push('TOTAL: '+pedHoy.length+' pedidos | '+totB+' btos | $'+totM.toFixed(2));
+  lineas.push('TOTAL: '+pedHoy.length+' pedidos | '+totB+' btos | $'+totM.toFixed(2)+(totI>0?' + IVA $'+totI.toFixed(2)+' = $'+(Math.round((totM+totI)*100)/100).toFixed(2):''));
   var msg=lineas.join(N);
   window.open('https://wa.me/'+numero+'?text='+encodeURIComponent(msg),'_blank');
   marcarEnviados(pedHoy);
@@ -9134,7 +9483,7 @@ function ajustarModoCargaCxC(){
 }
 
 function adminTab(tab){
-  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico','reposicion','comisiones','tasas'];
+  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico','reposicion','comisiones','tasas','iva'];
   for(var i=0;i<tabs.length;i++){
     var el=document.getElementById('adminTab-'+tabs[i]);
     if(el) el.style.display=(tabs[i]===tab)?'block':'none';
@@ -9144,6 +9493,7 @@ function adminTab(tab){
     }
   }
   if(tab==='inventario') renderAdminInv();
+  if(tab==='iva') renderAdminIva();
   if(tab==='tasas'){
     renderAdminTasasBCV();
     cargarTasasBCV(function(){
@@ -12892,7 +13242,7 @@ function vincularArchivosHuerfanosACliente(idx, clienteId){
 // documentos completos (carga de clientes, etc.) y tambien de forma
 // periodica. Se guardan los ultimos 10 respaldos, borrando
 // automaticamente los mas viejos.
-var CONFIG_DOCS_RESPALDABLES=['catalogo_productos','clientes','comisiones_registros','compras_registradas','cuentas_cobrar','cuentas_cobrar_fiscal','cuentas_cobrar_real','historial_agotado','historial_cargas_cxc','historial_inventario','inventario','limite_deuda','precios','promo_display','promociones_custom','reposicion','reposicion_historial','stock_estimado','storage_huerfanos_descartados','vendedores'];
+var CONFIG_DOCS_RESPALDABLES=['catalogo_productos','clientes','comisiones_registros','compras_registradas','cuentas_cobrar','cuentas_cobrar_fiscal','cuentas_cobrar_real','historial_agotado','historial_cargas_cxc','historial_inventario','inventario','iva','limite_deuda','precios','promo_display','promociones_custom','reposicion','reposicion_historial','stock_estimado','storage_huerfanos_descartados','vendedores'];
 var MAX_RESPALDOS_GUARDADOS=10;
 
 // Crea un respaldo completo. "tipo" es solo informativo (ej:
@@ -13667,9 +14017,11 @@ function cargarConfigFirebase(callback){
     db.collection('config').doc('historial_agotado').get(),
     db.collection('config').doc('historial_inventario').get(),
     db.collection('config').doc('compras_registradas').get(),
-    db.collection('config').doc('comisiones_registros').get()
+    db.collection('config').doc('comisiones_registros').get(),
+    db.collection('config').doc('iva').get()
   ];
   Promise.all(promesas).then(function(docs){
+    cargarIvaConfig(docs[18]);
     // Catalogo completo de productos (reemplaza el listado inicial si ya
     // se ha usado la gestion de productos en Admin - permite agregar
     // articulos nuevos, fotos, sabores/tipos libres, etc.)
@@ -14086,7 +14438,12 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
       coincidencias++;
       coincidenciasList.push({numero:f.numero, clienteId:f.clienteId, clienteNombre:f.clienteNombre, tipo:tipoMatch});
       if(tipoMatch==='diferencia35'){
-        var diferencia=Math.round((r.saldo-f.saldo)*100)/100;
+        // La diferencia del 35% es la BASE del documento real menos la BASE del
+        // fiscal (ambas sin IVA). Antes se restaba el saldo del fiscal, que ya
+        // trae el IVA incluido, y por eso el resultado salia menor al 35% real.
+        // Nunca puede ser mayor a lo que aun se debe del documento real.
+        var diferencia=Math.round((baseImponible(r)-baseImponible(f))*100)/100;
+        if(diferencia>r.saldo) diferencia=Math.round(r.saldo*100)/100;
         if(diferencia>0.009){
           resultado.push({
             numero: f.numero+'.',
@@ -14420,6 +14777,42 @@ function _cargarExcelCxCInterno(file, tipo, input){
     }).catch(function(){
       estadoEl.innerHTML='<span style="color:var(--rojo)">Error guardando la base '+nombreBase+' en Firebase</span>';
     });
+  });
+}
+
+// Recalcula el cruce Real/Fiscal con las dos bases ya guardadas, sin tener que
+// volver a subir los Excel. Sirve, por ejemplo, para que los documentos de
+// diferencia 35% tomen el calculo corregido.
+function recalcularCruceCxC(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))){ toast('Solo 01 y 20'); return; }
+  if(CUENTAS_COBRAR_REAL.length===0 || CUENTAS_COBRAR_FISCAL.length===0){ toast('Faltan cargar las bases Real y Fiscal'); return; }
+  if(!confirm('Recalcular el cruce de Cuentas por Cobrar con las bases Real y Fiscal ya guardadas? Los documentos con abonos hechos en la app se respetan.')) return;
+  var estadoEl=document.getElementById('cxcEstadoCarga');
+  var antes={};
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){ antes[CUENTAS_COBRAR[i].numero]=CUENTAS_COBRAR[i]; }
+  var fusion=fusionarBasesRealFiscal(CUENTAS_COBRAR_REAL, CUENTAS_COBRAR_FISCAL);
+  reconciliarCxC(fusion.resultado,function(docsFinal,mantenidos){
+    var numerosNuevo={};
+    for(var i=0;i<docsFinal.length;i++){ numerosNuevo[docsFinal[i].numero]=true; }
+    for(var i=0;i<CUENTAS_COBRAR.length;i++){
+      var viejo=CUENTAS_COBRAR[i];
+      if(viejo.abonadoEnApp && !numerosNuevo[viejo.numero]) docsFinal.push(viejo);
+    }
+    var cambios=[];
+    for(var i=0;i<docsFinal.length;i++){
+      var d=docsFinal[i];
+      if(d.origenBase==='diferencia' && antes[d.numero] && Math.abs(antes[d.numero].saldo-d.saldo)>0.009){
+        cambios.push('Doc.'+d.numero+' ('+d.clienteNombre+'): $'+formatearNumeroConMiles(antes[d.numero].saldo,2)+' → $'+formatearNumeroConMiles(d.saldo,2));
+      }
+    }
+    CUENTAS_COBRAR=docsFinal;
+    db.collection('config').doc('cuentas_cobrar').set({
+      data:JSON.stringify(CUENTAS_COBRAR), actualizado:new Date().toISOString()
+    }).then(function(){
+      if(estadoEl) estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ Cruce recalculado. '+fusion.docsDiferencia+' documento(s) de diferencia 35%, '+cambios.length+' con monto corregido.</span>'+(cambios.length?'<div style="font-size:11px;color:#555;margin-top:4px">'+cambios.slice(0,30).join('<br>')+(cambios.length>30?'<br>... y '+(cambios.length-30)+' mas':'')+'</div>':'');
+      toast('Cruce recalculado');
+      renderResumenCxC();
+    }).catch(function(){ toast('Error guardando en Firebase'); });
   });
 }
 
@@ -17679,7 +18072,7 @@ function cerrarSesion(){
 // archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
 // y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
 // el publicado es distinto, la app se recarga sola con la version nueva.
-var APP_VERSION='2026-11-09-2200';
+var APP_VERSION='2026-11-12-1530';
 function revisarVersionApp(){
   try{
     if(typeof fetch!=='function') return;
