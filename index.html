@@ -1002,6 +1002,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
         </div>
         <button class="btn btn-s btn-sm" style="margin-bottom:10px" onclick="descargarExcelCxCActual()">Descargar CxC actual (Excel)</button>
         <button class="btn btn-s btn-sm" id="btnVerCrucesCxC" style="margin-bottom:10px;display:none" onclick="abrirHistorialCruces()">Ver cruces de documentos</button>
+        <button class="btn btn-s btn-sm" id="btnDepurarCxC" style="margin-bottom:10px;display:none" onclick="abrirDepurarCxC()">🧹 Depurar documentos sospechosos</button>
         <div id="cxcListaCompleta"></div>
       </div>
       <div class="card" id="cxcVerificadorCard" style="display:none">
@@ -1179,7 +1180,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     <div id="adminTab-despacho" style="display:none">
       <div class="card">
         <div class="card-title">Despacho de pedidos</div>
-        <p style="font-size:12px;color:#666;margin-bottom:8px">Elige el rango de fechas, escribe el <strong>Nº de bulto</strong> de cada pedido, genera el reporte por Estado y Ciudad y marca los pedidos como <strong>Despachados</strong>. Los despachados dejan de aparecer en "Pendientes por despachar" y muestran la etiqueta <em>Despachado</em> en el estado del pedido.</p>
+        <p style="font-size:12px;color:#666;margin-bottom:8px">Elige el rango de fechas, escribe la <strong>cantidad de bultos</strong> de cada pedido (los totales se calculan con ese numero), genera el reporte por Estado y Ciudad, guardalo e imprimelo, y marca los pedidos como <strong>Despachados</strong>. Los despachados dejan de aparecer en "Pendientes por despachar" y muestran la etiqueta <em>Despachado</em> en el estado del pedido.</p>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
           <button class="btn btn-s btn-sm" onclick="despRango('hoy')">Hoy</button>
           <button class="btn btn-s btn-sm" onclick="despRango('7')">Ultimos 7 dias</button>
@@ -1199,19 +1200,33 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <div class="field" style="flex:1;min-width:150px;margin-bottom:8px"><label>Vendedor</label>
             <select id="despVend" onchange="despRender()"><option value="">Todos</option></select></div>
         </div>
-        <div class="field" style="margin-bottom:8px"><label>Buscar (cliente, codigo o Nº de bulto)</label><input type="text" id="despBuscar" oninput="despRender()" placeholder="Buscar..."></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:150px;margin-bottom:8px"><label>Bultos cargados</label>
+            <select id="despFiltroBulto" onchange="despRender()">
+              <option value="todos">Todos</option>
+              <option value="con">Solo los que tienen bultos cargados</option>
+              <option value="sin">Solo los que NO tienen bultos cargados</option>
+            </select></div>
+          <div class="field" style="flex:1;min-width:150px;margin-bottom:8px"><label>Transporte</label>
+            <select id="despFiltroTransp" onchange="despRender()"><option value="">Todos</option></select></div>
+        </div>
+        <div class="field" style="margin-bottom:8px"><label>Buscar (cliente o codigo)</label><input type="text" id="despBuscar" oninput="despRender()" placeholder="Buscar..."></div>
         <label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:8px"><input type="checkbox" id="despSoloRecibidos" onchange="despRender()"> Solo pedidos ya recibidos por oficina</label>
-        <button class="btn btn-s btn-sm" onclick="despCargar(true)">Actualizar desde Firebase</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-s btn-sm" onclick="despCargar(true)">Actualizar desde Firebase</button>
+          <button class="btn btn-s btn-sm" onclick="despAbrirTransportes()">🚚 Administrar transportes</button>
+        </div>
       </div>
       <div class="card">
         <div id="despResumen" style="font-size:12px;color:#555;margin-bottom:8px"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-          <button class="btn btn-p btn-sm" onclick="despGuardarBultos()" id="despBtnGuardar">Guardar Nº de bulto</button>
-          <button class="btn btn-s btn-sm" onclick="despSelTodosConBulto()">Seleccionar los que tienen bulto</button>
+          <button class="btn btn-p btn-sm" onclick="despGuardarBultos()" id="despBtnGuardar">Guardar bultos</button>
+          <button class="btn btn-s btn-sm" onclick="despSelTodosConBulto()">Seleccionar los que tienen bultos</button>
           <button class="btn btn-s btn-sm" onclick="despQuitarSel()">Quitar seleccion</button>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
           <button class="btn btn-s btn-sm" onclick="despReporte()">Reporte de bultos por Estado y Ciudad</button>
+          <button class="btn btn-s btn-sm" onclick="despAbrirGuardados()">📄 Reportes guardados</button>
           <button class="btn btn-p btn-sm" style="background:#1E7B4F" onclick="despDespachar()" id="despBtnDespachar">Marcar despachados</button>
         </div>
         <div id="despLista"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando...</div></div>
@@ -2078,6 +2093,28 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 </div>
 
 <!-- MODAL ELIMINAR DOCUMENTO DE CUENTAS POR COBRAR -->
+<div class="modal-bg" id="mDepurarCxC">
+  <div class="modal" style="max-height:90vh;overflow-y:auto">
+    <h3 style="color:var(--azul)">🧹 Depurar Cuentas por Cobrar</h3>
+    <p style="font-size:12px;color:#666;margin-bottom:8px">Marca los documentos que no deberian estar y quitalos: se borran de la lista y de las bases Real/Fiscal, para que la proxima carga no los vuelva a crear. Se hace un respaldo antes.</p>
+    <select id="depCxcModo" onchange="DEPCXC.sel={};renderDepurarCxC()" style="width:100%;margin-bottom:8px">
+      <option value="enormes">Montos sospechosos (saldo de $50,000 o mas)</option>
+      <option value="residuales">Residuales viejos (saldo de $25 o menos y mas de 60 dias)</option>
+      <option value="solofiscal">Solo fiscal con mas de 60 dias</option>
+      <option value="viejos">Todos los de mas de 90 dias</option>
+    </select>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <label style="font-size:12px"><input type="checkbox" onchange="depurarToggleTodos(this.checked)"> Marcar todos</label>
+      <span id="depCxcResumen" style="font-size:12px;color:#555"></span>
+    </div>
+    <div id="depCxcLista" style="max-height:50vh;overflow-y:auto;border:1px solid #eee;border-radius:8px"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn" id="depCxcBtn" style="background:var(--rojo);color:#fff;font-weight:600" onclick="depurarQuitar()" disabled>Quitar marcados</button>
+      <button class="btn btn-s" onclick="cerrarModal('mDepurarCxC')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="mEliminarDocCxC">
   <div class="modal">
     <h3 style="color:var(--rojo)">Eliminar documento de Cuentas por Cobrar</h3>
@@ -2148,14 +2185,46 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 </div>
 
 <!-- MODAL DETALLE DE CARGA DE CUENTAS POR COBRAR -->
-<div class="modal-bg" id="mDespReporte">
-  <div class="modal" style="max-width:640px">
-    <h3>Bultos por Estado y Ciudad</h3>
-    <div id="despReporteContenido" style="max-height:68vh;overflow-y:auto"></div>
-    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-p" onclick="despReporteExcel()">Descargar Excel</button>
-      <button class="btn btn-s" onclick="cerrarModal('mDespReporte')">Cerrar</button>
+<div class="modal-bg" id="mTransportes">
+  <div class="modal" style="max-width:560px">
+    <h3>Transportes</h3>
+    <p style="font-size:12px;color:#666;margin-bottom:8px">Crea aqui los transportes. Luego asignalos con el boton 🚚 del <strong>estado</strong>, de la <strong>ciudad</strong> o del <strong>cliente</strong> en el listado de Despacho. Prioridad: cliente, luego ciudad, luego estado.</p>
+    <input type="hidden" id="trEditId">
+    <div class="field"><label>Nombre del transporte</label><input type="text" id="trNombre" maxlength="60" placeholder="Ej: MRW, Zoom, Tealca, Transporte Perez..."></div>
+    <div class="field"><label>Telefono / contacto (opcional)</label><input type="text" id="trContacto" maxlength="80" placeholder="Ej: 0412-0000000 Juan"></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-p" id="trBtnGuardar" onclick="trGuardar()">Agregar transporte</button>
+      <button class="btn btn-s" onclick="trLimpiar()">Limpiar</button>
     </div>
+    <div id="trLista" style="max-height:42vh;overflow-y:auto"></div>
+    <div style="margin-top:12px"><button class="btn btn-s" onclick="cerrarModal('mTransportes')">Cerrar</button></div>
+  </div>
+</div>
+<div class="modal-bg" id="mTranspAsignar">
+  <div class="modal">
+    <h3 id="taTitulo">Asignar transporte</h3>
+    <div id="taInfo" style="font-size:12px;color:#666;margin-bottom:10px"></div>
+    <div class="field"><label>Transporte</label><select id="taSel"></select></div>
+    <label id="taCascadaWrap" style="display:none;gap:8px;align-items:flex-start;font-size:12px;margin-bottom:10px"><input type="checkbox" id="taCascada" checked style="margin-top:2px"><span id="taCascadaTxt"></span></label>
+    <div style="font-size:11px;color:#888;margin-bottom:10px">¿No esta en la lista? Cierra esto y usa "Administrar transportes".</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p" onclick="taGuardar()">Guardar</button>
+      <button class="btn btn-s" onclick="cerrarModal('mTranspAsignar')">Cancelar</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="mDespGuardados">
+  <div class="modal" style="max-width:600px">
+    <h3>Reportes de despacho guardados</h3>
+    <div id="despGuardadosLista" style="max-height:66vh;overflow-y:auto"></div>
+    <div style="margin-top:14px"><button class="btn btn-s" onclick="cerrarModal('mDespGuardados')">Cerrar</button></div>
+  </div>
+</div>
+<div class="modal-bg" id="mDespReporte">
+  <div class="modal" style="max-width:680px">
+    <h3 id="despReporteTitulo">Bultos por Estado y Ciudad</h3>
+    <div id="despReporteContenido" style="max-height:62vh;overflow-y:auto"></div>
+    <div id="despReporteBotones" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"></div>
   </div>
 </div>
 <div class="modal-bg" id="mDetalleCargaCxC">
@@ -10323,12 +10392,16 @@ function guardarLimiteDeudaPedidos(){
 // despachadoPor, despachoTs (marca de tiempo del ultimo cambio) y
 // modificadoDespuesDespacho.
 var DESP={peds:[], dirty:{}, sel:{}};
+// Base de transportes (config/transportes): lista + asignaciones.
+// Prioridad al resolver el transporte de un pedido: cliente > ciudad > estado.
+var TRANSP={lista:[], asig:{estados:{}, ciudades:{}, clientes:{}}, cargado:false};
+var TA={nivel:'', clave:'', etiqueta:''};
 function despPuede(){ return !!VEND && (VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20'); }
 function despKey(p){ return String(p.vendedor||'')+'|'+String(p.id); }
 function despISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function despVal(id){ var e=document.getElementById(id); return e?e.value:''; }
 function badgeDespachado(p, extraStyle){
-  return '<span class="tag" style="'+(extraStyle?extraStyle+';':'')+'background:#1E7B4F;color:#fff">Despachado '+escUbic(p.fechaDespacho||'')+(p.nroBulto?' · Bulto '+escUbic(p.nroBulto):'')+'</span>';
+  return '<span class="tag" style="'+(extraStyle?extraStyle+';':'')+'background:#1E7B4F;color:#fff">Despachado '+escUbic(p.fechaDespacho||'')+(p.nroBulto?(/^\d+$/.test(String(p.nroBulto))?' · '+p.nroBulto+' bulto'+(parseInt(p.nroBulto,10)!==1?'s':''):' · Bulto '+escUbic(p.nroBulto)):'')+(p.transporteNombre?' · '+escUbic(p.transporteNombre):'')+'</span>';
 }
 function despRango(tipo){
   var h=new Date(), d=new Date();
@@ -10350,9 +10423,113 @@ function despInit(){
       sel.appendChild(o);
     }
   }
+  if(!TRANSP.cargado) despCargarTransportes(function(){ despRender(); });
+  else despPoblarFiltroTransp();
   // Si hay Nº de bulto escritos sin guardar, no se recarga para no perderlos
   if(Object.keys(DESP.dirty).length>0){ despRender(); return; }
   despCargar(false);
+}
+
+// ── Base de transportes ──
+function despCargarTransportes(cb){
+  db.collection('config').doc('transportes').get().then(function(doc){
+    try{
+      if(doc.exists){
+        var d=JSON.parse(doc.data().data||'{}');
+        TRANSP.lista=d.lista||[];
+        TRANSP.asig={estados:(d.asig&&d.asig.estados)||{}, ciudades:(d.asig&&d.asig.ciudades)||{}, clientes:(d.asig&&d.asig.clientes)||{}};
+      }
+    }catch(e){}
+    TRANSP.cargado=true; despPoblarFiltroTransp(); if(cb) cb();
+  }).catch(function(){ TRANSP.cargado=true; despPoblarFiltroTransp(); if(cb) cb(); });
+}
+function despGuardarTransportes(cb){
+  db.collection('config').doc('transportes').set({
+    data:JSON.stringify({lista:TRANSP.lista, asig:TRANSP.asig}), actualizado:new Date().toISOString(), por:VEND?VEND.codigo:''
+  }).then(function(){ if(cb) cb(true); }).catch(function(){ toast('Error guardando transportes en Firebase'); if(cb) cb(false); });
+}
+function despTransporteDe(p, u){
+  // Pedido ya despachado: se respeta el transporte con el que salio
+  if(p.despachado && p.transporteNombre) return {id:p.transporteId||'', nombre:p.transporteNombre, nivel:'despacho'};
+  var cid=p.cliente&&p.cliente.id, A=TRANSP.asig, tid=null, nivel='';
+  if(cid && A.clientes[cid]){ tid=A.clientes[cid]; nivel='cliente'; }
+  else if(A.ciudades[u.estado+'|'+u.ciudad]){ tid=A.ciudades[u.estado+'|'+u.ciudad]; nivel='ciudad'; }
+  else if(A.estados[u.estado]){ tid=A.estados[u.estado]; nivel='estado'; }
+  if(!tid) return null;
+  for(var i=0;i<TRANSP.lista.length;i++){ if(TRANSP.lista[i].id===tid) return {id:tid, nombre:TRANSP.lista[i].nombre, nivel:nivel}; }
+  return null;
+}
+function despNombreTransp(id){
+  for(var i=0;i<TRANSP.lista.length;i++){ if(TRANSP.lista[i].id===id) return TRANSP.lista[i].nombre; }
+  return '';
+}
+function despPoblarFiltroTransp(){
+  var sel=document.getElementById('despFiltroTransp'); if(!sel) return;
+  var actual=sel.value||'';
+  var h='<option value="">Todos</option><option value="__sin">Sin transporte</option>';
+  TRANSP.lista.slice().sort(function(a,b){ return a.nombre.localeCompare(b.nombre,'es'); }).forEach(function(t){ h+='<option value="'+escUbic(t.id)+'">'+escUbic(t.nombre)+'</option>'; });
+  sel.innerHTML=h; sel.value=actual;
+  if(sel.value!==actual) sel.value='';
+}
+function despAbrirTransportes(){
+  document.getElementById('trEditId').value=''; document.getElementById('trNombre').value=''; document.getElementById('trContacto').value='';
+  document.getElementById('trBtnGuardar').textContent='Agregar transporte';
+  despRenderTransportes();
+  document.getElementById('mTransportes').classList.add('open');
+}
+function despRenderTransportes(){
+  var cont=document.getElementById('trLista'); if(!cont) return;
+  if(!TRANSP.lista.length){ cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Aun no hay transportes. Agrega el primero arriba.</div>'; return; }
+  var mapa=mapaClientesUbic();
+  var html='';
+  TRANSP.lista.slice().sort(function(a,b){ return a.nombre.localeCompare(b.nombre,'es'); }).forEach(function(t){
+    var est=Object.keys(TRANSP.asig.estados).filter(function(k){ return TRANSP.asig.estados[k]===t.id; });
+    var ciu=Object.keys(TRANSP.asig.ciudades).filter(function(k){ return TRANSP.asig.ciudades[k]===t.id; }).map(function(k){ var x=k.split('|'); return x[1]+' ('+x[0]+')'; });
+    var cli=Object.keys(TRANSP.asig.clientes).filter(function(k){ return TRANSP.asig.clientes[k]===t.id; }).map(function(k){ return (mapa[k]&&mapa[k].nombre)||k; });
+    html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin-bottom:6px">'+
+      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><strong style="font-size:13px">'+escUbic(t.nombre)+'</strong>'+(t.contacto?'<div style="font-size:11px;color:#666">'+escUbic(t.contacto)+'</div>':'')+'</div>'+
+      '<div style="white-space:nowrap"><button class="btn btn-s btn-sm" data-id="'+escUbic(t.id)+'" onclick="trEditar(this.getAttribute(&quot;data-id&quot;))">Editar</button> <button class="btn btn-s btn-sm" style="color:var(--rojo)" data-id="'+escUbic(t.id)+'" onclick="trEliminar(this.getAttribute(&quot;data-id&quot;))">Eliminar</button></div></div>'+
+      '<div style="font-size:11px;color:#555;margin-top:4px">'+
+        (est.length?'<div><strong>Estados:</strong> '+escUbic(est.join(', '))+'</div>':'')+
+        (ciu.length?'<div><strong>Ciudades:</strong> '+escUbic(ciu.join(', '))+'</div>':'')+
+        (cli.length?'<div><strong>Clientes ('+cli.length+'):</strong> '+escUbic(cli.slice(0,6).join(', ')+(cli.length>6?'...':''))+'</div>':'')+
+        (!est.length&&!ciu.length&&!cli.length?'<span style="color:#aaa">Sin asignaciones todavia (asignalo desde el listado con el boton de transporte).</span>':'')+
+      '</div></div>';
+  });
+  cont.innerHTML=html;
+}
+function trEditar(id){
+  var t=TRANSP.lista.find(function(x){ return x.id===id; }); if(!t) return;
+  document.getElementById('trEditId').value=t.id; document.getElementById('trNombre').value=t.nombre; document.getElementById('trContacto').value=t.contacto||'';
+  document.getElementById('trBtnGuardar').textContent='Guardar cambios';
+}
+function trLimpiar(){
+  document.getElementById('trEditId').value=''; document.getElementById('trNombre').value=''; document.getElementById('trContacto').value='';
+  document.getElementById('trBtnGuardar').textContent='Agregar transporte';
+}
+function trGuardar(){
+  var nombre=document.getElementById('trNombre').value.trim(), contacto=document.getElementById('trContacto').value.trim(), id=document.getElementById('trEditId').value;
+  if(!nombre){ toast('Escribe el nombre del transporte'); return; }
+  var dup=TRANSP.lista.some(function(t){ return t.id!==id && t.nombre.toLowerCase()===nombre.toLowerCase(); });
+  if(dup){ toast('Ya existe un transporte con ese nombre'); return; }
+  if(id){
+    var t=TRANSP.lista.find(function(x){ return x.id===id; });
+    if(t){ t.nombre=nombre; t.contacto=contacto; }
+  } else {
+    TRANSP.lista.push({id:'T'+Date.now(), nombre:nombre, contacto:contacto});
+  }
+  despGuardarTransportes(function(ok){
+    if(!ok) return;
+    trLimpiar(); despRenderTransportes(); despPoblarFiltroTransp(); despRender(); toast('Transporte guardado');
+  });
+}
+function trEliminar(id){
+  var t=TRANSP.lista.find(function(x){ return x.id===id; }); if(!t) return;
+  var n=0; ['estados','ciudades','clientes'].forEach(function(k){ Object.keys(TRANSP.asig[k]).forEach(function(c){ if(TRANSP.asig[k][c]===id) n++; }); });
+  if(!confirm('Eliminar el transporte "'+t.nombre+'"?'+(n?' Se quitaran sus '+n+' asignacion(es).':'')+' Los pedidos ya despachados conservan el nombre con el que salieron.')) return;
+  TRANSP.lista=TRANSP.lista.filter(function(x){ return x.id!==id; });
+  ['estados','ciudades','clientes'].forEach(function(k){ Object.keys(TRANSP.asig[k]).forEach(function(c){ if(TRANSP.asig[k][c]===id) delete TRANSP.asig[k][c]; }); });
+  despGuardarTransportes(function(ok){ if(!ok) return; despRenderTransportes(); despPoblarFiltroTransp(); despRender(); toast('Transporte eliminado'); });
 }
 function despCargar(manual){
   if(manual && Object.keys(DESP.dirty).length>0 && !confirm('Hay Nº de bulto sin guardar. Si actualizas se perderan. Continuar?')) return;
@@ -10375,6 +10552,8 @@ function despBultoEfectivo(p){
 function despFiltrados(){
   var desde=despVal('despDesde'), hasta=despVal('despHasta'), vend=despVal('despVend'), est=despVal('despEstado')||'pend';
   var q=despVal('despBuscar').trim().toLowerCase();
+  var fb=despVal('despFiltroBulto')||'todos', ft=despVal('despFiltroTransp')||'';
+  var mapaT=ft?mapaClientesUbic():null;
   var soloRec=!!(document.getElementById('despSoloRecibidos')&&document.getElementById('despSoloRecibidos').checked);
   return DESP.peds.filter(function(p){
     if(p.anulado) return false;
@@ -10385,6 +10564,12 @@ function despFiltrados(){
     if(est==='pend' && p.despachado) return false;
     if(est==='desp' && !p.despachado) return false;
     if(soloRec && !p.recibidoOficina && !p.despachado) return false;
+    if(fb==='con' && !despTieneBulto(p)) return false;
+    if(fb==='sin' && despTieneBulto(p)) return false;
+    if(ft){
+      var tr=despTransporteDe(p, despUbic(p,mapaT));
+      if(ft==='__sin'){ if(tr) return false; } else if(!tr || tr.id!==ft) return false;
+    }
     if(q){
       var txt=((p.cliente&&p.cliente.nombre)||'')+' '+((p.cliente&&p.cliente.id)||'')+' '+despBultoEfectivo(p);
       if(txt.toLowerCase().indexOf(q)<0) return false;
@@ -10398,31 +10583,42 @@ function despRender(){
   var lista=despFiltrados();
   var mapa=mapaClientesUbic();
   var prodPorId={}; PRODUCTOS.forEach(function(x){ prodPorId[x.id]=x; });
-  var items=lista.map(function(p){ var u=despUbic(p,mapa); return {p:p, est:u.estado, ciu:u.ciudad}; });
+  var items=lista.map(function(p){ var u=despUbic(p,mapa); return {p:p, est:u.estado, ciu:u.ciudad, tr:despTransporteDe(p,u)}; });
   items.sort(function(a,b){
     return despCmpEstado(a.est,b.est) || a.ciu.localeCompare(b.ciu,'es') ||
       (fechaToISO(a.p.fecha||'')<fechaToISO(b.p.fecha||'')?-1:(fechaToISO(a.p.fecha||'')>fechaToISO(b.p.fecha||'')?1:0)) ||
       String((a.p.cliente&&a.p.cliente.nombre)||'').localeCompare(String((b.p.cliente&&b.p.cliente.nombre)||''),'es');
   });
-  var cntE={}, cntC={};
-  items.forEach(function(it){ cntE[it.est]=(cntE[it.est]||0)+1; var kc=it.est+'|'+it.ciu; cntC[kc]=(cntC[kc]||0)+1; });
+  var porE={}, porC={};
+  items.forEach(function(it){ (porE[it.est]=porE[it.est]||[]).push(it); var kc=it.est+'|'+it.ciu; (porC[kc]=porC[kc]||[]).push(it); });
   var html='', estAct=null, ciuAct=null;
   items.forEach(function(it){
+    var idE=TRANSP.asig.estados[it.est], nomE=idE?despNombreTransp(idE):'';
     if(it.est!==estAct){
       estAct=it.est; ciuAct=null;
-      html+='<div style="background:var(--azul);color:#fff;font-weight:700;font-size:13px;padding:6px 10px;border-radius:6px;margin:12px 0 4px">'+escUbic(it.est)+' <span style="font-weight:400;opacity:.85">('+cntE[it.est]+' pedido'+(cntE[it.est]!==1?'s':'')+')</span></div>';
+      html+='<div style="background:var(--azul);color:#fff;font-weight:700;font-size:13px;padding:6px 10px;border-radius:6px;margin:12px 0 4px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
+        '<span>'+escUbic(it.est)+' <span style="font-weight:400;opacity:.95">— '+despTxtStats(despStats(porE[it.est]),'#FFD27A')+'</span></span>'+
+        (it.est!==UBIC_SIN?despBtnTransp('estado',it.est,'Estado '+it.est,nomE,false,true):'')+'</div>';
     }
     if(it.ciu!==ciuAct){
       ciuAct=it.ciu;
-      html+='<div style="font-size:12px;font-weight:700;color:var(--azul);padding:4px 2px;border-bottom:1px solid var(--borde);margin-top:6px">'+escUbic(it.ciu)+' <span style="font-weight:400;color:#888">('+cntC[it.est+'|'+it.ciu]+')</span></div>';
+      var kC=it.est+'|'+it.ciu, idC=TRANSP.asig.ciudades[kC], nomC=idC?despNombreTransp(idC):'', hered=false;
+      if(!nomC && nomE){ nomC=nomE; hered=true; }
+      html+='<div style="font-size:12px;font-weight:700;color:var(--azul);padding:4px 2px;border-bottom:1px solid var(--borde);margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
+        '<span>'+escUbic(it.ciu)+' <span style="font-weight:400;color:#666">— '+despTxtStats(despStats(porC[kC]),'#b26a00')+'</span></span>'+
+        (it.est!==UBIC_SIN?despBtnTransp('ciudad',kC,'Ciudad '+it.ciu+' ('+it.est+')',nomC,hered,false):'')+'</div>';
     }
-    html+=despFila(it.p, prodPorId);
+    html+=despFila(it.p, prodPorId, it.tr);
   });
-  if(!items.length) html='<div style="color:#aaa;font-size:13px;text-align:center;padding:14px">No hay pedidos con este filtro</div>';
+  if(!items.length) {
+    var _tr=despVal('despFiltroTransp')||'', _bu=despVal('despFiltroBulto')||'todos';
+    var _extra=(_tr||_bu!=='todos')?('<div style="margin-top:8px;color:#666">Filtros activos: '+(_tr?('Transporte '+(_tr==='__sin'?'sin transporte':escUbic(despNombreTransp(_tr)||_tr))):'')+((_tr&&_bu!=='todos')?' · ':'')+(_bu!=='todos'?('Bultos: '+escUbic(_bu)):'')+'</div><button class="btn btn-s btn-sm" style="margin-top:8px" onclick="despLimpiarFiltrosVacio()">Quitar filtros de transporte y bultos</button>'):'';
+    html='<div style="color:#aaa;font-size:13px;text-align:center;padding:14px">No hay pedidos con este filtro'+_extra+'</div>';
+  }
   cont.innerHTML=html;
   despActualizarBarra(lista);
 }
-function despFila(p, prodPorId){
+function despFila(p, prodPorId, tr){
   var k=despKey(p), ka=escUbic(k);
   var esDesp=!!p.despachado;
   var itemsTxt=Object.keys(p.items||{}).filter(function(id){ return p.items[id]; }).map(function(id){
@@ -10437,15 +10633,25 @@ function despFila(p, prodPorId){
   if(esDesp){
     ctrl='<button onclick="despDeshacer(this.getAttribute(&quot;data-k&quot;))" data-k="'+ka+'" style="background:none;border:1px solid var(--rojo);color:var(--rojo);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer">Deshacer</button>';
   } else {
-    ctrl='<input type="text" data-k="'+ka+'" value="'+escUbic(despBultoEfectivo(p))+'" maxlength="30" placeholder="Nº bulto" oninput="despBultoCambio(this)" style="width:96px;padding:5px 6px;border:1px solid var(--borde);border-radius:6px;font-size:13px">';
+    ctrl='<span style="font-size:11px;color:#666">Bultos:</span> <input type="text" inputmode="numeric" data-k="'+ka+'" value="'+escUbic(despBultoEfectivo(p))+'" maxlength="4" placeholder="0" oninput="despBultoCambio(this)" style="width:64px;padding:5px 6px;border:1px solid var(--borde);border-radius:6px;font-size:14px;font-weight:700;text-align:center">';
+  }
+  var cid=(p.cliente&&p.cliente.id)||'';
+  var lineaTr;
+  if(esDesp){
+    lineaTr=tr?'<div style="font-size:11px;color:#1B2A6B">🚚 '+escUbic(tr.nombre)+'</div>':'';
+  } else {
+    var nivTxt=tr?({cliente:'cliente',ciudad:'ciudad',estado:'estado'}[tr.nivel]||''):'';
+    lineaTr='<div style="font-size:11px;color:#1B2A6B;margin-top:1px">'+(tr?'🚚 '+escUbic(tr.nombre)+' <span style="color:#888">(por '+nivTxt+')</span>':'<span style="color:#b26a00">🚚 Sin transporte</span>')+
+      ' <a href="#" data-n="cliente" data-c="'+escUbic(cid)+'" data-e="'+escUbic('Cliente '+((p.cliente&&p.cliente.nombre)||'')+' ('+cid+')')+'" onclick="despAbrirAsignar(this);return false" style="color:var(--azul);text-decoration:underline">'+(TRANSP.asig.clientes[cid]?'cambiar':'asignar')+' a este cliente</a></div>';
   }
   return '<div style="padding:8px 2px;border-bottom:1px solid var(--borde)">'+
     '<div style="display:flex;gap:8px;align-items:flex-start">'+
       '<input type="checkbox" data-k="'+ka+'" '+(DESP.sel[k]&&!esDesp?'checked':'')+(esDesp?' disabled':'')+' onchange="despToggleSel(this)" style="width:17px;height:17px;margin-top:2px;flex-shrink:0">'+
       '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;justify-content:space-between;gap:6px"><strong style="font-size:13px">'+escUbic((p.cliente&&p.cliente.nombre)||'')+'</strong><span style="font-size:11px;color:#888;white-space:nowrap">'+escUbic(p.fecha||'')+'</span></div>'+
-        '<div style="font-size:11px;color:#666">Cod '+escUbic((p.cliente&&p.cliente.id)||'')+' · VEND '+escUbic(p.vendedor||'')+' · '+(p.bultos||0)+' bultos · $'+formatearNumeroConMiles(p.monto||0,2)+'</div>'+
+        '<div style="font-size:11px;color:#666">Cod '+escUbic(cid)+' · VEND '+escUbic(p.vendedor||'')+' · Pedido: '+(p.bultos||0)+' btos · $'+formatearNumeroConMiles(p.monto||0,2)+'</div>'+
         '<div style="font-size:11px;color:#888;margin:2px 0">'+escUbic(itemsTxt)+'</div>'+
+        lineaTr+
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px"><div>'+tag+'</div><div>'+ctrl+'</div></div>'+
       '</div>'+
     '</div></div>';
@@ -10453,7 +10659,9 @@ function despFila(p, prodPorId){
 function despBultoCambio(el){
   var k=el.getAttribute('data-k');
   var p=DESP.peds.find(function(x){ return despKey(x)===k; });
-  var v=(el.value||'').trim();
+  // solo cantidad (numero entero de bultos)
+  var v=(el.value||'').replace(/\D/g,'').replace(/^0+/,'').slice(0,4);
+  if(el.value!==v) el.value=v;
   if(p && v===(p.nroBulto||'')) delete DESP.dirty[k]; else DESP.dirty[k]=v;
   despActualizarBarra();
 }
@@ -10463,7 +10671,7 @@ function despToggleSel(el){
   despActualizarBarra();
 }
 function despSelTodosConBulto(){
-  despFiltrados().forEach(function(p){ if(!p.despachado && despBultoEfectivo(p)) DESP.sel[despKey(p)]=true; });
+  despFiltrados().forEach(function(p){ if(!p.despachado && despTieneBulto(p)) DESP.sel[despKey(p)]=true; });
   despRender();
 }
 function despQuitarSel(){ DESP.sel={}; despRender(); }
@@ -10474,12 +10682,12 @@ function despSeleccionados(){
 function despActualizarBarra(lista){
   lista=lista||despFiltrados();
   var conBulto=0, desp=0, btos=0, monto=0;
-  lista.forEach(function(p){ if(p.despachado) desp++; if(despBultoEfectivo(p)) conBulto++; btos+=p.bultos||0; monto+=p.monto||0; });
+  lista.forEach(function(p){ if(p.despachado) desp++; var q=despBultosCant(p); if(q) conBulto++; btos+=q; monto+=p.monto||0; });
   var nSel=despSeleccionados().length, nDirty=Object.keys(DESP.dirty).length;
   var r=document.getElementById('despResumen');
-  if(r) r.innerHTML='<strong>'+lista.length+'</strong> pedido(s) · '+btos+' bultos de producto · $'+formatearNumeroConMiles(monto,2)+' · '+conBulto+' con Nº de bulto · '+desp+' despachado(s)'+
-    (nDirty?' · <span style="color:var(--ambar);font-weight:700">'+nDirty+' Nº de bulto sin guardar</span>':'');
-  var bg=document.getElementById('despBtnGuardar'); if(bg) bg.textContent='Guardar Nº de bulto'+(nDirty?' ('+nDirty+')':'');
+  if(r) r.innerHTML='<strong>'+lista.length+'</strong> pedido(s) · <strong>'+btos+' bultos cargados</strong> · $'+formatearNumeroConMiles(monto,2)+' · '+conBulto+' con bultos cargados · '+desp+' despachado(s)'+
+    (nDirty?' · <span style="color:var(--ambar);font-weight:700">'+nDirty+' sin guardar</span>':'');
+  var bg=document.getElementById('despBtnGuardar'); if(bg) bg.textContent='Guardar bultos'+(nDirty?' ('+nDirty+')':'');
   var bd=document.getElementById('despBtnDespachar'); if(bd) bd.textContent='Marcar despachados'+(nSel?' ('+nSel+')':'');
 }
 // Aplica cambios a los pedidos en el documento de su vendedor. changes:
@@ -10548,18 +10756,24 @@ function despGuardarBultos(){
 function despDespachar(){
   var sel=despSeleccionados();
   if(!sel.length){ toast('Selecciona los pedidos que salieron'); return; }
-  var sinBulto=sel.filter(function(p){ return !despBultoEfectivo(p); }).length;
+  var sinBulto=sel.filter(function(p){ return !despTieneBulto(p); }).length;
+  var mapaC=mapaClientesUbic();
+  var sinTransp=sel.filter(function(p){ return !despTransporteDe(p, despUbic(p,mapaC)); }).length;
   var msg='Marcar '+sel.length+' pedido(s) como DESPACHADOS? Dejaran de salir en "Pendientes por despachar".';
-  if(sinBulto) msg+='\n\nATENCION: '+sinBulto+' de ellos no tiene Nº de bulto.';
+  if(sinBulto) msg+='\n\nATENCION: '+sinBulto+' de ellos no tiene bultos cargados.';
+  if(sinTransp) msg+='\n\nATENCION: '+sinTransp+' de ellos no tiene transporte asignado.';
   if(!confirm(msg)) return;
   var ahora=new Date(), ts=ahora.toISOString();
   var fecha=String(ahora.getDate()).padStart(2,'0')+'/'+String(ahora.getMonth()+1).padStart(2,'0')+'/'+ahora.getFullYear();
   var hora=String(ahora.getHours()).padStart(2,'0')+':'+String(ahora.getMinutes()).padStart(2,'0');
   var quien=VEND.nombre+' (VEND '+VEND.codigo+')';
+  var mapaD=mapaClientesUbic();
   var changes=sel.map(function(p){
     var bulto=despBultoEfectivo(p);
     var c={p:p, set:{despachado:true, fechaDespacho:fecha, horaDespacho:hora, despachadoPor:quien, despachoTs:ts}, del:['modificadoDespuesDespacho']};
     if(bulto) c.set.nroBulto=bulto; else c.del.push('nroBulto');
+    var tr=despTransporteDe(p, despUbic(p,mapaD));
+    if(tr){ c.set.transporteId=tr.id; c.set.transporteNombre=tr.nombre; } else { c.del.push('transporteId','transporteNombre'); }
     return c;
   });
   var btn=document.getElementById('despBtnDespachar'); if(btn) btn.disabled=true;
@@ -10574,12 +10788,104 @@ function despDeshacer(k){
   var p=DESP.peds.find(function(x){ return despKey(x)===k; });
   if(!p) return;
   if(!confirm('Deshacer el despacho de "'+((p.cliente&&p.cliente.nombre)||'')+'"? Volvera a "Pendientes por despachar".')) return;
-  despAplicarCambios([{p:p, set:{despachado:false, despachoTs:new Date().toISOString()}, del:['fechaDespacho','horaDespacho','despachadoPor','modificadoDespuesDespacho']}],function(ok,errores){
+  despAplicarCambios([{p:p, set:{despachado:false, despachoTs:new Date().toISOString()}, del:['fechaDespacho','horaDespacho','despachadoPor','modificadoDespuesDespacho','transporteId','transporteNombre']}],function(ok,errores){
     despRender();
     toast(errores.length?('Error: '+errores.join(' | ')):'Despacho deshecho');
   });
 }
-// Reporte: pedidos con Nº de bulto (segun los filtros activos), por Estado y Ciudad
+// Cantidad de bultos CARGADA por la oficina (el numero que se escribe en el
+// pedido), no los bultos del pedido. Valores viejos con texto ("12, 13") se
+// cuentan por elementos.
+function despCantDeTexto(v){
+  v=String(v==null?'':v).trim();
+  if(!v) return 0;
+  if(/^\d+$/.test(v)) return parseInt(v,10);
+  return despTokensBulto(v).length;
+}
+function despBultosCant(p){ return despCantDeTexto(despBultoEfectivo(p)); }
+function despTieneBulto(p){ return despBultosCant(p)>0; }
+function despUbicCliente(cli){
+  var u=ubicacionDeCliente(cli||{});
+  return {estado:u.estado||UBIC_SIN, ciudad:u.ciudad||(u.estado?'(Sin ciudad)':UBIC_SIN)};
+}
+function despStats(arr){
+  var b=0, sin=0;
+  arr.forEach(function(it){ var q=despBultosCant(it.p); b+=q; if(!q) sin++; });
+  return {pedidos:arr.length, bultos:b, sin:sin};
+}
+function despTxtStats(st, colorSin){
+  return st.pedidos+' pedido'+(st.pedidos!==1?'s':'')+' · <strong>'+st.bultos+' bulto'+(st.bultos!==1?'s':'')+'</strong>'+
+    (st.sin?' · <span style="color:'+colorSin+'">'+st.sin+' sin bultos cargados</span>':'');
+}
+function despBtnTransp(nivel, clave, etiqueta, nombre, heredado, sobreAzul){
+  var estilo=sobreAzul?'background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.5)':'background:#fff;color:var(--azul);border:1px solid var(--azul)';
+  var txt=nombre?('🚚 '+escUbic(nombre)+(heredado?' <span style="opacity:.75">(del estado)</span>':'')):'🚚 Asignar transporte';
+  return '<button data-n="'+nivel+'" data-c="'+escUbic(clave)+'" data-e="'+escUbic(etiqueta)+'" onclick="despAbrirAsignar(this)" style="'+estilo+';border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;white-space:nowrap">'+txt+'</button>';
+}
+// Abre el selector de transporte para un estado, una ciudad o un cliente.
+// Al asignar a un estado (o ciudad) se puede aplicar a todas sus ciudades y
+// clientes; cualquiera de ellos se puede cambiar despues por separado.
+function despContarPropias(nivel, clave){
+  var n1=0, n2=0, mapa=mapaClientesUbic();
+  if(nivel==='estado'){ Object.keys(TRANSP.asig.ciudades).forEach(function(k){ if(k.indexOf(clave+'|')===0) n1++; }); }
+  Object.keys(TRANSP.asig.clientes).forEach(function(cid){
+    var u=despUbicCliente(mapa[cid]||{id:cid});
+    if(nivel==='estado'?(u.estado===clave):((u.estado+'|'+u.ciudad)===clave)) n2++;
+  });
+  return {ciudades:n1, clientes:n2};
+}
+function despAbrirAsignar(el){
+  var nivel=el.getAttribute('data-n'), clave=el.getAttribute('data-c'), etiqueta=el.getAttribute('data-e');
+  TA={nivel:nivel, clave:clave, etiqueta:etiqueta};
+  var nom={estado:'el estado',ciudad:'la ciudad',cliente:'el cliente'}[nivel];
+  document.getElementById('taTitulo').textContent='Transporte para '+nom;
+  document.getElementById('taInfo').innerHTML='<strong>'+escUbic(etiqueta)+'</strong><br>Si lo dejas sin asignar se usa el del nivel superior (cliente → ciudad → estado).';
+  var mapaNivel={estado:'estados',ciudad:'ciudades',cliente:'clientes'}[nivel];
+  var actual=TRANSP.asig[mapaNivel][clave]||'';
+  var h='<option value="">— Sin asignar —</option>';
+  TRANSP.lista.slice().sort(function(a,b){ return a.nombre.localeCompare(b.nombre,'es'); }).forEach(function(t){ h+='<option value="'+escUbic(t.id)+'"'+(t.id===actual?' selected':'')+'>'+escUbic(t.nombre)+'</option>'; });
+  document.getElementById('taSel').innerHTML=h;
+  var wrap=document.getElementById('taCascadaWrap');
+  if(nivel==='cliente'){ wrap.style.display='none'; }
+  else {
+    var c=despContarPropias(nivel,clave);
+    var base=(nivel==='estado')?'Aplicar tambien a todas las ciudades y clientes de este estado':'Aplicar tambien a todos los clientes de esta ciudad';
+    var detalle=[];
+    if(c.ciudades) detalle.push(c.ciudades+' ciudad'+(c.ciudades!==1?'es':''));
+    if(c.clientes) detalle.push(c.clientes+' cliente'+(c.clientes!==1?'s':''));
+    document.getElementById('taCascadaTxt').innerHTML=base+(detalle.length?' <span style="color:#b26a00">(reemplaza lo asignado por separado a '+detalle.join(' y ')+')</span>':'');
+    document.getElementById('taCascada').checked=true;
+    wrap.style.display='flex';
+  }
+  document.getElementById('mTranspAsignar').classList.add('open');
+}
+function taGuardar(){
+  var v=document.getElementById('taSel').value;
+  var mapaNivel={estado:'estados',ciudad:'ciudades',cliente:'clientes'}[TA.nivel];
+  if(!mapaNivel) return;
+  var casc=TA.nivel!=='cliente' && document.getElementById('taCascada').checked;
+  if(casc){
+    var mapa=mapaClientesUbic();
+    if(TA.nivel==='estado'){
+      Object.keys(TRANSP.asig.ciudades).forEach(function(k){ if(k.indexOf(TA.clave+'|')===0) delete TRANSP.asig.ciudades[k]; });
+    }
+    Object.keys(TRANSP.asig.clientes).forEach(function(cid){
+      var u=despUbicCliente(mapa[cid]||{id:cid});
+      if(TA.nivel==='estado'?(u.estado===TA.clave):((u.estado+'|'+u.ciudad)===TA.clave)) delete TRANSP.asig.clientes[cid];
+    });
+  }
+  if(v) TRANSP.asig[mapaNivel][TA.clave]=v; else delete TRANSP.asig[mapaNivel][TA.clave];
+  despGuardarTransportes(function(ok){
+    if(!ok) return;
+    cerrarModal('mTranspAsignar'); despRender();
+    if(document.getElementById('mDespReporte').classList.contains('open') && DESPREP.modo==='vivo') despReporteRefrescar();
+    toast(v?('Transporte asignado: '+despNombreTransp(v)+(casc?' (a todo el nivel)':'')):'Asignacion quitada');
+  });
+}
+// ═══ Reporte de bultos por Estado y Ciudad (vivo o guardado) ═══
+var DESPREP={modo:'vivo', rows:[], meta:{}, id:null};
+var DESPIDX=[];           // indice de reportes guardados (config/despacho_reportes)
+var DESP_TRANSP_SIN='(Sin transporte)';
 function despTokensBulto(s){
   var out=[];
   String(s||'').split(/[,;\s]+/).forEach(function(t){
@@ -10590,72 +10896,333 @@ function despTokensBulto(s){
   });
   return out;
 }
-function despDatosReporte(){
-  var lista=despFiltrados().filter(function(p){ return p.nroBulto; });
-  var mapa=mapaClientesUbic(), estados={};
-  function nuevo(){ return {peds:[], bultos:{}, btosProd:0, monto:0}; }
-  function sumar(x,p){
-    x.peds.push(p); x.btosProd+=p.bultos||0; x.monto+=p.monto||0;
-    despTokensBulto(p.nroBulto).forEach(function(t){ x.bultos[t]=true; });
-  }
-  var tot=nuevo();
-  lista.forEach(function(p){
-    var u=despUbic(p,mapa);
-    var E=estados[u.estado]||(estados[u.estado]=Object.assign(nuevo(),{nombre:u.estado,ciudades:{}}));
-    var C=E.ciudades[u.ciudad]||(E.ciudades[u.ciudad]=Object.assign(nuevo(),{nombre:u.ciudad}));
-    sumar(E,p); sumar(C,p); sumar(tot,p);
+function despOrdenTransp(a,b){ if(a===DESP_TRANSP_SIN) return 1; if(b===DESP_TRANSP_SIN) return -1; return a.localeCompare(b,'es'); }
+function despFmtFechaHora(d){
+  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function despNombreFiltroTransp(){
+  var v=despVal('despFiltroTransp');
+  return v==='__sin'?'Sin transporte':(v?despNombreTransp(v):'Todos');
+}
+// Filas del reporte "vivo": pedidos del filtro actual que tienen bultos cargados
+function despFilasReporteVivo(){
+  var mapa=mapaClientesUbic();
+  return despFiltrados().filter(despTieneBulto).map(function(p){
+    var u=despUbic(p,mapa), tr=despTransporteDe(p,u);
+    return {k:despKey(p), vend:p.vendedor||'', id:p.id, estado:u.estado, ciudad:u.ciudad,
+      transp:tr?tr.nombre:DESP_TRANSP_SIN, transpId:tr?tr.id:'', qty:despBultosCant(p),
+      cid:(p.cliente&&p.cliente.id)||'', cnom:(p.cliente&&p.cliente.nombre)||'', fecha:p.fecha||'',
+      btosPed:p.bultos||0, monto:Math.round((p.monto||0)*100)/100, desp:!!p.despachado, fdesp:p.fechaDespacho||''};
   });
-  var cmpB=function(a,b){ return String(a.nroBulto).localeCompare(String(b.nroBulto),'es',{numeric:true}) || String((a.cliente&&a.cliente.nombre)||'').localeCompare(String((b.cliente&&b.cliente.nombre)||''),'es'); };
-  var lst=Object.keys(estados).sort(despCmpEstado).map(function(k){
-    var E=estados[k];
-    E.lstCiudades=Object.keys(E.ciudades).sort(function(a,b){ return a.localeCompare(b,'es'); }).map(function(c){ var C=E.ciudades[c]; C.peds.sort(cmpB); return C; });
+}
+function despArmarReporte(rows){
+  function nuevo(){ return {rows:[], qty:0, monto:0}; }
+  function sumar(x,r){ x.rows.push(r); x.qty+=r.qty; x.monto+=r.monto; }
+  var tot=nuevo(), est={}, tr={};
+  rows.forEach(function(r){
+    var E=est[r.estado]||(est[r.estado]=Object.assign(nuevo(),{nombre:r.estado,ciudades:{}}));
+    var C=E.ciudades[r.ciudad]||(E.ciudades[r.ciudad]=Object.assign(nuevo(),{nombre:r.ciudad}));
+    sumar(E,r); sumar(C,r); sumar(tot,r); sumar(tr[r.transp]||(tr[r.transp]=nuevo()),r);
+  });
+  var cmp=function(a,b){ return a.cnom.localeCompare(b.cnom,'es') || a.fecha.localeCompare(b.fecha); };
+  var lst=Object.keys(est).sort(despCmpEstado).map(function(k){
+    var E=est[k];
+    E.lstCiudades=Object.keys(E.ciudades).sort(function(a,b){ return a.localeCompare(b,'es'); }).map(function(c){ var C=E.ciudades[c]; C.rows.sort(cmp); return C; });
     return E;
   });
-  return {estados:lst, tot:tot, desde:despVal('despDesde'), hasta:despVal('despHasta'),
-    filtro:({pend:'Pendientes por despachar',desp:'Despachados',todos:'Todos'})[despVal('despEstado')||'pend']};
+  return {estados:lst, tot:tot, porTransp:tr};
 }
-function despListaBultos(x){ return Object.keys(x.bultos).sort(function(a,b){ return a.localeCompare(b,'es',{numeric:true}); }); }
-function despReporte(){
-  if(Object.keys(DESP.dirty).length){ toast('Guarda primero los Nº de bulto'); return; }
-  var R=despDatosReporte();
-  if(!R.tot.peds.length){ toast('No hay pedidos con Nº de bulto en este filtro'); return; }
-  var html='<div style="font-size:12px;color:#888;margin-bottom:8px">Periodo: '+escUbic(R.desde||'inicio')+' al '+escUbic(R.hasta||'hoy')+' — '+escUbic(R.filtro)+'</div>'+
-    '<div style="font-size:13px;font-weight:700;margin-bottom:10px">TOTAL: '+R.tot.peds.length+' pedidos · '+Object.keys(R.tot.bultos).length+' bultos (Nº distintos) · '+R.tot.btosProd+' bultos de producto · $'+formatearNumeroConMiles(R.tot.monto,2)+'</div>';
+function despTxtBultos(n){ return n+' bulto'+(n!==1?'s':''); }
+// modo 'pantalla' (modal) o 'imprimir' (blanco y negro, para papel)
+function despHtmlReporte(R, meta, modo){
+  var imp=(modo==='imprimir');
+  var estHdr=imp?'border:1.5px solid #000;background:#e6e6e6;color:#000;font-weight:700;font-size:13px;padding:5px 8px;margin:14px 0 4px':'background:var(--azul);color:#fff;font-weight:700;font-size:13px;padding:6px 10px;border-radius:6px;margin:12px 0 4px';
+  var ciuHdr=imp?'font-size:12px;font-weight:700;margin:8px 0 2px;border-bottom:1px solid #000':'font-size:12px;font-weight:700;color:var(--azul);margin:8px 0 2px';
+  var sub=imp?'#333':'#666', brd=imp?'#999':'var(--borde)';
+  var h='';
+  if(imp) h+='<h1>'+escUbic(meta.nombre||'Reporte de despacho')+'</h1>';
+  h+='<div style="font-size:12px;color:'+sub+';margin-bottom:6px">Periodo: '+escUbic(meta.desde||'inicio')+' al '+escUbic(meta.hasta||'hoy')+' — '+escUbic(meta.filtro||'')+' — Transporte: '+escUbic(meta.transpFiltro||'Todos')+
+    (meta.creado?'<br>Generado: '+escUbic(despFmtFechaHora(new Date(meta.creado)))+(meta.por?' por '+escUbic(meta.por):''):'')+'</div>';
+  if(!R.tot.rows.length) return h+'<div style="color:#aaa;font-size:13px;text-align:center;padding:16px">No hay pedidos con bultos cargados para este filtro</div>';
+  h+='<div style="font-size:13px;font-weight:700;margin-bottom:8px">TOTAL: '+R.tot.rows.length+' pedido'+(R.tot.rows.length!==1?'s':'')+' · '+despTxtBultos(R.tot.qty)+' · $'+formatearNumeroConMiles(R.tot.monto,2)+'</div>';
+  var nT=Object.keys(R.porTransp).sort(despOrdenTransp);
+  h+='<div style="border:1px solid '+(imp?'#000':'var(--borde)')+';border-radius:'+(imp?'0':'8px')+';padding:6px 10px;margin-bottom:6px"><div style="font-size:12px;font-weight:700;margin-bottom:3px">Resumen por transporte</div>'+
+    nT.map(function(n){ var x=R.porTransp[n]; return '<div style="font-size:12px;display:flex;justify-content:space-between;gap:8px"><span>🚚 '+escUbic(n)+'</span><span>'+x.rows.length+' pedido(s) · <strong>'+despTxtBultos(x.qty)+'</strong></span></div>'; }).join('')+'</div>';
   R.estados.forEach(function(E){
-    html+='<div style="background:var(--azul);color:#fff;font-weight:700;font-size:13px;padding:6px 10px;border-radius:6px;margin:12px 0 4px">'+escUbic(E.nombre)+' <span style="font-weight:400;opacity:.9">— '+E.peds.length+' pedido(s) · '+Object.keys(E.bultos).length+' bultos · $'+formatearNumeroConMiles(E.monto,2)+'</span></div>';
+    h+='<div style="'+estHdr+'" class="estado">'+escUbic(E.nombre)+' <span style="font-weight:400">— '+E.rows.length+' pedido(s) · <strong>'+despTxtBultos(E.qty)+'</strong> · $'+formatearNumeroConMiles(E.monto,2)+'</span></div>';
     E.lstCiudades.forEach(function(C){
-      html+='<div style="font-size:12px;font-weight:700;color:var(--azul);margin:8px 0 2px">'+escUbic(C.nombre)+' <span style="font-weight:400;color:#666">— '+C.peds.length+' pedido(s) · '+Object.keys(C.bultos).length+' bultos: '+escUbic(despListaBultos(C).join(', '))+'</span></div>'+
+      h+='<div style="'+ciuHdr+'">'+escUbic(C.nombre)+' <span style="font-weight:400;color:'+sub+'">— '+C.rows.length+' pedido(s) · <strong>'+despTxtBultos(C.qty)+'</strong></span></div>'+
         '<table style="width:100%;border-collapse:collapse;font-size:11px">';
-      C.peds.forEach(function(p){
-        html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:3px 4px;font-weight:700;white-space:nowrap">'+escUbic(p.nroBulto)+'</td><td style="padding:3px 4px">'+escUbic((p.cliente&&p.cliente.nombre)||'')+'<div style="color:#888">Cod '+escUbic((p.cliente&&p.cliente.id)||'')+' · VEND '+escUbic(p.vendedor||'')+'</div></td><td style="padding:3px 4px;white-space:nowrap">'+escUbic(p.fecha||'')+'</td><td style="padding:3px 4px;text-align:right;white-space:nowrap">'+(p.bultos||0)+' btos<div style="color:#888">$'+formatearNumeroConMiles(p.monto||0,2)+'</div></td><td style="padding:3px 4px">'+(p.despachado?'<span style="color:#1E7B4F;font-weight:700">Despachado</span>':'<span style="color:#856404">Pendiente</span>')+'</td></tr>';
+      C.rows.forEach(function(r){
+        h+='<tr style="border-top:1px solid '+brd+'">'+
+          (imp?'<td style="padding:3px 4px;width:16px">☐</td>':'')+
+          '<td style="padding:3px 4px;font-weight:700;white-space:nowrap;font-size:13px">'+r.qty+'</td>'+
+          '<td style="padding:3px 4px">'+escUbic(r.cnom)+'<div style="color:'+(imp?'#333':'#888')+'">Cod '+escUbic(r.cid)+' · VEND '+escUbic(r.vend)+'</div><div style="color:'+(imp?'#000':'#1B2A6B')+'">🚚 '+escUbic(r.transp)+'</div></td>'+
+          '<td style="padding:3px 4px;white-space:nowrap">'+escUbic(r.fecha)+'</td>'+
+          '<td style="padding:3px 4px;text-align:right;white-space:nowrap">$'+formatearNumeroConMiles(r.monto,2)+'</td>'+
+          '<td style="padding:3px 4px">'+(r.desp?'<span style="'+(imp?'font-weight:700':'color:#1E7B4F;font-weight:700')+'">Despachado</span>':'<span style="'+(imp?'':'color:#856404')+'">Pendiente</span>')+'</td></tr>';
       });
-      html+='</table>';
+      h+='</table>';
     });
   });
-  document.getElementById('despReporteContenido').innerHTML=html;
+  return h;
+}
+function despSelectTranspReporte(){
+  var v=despVal('despFiltroTransp');
+  var o='<option value=""'+(v===''?' selected':'')+'>Todos los transportes</option><option value="__sin"'+(v==='__sin'?' selected':'')+'>Sin transporte</option>';
+  TRANSP.lista.slice().sort(function(a,b){ return a.nombre.localeCompare(b.nombre,'es'); }).forEach(function(t){ o+='<option value="'+escUbic(t.id)+'"'+(v===t.id?' selected':'')+'>'+escUbic(t.nombre)+'</option>'; });
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:12px;font-weight:700">🚚 Transporte:</label><select onchange="despReporteFiltroTransp(this.value)" style="flex:1;padding:6px;border:1px solid var(--borde);border-radius:6px;font-size:13px">'+o+'</select></div>';
+}
+function despMetaVivo(){
+  return {nombre:'', desde:despVal('despDesde'), hasta:despVal('despHasta'),
+    filtro:({pend:'Pendientes por despachar',desp:'Despachados',todos:'Todos los pedidos'})[despVal('despEstado')||'pend'],
+    transpFiltro:despNombreFiltroTransp(), por:VEND?VEND.nombre:'', creado:new Date().toISOString()};
+}
+// El selector de transporte del reporte cambia el filtro de la pantalla. Se
+// recuerda el valor que tenia antes y se restaura al cerrar el reporte, para que
+// la pantalla no se quede filtrada por un transporte (y vacia al despacharlo).
+var DESP_TR_PREVIO=null;
+function despRestaurarFiltroTransp(){
+  if(DESP_TR_PREVIO===null) return;
+  var sel=document.getElementById('despFiltroTransp');
+  var prev=DESP_TR_PREVIO; DESP_TR_PREVIO=null;
+  if(sel){ sel.value=prev; if(sel.value!==prev) sel.value=''; }
+  despRender();
+}
+function despLimpiarFiltrosVacio(){
+  var s=document.getElementById('despFiltroTransp'); if(s) s.value='';
+  var b=document.getElementById('despFiltroBulto'); if(b) b.value='todos';
+  var q=document.getElementById('despBuscar'); if(q) q.value='';
+  despRender();
+}
+function despReporte(){
+  if(Object.keys(DESP.dirty).length){ toast('Guarda primero los bultos cargados'); return; }
+  if(DESP_TR_PREVIO===null) DESP_TR_PREVIO=despVal('despFiltroTransp')||'';
+  var rows=despFilasReporteVivo();
+  if(!rows.length){ toast('No hay pedidos con bultos cargados en este filtro'); return; }
+  DESPREP={modo:'vivo', rows:rows, meta:despMetaVivo(), id:null};
+  despMostrarReporte();
   document.getElementById('mDespReporte').classList.add('open');
 }
+// Cambia el transporte del filtro desde dentro del reporte
+function despReporteFiltroTransp(v){
+  var sel=document.getElementById('despFiltroTransp'); if(sel) sel.value=v;
+  despRender();
+  despReporteRefrescar();
+}
+function despReporteRefrescar(){
+  DESPREP.rows=despFilasReporteVivo(); DESPREP.meta=despMetaVivo();
+  despMostrarReporte();
+}
+function despMostrarReporte(){
+  var vivo=(DESPREP.modo==='vivo');
+  var R=despArmarReporte(DESPREP.rows), meta=DESPREP.meta;
+  var entry=DESPREP.id?despEntradaIdx(DESPREP.id):null;
+  document.getElementById('despReporteTitulo').textContent=vivo?'Bultos por Estado y Ciudad':(meta.nombre||'Reporte guardado');
+  var h='';
+  if(vivo) h+=despSelectTranspReporte();
+  else if(entry){
+    h+='<div style="font-size:12px;margin-bottom:8px;padding:6px 10px;border-radius:6px;'+(entry.estado==='despachado'?'background:#E6F4EC;color:#1E7B4F':(entry.estado==='parcial'?'background:#FCE4D6;color:#9C4221':'background:#FFF3CD;color:#856404'))+'">'+
+      (entry.estado==='despachado'?'<strong>Despachado</strong> el '+escUbic(entry.fechaDespacho||'')+(entry.despachadoPor?' por '+escUbic(entry.despachadoPor):''):(entry.estado==='parcial'?'<strong>Despachado parcialmente</strong>: quedaron pedidos pendientes':'<strong>Pendiente de despacho</strong>'))+'</div>';
+  }
+  h+=despHtmlReporte(R,meta,'pantalla');
+  document.getElementById('despReporteContenido').innerHTML=h;
+  var b='<button class="btn btn-s" onclick="despImprimir()">🖨 Imprimir</button><button class="btn btn-s" onclick="despReporteExcel()">Excel</button>';
+  if(R.tot.rows.length){
+    if(vivo) b='<button class="btn btn-p" onclick="despGuardarReporte(false)">Guardar reporte</button><button class="btn btn-p" style="background:#1E7B4F" onclick="despGuardarReporte(true)">Guardar y marcar despachado</button>'+b;
+    else {
+      if(entry && entry.estado!=='despachado') b='<button class="btn btn-p" style="background:#1E7B4F" onclick="despDespacharReporte()">Marcar todo como despachado</button>'+b;
+      b+='<button class="btn btn-s" style="color:var(--rojo)" onclick="despEliminarReporte(DESPREP.id)">Eliminar</button>';
+    }
+  }
+  b+='<button class="btn btn-s" onclick="cerrarModal(\'mDespReporte\')">Cerrar</button>';
+  document.getElementById('despReporteBotones').innerHTML=b;
+}
+// ── Impresion (mismo formato, en blanco y negro) ──
+function despImprimir(){
+  var R=despArmarReporte(DESPREP.rows);
+  if(!R.tot.rows.length){ toast('No hay datos para imprimir'); return; }
+  var meta=Object.assign({}, DESPREP.meta);
+  if(!meta.nombre) meta.nombre='Reporte de despacho';
+  var body=despHtmlReporte(R,meta,'imprimir');
+  var doc='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+escUbic(meta.nombre)+'</title><style>'+
+    'body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;margin:14px}h1{font-size:16px;margin:0 0 4px}'+
+    'table{width:100%;border-collapse:collapse}td{vertical-align:top}.estado{page-break-after:avoid}tr{page-break-inside:avoid}'+
+    '@media print{body{margin:6mm}}</style></head><body>'+body+'</body></html>';
+  try{
+    var f=document.createElement('iframe');
+    f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    document.body.appendChild(f);
+    var d=f.contentWindow.document; d.open(); d.write(doc); d.close();
+    setTimeout(function(){
+      try{ f.contentWindow.focus(); f.contentWindow.print(); }
+      catch(e){ var w=window.open('','_blank'); if(w){ w.document.write(doc); w.document.close(); w.print(); } else toast('No se pudo abrir la impresion'); }
+      setTimeout(function(){ if(f.parentNode) f.parentNode.removeChild(f); },60000);
+    },300);
+  }catch(e){
+    var w2=window.open('','_blank'); if(w2){ w2.document.write(doc); w2.document.close(); w2.print(); } else toast('No se pudo abrir la impresion');
+  }
+}
 function despReporteExcel(){
-  var R=despDatosReporte();
-  if(!R.tot.peds.length){ toast('No hay datos para exportar'); return; }
-  var resumen=[['Despacho - Bultos por Estado y Ciudad'],['Periodo: '+(R.desde||'inicio')+' al '+(R.hasta||'hoy')+' — '+R.filtro],[],['Estado','Ciudad','Pedidos','Bultos (Nº distintos)','Nº de bulto','Bultos de producto','Monto $']];
-  var detalle=[['Estado','Ciudad','Nº de bulto','Fecha pedido','Cod. cliente','Cliente','Vendedor','Bultos de producto','Monto $','Estado de despacho','Fecha despacho','Despachado por']];
+  var R=despArmarReporte(DESPREP.rows), meta=DESPREP.meta;
+  if(!R.tot.rows.length){ toast('No hay datos para exportar'); return; }
+  var per='Periodo: '+(meta.desde||'inicio')+' al '+(meta.hasta||'hoy')+' — '+(meta.filtro||'')+' — Transporte: '+(meta.transpFiltro||'Todos');
+  var resumen=[[meta.nombre||'Despacho - Bultos por Estado y Ciudad'],[per],[],['Estado','Ciudad','Pedidos','Bultos','Transporte(s)','Monto $']];
+  var detalle=[['Estado','Ciudad','Bultos','Transporte','Fecha pedido','Cod. cliente','Cliente','Vendedor','Bultos del pedido','Monto $','Estado de despacho']];
+  var porT=[['Resumen por transporte'],[per],[],['Transporte','Pedidos','Bultos','Monto $']];
+  Object.keys(R.porTransp).sort(despOrdenTransp).forEach(function(n){ var x=R.porTransp[n]; porT.push([n,x.rows.length,x.qty,Math.round(x.monto*100)/100]); });
+  porT.push(['TOTAL',R.tot.rows.length,R.tot.qty,Math.round(R.tot.monto*100)/100]);
   R.estados.forEach(function(E){
-    resumen.push([E.nombre,'(TOTAL ESTADO)',E.peds.length,Object.keys(E.bultos).length,'',E.btosProd,Math.round(E.monto*100)/100]);
+    resumen.push([E.nombre,'(TOTAL ESTADO)',E.rows.length,E.qty,'',Math.round(E.monto*100)/100]);
     E.lstCiudades.forEach(function(C){
-      resumen.push([E.nombre,C.nombre,C.peds.length,Object.keys(C.bultos).length,despListaBultos(C).join(', '),C.btosProd,Math.round(C.monto*100)/100]);
-      C.peds.forEach(function(p){
-        detalle.push([E.nombre,C.nombre,p.nroBulto,p.fecha||'',(p.cliente&&p.cliente.id)||'',(p.cliente&&p.cliente.nombre)||'',p.vendedor||'',p.bultos||0,Math.round((p.monto||0)*100)/100,p.despachado?'Despachado':'Pendiente',p.fechaDespacho?(p.fechaDespacho+(p.horaDespacho?' '+p.horaDespacho:'')):'',p.despachadoPor||'']);
-      });
+      var trs={}; C.rows.forEach(function(r){ trs[r.transp]=true; });
+      resumen.push([E.nombre,C.nombre,C.rows.length,C.qty,Object.keys(trs).join(', '),Math.round(C.monto*100)/100]);
+      C.rows.forEach(function(r){ detalle.push([E.nombre,C.nombre,r.qty,r.transp,r.fecha,r.cid,r.cnom,r.vend,r.btosPed,r.monto,r.desp?'Despachado':'Pendiente']); });
     });
   });
-  resumen.push(['TOTAL','',R.tot.peds.length,Object.keys(R.tot.bultos).length,'',R.tot.btosProd,Math.round(R.tot.monto*100)/100]);
-  var wb=XLSX.utils.book_new(), w1=XLSX.utils.aoa_to_sheet(resumen), w2=XLSX.utils.aoa_to_sheet(detalle);
-  w1['!cols']=[{wch:20},{wch:26},{wch:9},{wch:12},{wch:34},{wch:12},{wch:13}];
-  w2['!cols']=[{wch:20},{wch:24},{wch:12},{wch:12},{wch:10},{wch:38},{wch:9},{wch:10},{wch:12},{wch:14},{wch:16},{wch:28}];
+  resumen.push(['TOTAL','',R.tot.rows.length,R.tot.qty,'',Math.round(R.tot.monto*100)/100]);
+  var wb=XLSX.utils.book_new(), w1=XLSX.utils.aoa_to_sheet(resumen), w2=XLSX.utils.aoa_to_sheet(detalle), w3=XLSX.utils.aoa_to_sheet(porT);
+  w1['!cols']=[{wch:20},{wch:26},{wch:9},{wch:9},{wch:30},{wch:13}];
+  w2['!cols']=[{wch:20},{wch:24},{wch:8},{wch:22},{wch:12},{wch:10},{wch:38},{wch:9},{wch:12},{wch:12},{wch:14}];
+  w3['!cols']=[{wch:28},{wch:9},{wch:9},{wch:13}];
   XLSX.utils.book_append_sheet(wb,w1,'Resumen');
   XLSX.utils.book_append_sheet(wb,w2,'Detalle');
-  XLSX.writeFile(wb,'despacho_bultos_'+(R.desde||'inicio')+'_a_'+(R.hasta||'hoy')+'.xlsx');
+  XLSX.utils.book_append_sheet(wb,w3,'Por transporte');
+  var base=(meta.nombre||('despacho_'+(meta.desde||'inicio')+'_a_'+(meta.hasta||'hoy'))).replace(/[^A-Za-z0-9_\-]+/g,'_');
+  XLSX.writeFile(wb,base+'.xlsx');
+}
+
+// ── Reportes guardados ──
+// Indice: config/despacho_reportes ; cada reporte: config/despRep_<id>
+function despEntradaIdx(id){ for(var i=0;i<DESPIDX.length;i++){ if(DESPIDX[i].id===id) return DESPIDX[i]; } return null; }
+function despCargarIndice(cb){
+  db.collection('config').doc('despacho_reportes').get().then(function(doc){
+    try{ DESPIDX=(doc.exists&&doc.data().data)?JSON.parse(doc.data().data):[]; }catch(e){ DESPIDX=[]; }
+    if(cb) cb();
+  }).catch(function(){ toast('No se pudo leer la lista de reportes guardados'); if(cb) cb(); });
+}
+// Lee el indice, aplica fn(arr) y lo guarda (evita pisar cambios recientes)
+function despActualizarIndice(fn, cb){
+  var ref=db.collection('config').doc('despacho_reportes');
+  ref.get().then(function(doc){
+    var arr=[]; try{ arr=(doc.exists&&doc.data().data)?JSON.parse(doc.data().data):[]; }catch(e){}
+    arr=fn(arr)||arr;
+    return ref.set({data:JSON.stringify(arr), actualizado:new Date().toISOString()}).then(function(){ DESPIDX=arr; if(cb) cb(true); });
+  }).catch(function(){ toast('Error guardando la lista de reportes'); if(cb) cb(false); });
+}
+function despGuardarReporte(luegoDespachar){
+  if(DESPREP.modo!=='vivo' || !DESPREP.rows.length) return;
+  var ahora=new Date();
+  var def='Despacho '+despFmtFechaHora(ahora)+(DESPREP.meta.transpFiltro&&DESPREP.meta.transpFiltro!=='Todos'?' - '+DESPREP.meta.transpFiltro:'');
+  var nombre=prompt('Nombre del reporte:', def);
+  if(nombre===null) return;
+  nombre=nombre.trim()||def;
+  var R=despArmarReporte(DESPREP.rows);
+  var id='R'+Date.now();
+  var meta=Object.assign({}, DESPREP.meta, {nombre:nombre, creado:ahora.toISOString()});
+  var entrada={id:id, nombre:nombre, creado:meta.creado, por:meta.por, desde:meta.desde, hasta:meta.hasta, filtro:meta.filtro, transpFiltro:meta.transpFiltro,
+    pedidos:R.tot.rows.length, bultos:R.tot.qty, monto:Math.round(R.tot.monto*100)/100, estado:'pendiente'};
+  db.collection('config').doc('despRep_'+id).set({data:JSON.stringify({meta:meta, rows:DESPREP.rows}), actualizado:meta.creado}).then(function(){
+    despActualizarIndice(function(arr){ arr.unshift(entrada); return arr; }, function(ok){
+      if(!ok) return;
+      DESPREP={modo:'guardado', rows:DESPREP.rows, meta:meta, id:id};
+      despMostrarReporte();
+      toast('Reporte guardado');
+      if(luegoDespachar) despDespacharReporte();
+    });
+  }).catch(function(){ toast('Error guardando el reporte en Firebase'); });
+}
+function despAbrirGuardados(){
+  document.getElementById('despGuardadosLista').innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando...</div>';
+  document.getElementById('mDespGuardados').classList.add('open');
+  despCargarIndice(despRenderGuardados);
+}
+function despRenderGuardados(){
+  var cont=document.getElementById('despGuardadosLista'); if(!cont) return;
+  if(!DESPIDX.length){ cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:14px">Aun no hay reportes guardados. Genera un reporte y usa "Guardar reporte".</div>'; return; }
+  cont.innerHTML=DESPIDX.map(function(e){
+    var chip=e.estado==='despachado'?'<span class="tag" style="background:#1E7B4F;color:#fff;font-size:10px">Despachado</span>':(e.estado==='parcial'?'<span class="tag" style="background:#FCE4D6;color:#9C4221;font-size:10px">Parcial</span>':'<span class="tag" style="background:#FFF3CD;color:#856404;font-size:10px">Pendiente</span>');
+    return '<div style="border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin-bottom:6px">'+
+      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><strong style="font-size:13px">'+escUbic(e.nombre)+'</strong>'+chip+'</div>'+
+      '<div style="font-size:11px;color:#666;margin-top:2px">'+escUbic(despFmtFechaHora(new Date(e.creado)))+(e.por?' · '+escUbic(e.por):'')+'</div>'+
+      '<div style="font-size:11px;color:#555">'+e.pedidos+' pedido(s) · <strong>'+despTxtBultos(e.bultos)+'</strong> · $'+formatearNumeroConMiles(e.monto||0,2)+' · Transporte: '+escUbic(e.transpFiltro||'Todos')+'</div>'+
+      (e.estado==='despachado'&&e.fechaDespacho?'<div style="font-size:11px;color:#1E7B4F">Despachado el '+escUbic(e.fechaDespacho)+'</div>':'')+
+      '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn btn-p btn-sm" data-id="'+escUbic(e.id)+'" onclick="despAbrirGuardado(this.getAttribute(&quot;data-id&quot;))">Ver / Imprimir</button>'+
+      '<button class="btn btn-s btn-sm" style="color:var(--rojo)" data-id="'+escUbic(e.id)+'" onclick="despEliminarReporte(this.getAttribute(&quot;data-id&quot;))">Eliminar</button></div></div>';
+  }).join('');
+}
+function despAbrirGuardado(id){
+  db.collection('config').doc('despRep_'+id).get().then(function(doc){
+    if(!doc.exists){ toast('El reporte ya no existe'); return; }
+    var snap=JSON.parse(doc.data().data);
+    // estado actual de cada pedido (si ya se despacho por otra via)
+    snap.rows.forEach(function(r){ var p=DESP.peds.find(function(x){ return despKey(x)===r.k; }); if(p) r.desp=!!p.despachado; });
+    DESPREP={modo:'guardado', rows:snap.rows, meta:snap.meta, id:id};
+    despMostrarReporte();
+    document.getElementById('mDespReporte').classList.add('open');
+  }).catch(function(){ toast('No se pudo abrir el reporte'); });
+}
+function despEliminarReporte(id){
+  var e=despEntradaIdx(id); if(!e) return;
+  if(!confirm('Eliminar el reporte "'+e.nombre+'"?'+(e.estado==='despachado'?' (Los pedidos seguiran como Despachados.)':''))) return;
+  db.collection('config').doc('despRep_'+id).delete().catch(function(){}).then(function(){
+    despActualizarIndice(function(arr){ return arr.filter(function(x){ return x.id!==id; }); }, function(ok){
+      if(!ok) return;
+      if(DESPREP.id===id) cerrarModal('mDespReporte');
+      despRenderGuardados(); toast('Reporte eliminado');
+    });
+  });
+}
+// Marca como despachados TODOS los pedidos del reporte guardado
+function despDespacharReporte(){
+  if(DESPREP.modo!=='guardado' || !DESPREP.id) return;
+  var id=DESPREP.id, entrada=despEntradaIdx(id);
+  if(!entrada){ toast('Reporte no encontrado'); return; }
+  if(entrada.estado==='despachado'){ toast('Este reporte ya esta despachado'); return; }
+  var porKey={}; DESP.peds.forEach(function(p){ porKey[despKey(p)]=p; });
+  var aplicar=[], yaDesp=0, anulados=0, noEncontrados=0;
+  DESPREP.rows.forEach(function(r){
+    var p=porKey[r.k];
+    if(!p){ noEncontrados++; return; }
+    if(p.anulado){ anulados++; return; }
+    if(p.despachado){ yaDesp++; return; }
+    aplicar.push({p:p, r:r});
+  });
+  if(!aplicar.length && noEncontrados){ toast('No se encontraron los pedidos de este reporte. Pulsa "Actualizar desde Firebase" e intenta de nuevo'); return; }
+  if(!aplicar.length){
+    despActualizarIndice(function(arr){ var x=arr.find(function(e){ return e.id===id; }); if(x){ x.estado='despachado'; x.fechaDespacho=despFmtFechaHora(new Date()); x.despachadoPor=VEND.nombre+' (VEND '+VEND.codigo+')'; } return arr; }, function(){ despMostrarReporte(); despRenderGuardados(); toast(anulados?('No quedan pedidos por despachar ('+anulados+' anulado(s) omitido(s))'):'Todos los pedidos ya estaban despachados'); });
+    return;
+  }
+  var btos=aplicar.reduce(function(s,x){ return s+x.r.qty; },0);
+  var msg='Marcar como DESPACHADOS los '+aplicar.length+' pedido(s) de "'+entrada.nombre+'" ('+despTxtBultos(btos)+')? Dejaran de salir en "Pendientes por despachar".';
+  var omit=[]; if(yaDesp) omit.push(yaDesp+' ya despachado(s)'); if(anulados) omit.push(anulados+' anulado(s)'); if(noEncontrados) omit.push(noEncontrados+' no encontrado(s)');
+  if(omit.length) msg+='\n\nSe omiten: '+omit.join(', ')+'.';
+  if(!confirm(msg)) return;
+  var ahora=new Date(), ts=ahora.toISOString();
+  var fecha=String(ahora.getDate()).padStart(2,'0')+'/'+String(ahora.getMonth()+1).padStart(2,'0')+'/'+ahora.getFullYear();
+  var hora=String(ahora.getHours()).padStart(2,'0')+':'+String(ahora.getMinutes()).padStart(2,'0');
+  var quien=VEND.nombre+' (VEND '+VEND.codigo+')';
+  var changes=aplicar.map(function(x){
+    // se usan los bultos y el transporte tal como quedaron impresos en el reporte
+    var c={p:x.p, set:{despachado:true, fechaDespacho:fecha, horaDespacho:hora, despachadoPor:quien, despachoTs:ts, nroBulto:String(x.r.qty)}, del:['modificadoDespuesDespacho']};
+    if(x.r.transp && x.r.transp!==DESP_TRANSP_SIN){ c.set.transporteNombre=x.r.transp; if(x.r.transpId) c.set.transporteId=x.r.transpId; else c.del.push('transporteId'); }
+    else c.del.push('transporteId','transporteNombre');
+    return c;
+  });
+  despAplicarCambios(changes,function(ok,errores){
+    var completo=(errores.length===0 && noEncontrados===0);   // los anulados no salen: no impiden cerrar el reporte
+    var nuevoEstado=completo?'despachado':((ok.length+yaDesp)>0?'parcial':'pendiente');
+    despActualizarIndice(function(arr){
+      var x=arr.find(function(e){ return e.id===id; });
+      if(x){ x.estado=nuevoEstado; if(nuevoEstado==='despachado'){ x.fechaDespacho=fecha+' '+hora; x.despachadoPor=quien; } }
+      return arr;
+    },function(){
+      ok.forEach(function(k){ delete DESP.dirty[k]; delete DESP.sel[k]; });
+      DESPREP.rows.forEach(function(r){ if(ok.indexOf(r.k)>=0) r.desp=true; });
+      despMostrarReporte(); despRender(); despRenderGuardados();
+      toast(errores.length?('Despachados '+ok.length+'. Error: '+errores.join(' | ')):(ok.length+' pedido(s) despachado(s)'+(anulados?(' ('+anulados+' anulado(s) omitido(s))'):(noEncontrados?' (hay pedidos no encontrados)':''))));
+    });
+  });
 }
 
 // ═══ ADMIN ═══
@@ -10675,9 +11242,9 @@ function ajustarModoCargaCxC(){
     sel.disabled=true;
     if(avisoEl) avisoEl.innerHTML='Tu usuario solo puede agregar o actualizar documentos, no reemplazar toda la base. Si necesitas hacer una actualizacion completa, pidele a un administrador (01/20) que la realice.';
   } else {
-    sel.innerHTML='<option value="reemplazar">Reemplazar toda la base (actualizacion periodica completa, "Sin Cancelar" entero)</option>'+
-      '<option value="agregar">Agregar/actualizar sin borrar lo demas (solo subo unos documentos nuevos)</option>';
-    sel.value='reemplazar';
+    sel.innerHTML='<option value="agregar">Agregar/actualizar sin borrar lo demas (solo subo unos documentos nuevos)</option>'+
+      '<option value="reemplazar">Reemplazar toda la base (actualizacion periodica completa, "Sin Cancelar" entero)</option>';
+    sel.value='agregar';
     sel.disabled=false;
     if(avisoEl) avisoEl.innerHTML='⚠ Si subes un archivo con SOLO unos documentos nuevos, usa "Agregar/actualizar" — si eliges "Reemplazar" con un archivo parcial, se va a borrar todo lo que no venga en ese archivo.';
   }
@@ -14683,7 +15250,7 @@ function vincularArchivosHuerfanosACliente(idx, clienteId){
 // documentos completos (carga de clientes, etc.) y tambien de forma
 // periodica. Se guardan los ultimos 10 respaldos, borrando
 // automaticamente los mas viejos.
-var CONFIG_DOCS_RESPALDABLES=['catalogo_productos','cxc_serie','clientes','comisiones_registros','compras_registradas','cuentas_cobrar','cuentas_cobrar_fiscal','cuentas_cobrar_real','descuentos_factura','historial_agotado','historial_cargas_cxc','historial_inventario','inventario','iva','limite_deuda','precios','promo_display','promociones_custom','reposicion','reposicion_historial','stock_estimado','storage_huerfanos_descartados','vendedores'];
+var CONFIG_DOCS_RESPALDABLES=['catalogo_productos','cxc_serie','clientes','comisiones_registros','compras_registradas','cuentas_cobrar','cuentas_cobrar_fiscal','cuentas_cobrar_real','descuentos_factura','historial_agotado','historial_cargas_cxc','historial_inventario','inventario','iva','limite_deuda','precios','promo_display','promociones_custom','reposicion','reposicion_historial','stock_estimado','storage_huerfanos_descartados','transportes','vendedores'];
 var MAX_RESPALDOS_GUARDADOS=10;
 
 // Crea un respaldo completo. "tipo" es solo informativo (ej:
@@ -15736,7 +16303,27 @@ function parsearExcelCxC(file, callback){
       }
       var col=function(offset){ return numeroCol+offset; };
       var docs=[];
+      var cancelados=[];
       var filasVacias=0, filasSaldoCero=0, filasTotal=0;
+      // Moneda del reporte: Profit la escribe en el encabezado ("Moneda US$").
+      // Si el archivo esta en bolivares, los montos serian cientos de veces
+      // mayores y se mezclarian como si fueran dolares.
+      var monedaTxt='', monedaBs=false, rangoDias=null, rangoTxt='';
+      for(var h=0;h<headerIdx;h++){
+        var rh=rows[h]; if(!rh) continue;
+        for(var hc=0;hc<rh.length;hc++){
+          var th=String(rh[hc]===null||rh[hc]===undefined?'':rh[hc]);
+          var mm=th.match(/moneda\s*:?\s*([^;]*)/i);
+          if(mm){ monedaTxt=mm[1].trim(); }
+          var mr=th.match(/Fecha:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*Hasta\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+          if(mr){
+            var f1=new Date(+mr[3],+mr[2]-1,+mr[1]), f2=new Date(+mr[6],+mr[5]-1,+mr[4]);
+            rangoDias=Math.round((f2-f1)/86400000)+1;
+            rangoTxt=mr[1]+'/'+mr[2]+'/'+mr[3]+' al '+mr[4]+'/'+mr[5]+'/'+mr[6];
+          }
+        }
+      }
+      if(monedaTxt && !/us|\$|d[oó]lar/i.test(monedaTxt) && /bs|bol[ií]var/i.test(monedaTxt)) monedaBs=true;
       // El nombre del cliente que trae el Excel de Profit suele venir
       // cortado/truncado. El codigo si es confiable, asi que se usa para
       // buscar el nombre COMPLETO en la base de clientes de la app. Si el
@@ -15750,7 +16337,11 @@ function parsearExcelCxC(file, callback){
         if(!r || r[numeroCol]===null || r[numeroCol]===undefined || String(r[numeroCol]).trim()===''){ filasVacias++; continue; }
         if(String(r[numeroCol]).trim().toLowerCase().indexOf('total')>=0){ filasTotal++; continue; }
         var saldo=parseFloat(r[col(9)])||0;
-        if(saldo<=0.009){ filasSaldoCero++; continue; } // ya cancelado, no es cuenta pendiente
+        if(saldo<=0.009){
+          filasSaldoCero++;
+          if(Math.abs(saldo)<=0.009) cancelados.push(String(r[numeroCol]).trim());  // pagado en Profit
+          continue; // ya cancelado, no es cuenta pendiente
+        }
         var clienteIdExcel=String(r[col(3)]||'').trim();
         var nombreExcel=String(r[col(4)]||'').trim();
         docs.push({
@@ -15766,7 +16357,7 @@ function parsearExcelCxC(file, callback){
           saldo:saldo
         });
       }
-      callback(docs,null,{filasVacias:filasVacias,filasSaldoCero:filasSaldoCero,filasTotal:filasTotal,numeroCol:numeroCol,hoja:hojaUsada,encabezadoAprox:encabezadoAprox});
+      callback(docs,null,{rangoDias:rangoDias,rangoTxt:rangoTxt,cancelados:cancelados,moneda:monedaTxt,monedaBs:monedaBs,filasVacias:filasVacias,filasSaldoCero:filasSaldoCero,filasTotal:filasTotal,numeroCol:numeroCol,hoja:hojaUsada,encabezadoAprox:encabezadoAprox});
     }catch(err){
       callback(null,'Error leyendo el archivo: '+err.message);
     }
@@ -15929,6 +16520,7 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
   var fiscalSola=0;
   var fiscalSolaList=[];
   var fiscalOmitidosList=[];
+  var fiscalAnterioresList=[];
   var numerosEnResultado={};
   for(var i=0;i<resultado.length;i++){ numerosEnResultado[resultado[i].numero]=true; }
   for(var key in fiscalPorGrupo){
@@ -15937,6 +16529,15 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
       if(usados[key+'#'+j]) continue;
       var fs=candidatos[j];
       var numF=numeroFiscalConSerie(fs.numero);
+      // Una factura fiscal SIN nota solo es una cuenta por cobrar propia desde que
+      // empezo la serie fiscal (CXC_SERIE.fiscalDesde, ej. F-1323). Las anteriores
+      // siempre tenian su nota, asi que una fiscal vieja sin nota es un resto de
+      // Profit y se descarta, como se hacia antes de agregar las fiscales solas.
+      var esSerieNueva=(CXC_SERIE.prefijoFiscal && numF.indexOf(CXC_SERIE.prefijoFiscal)===0) || (/^\d+$/.test(numF) && parseInt(numF,10)>=CXC_SERIE.fiscalDesde);
+      if(!esSerieNueva){
+        fiscalAnterioresList.push({numero:numF, clienteId:fs.clienteId, clienteNombre:fs.clienteNombre, saldo:fs.saldo, emision:fs.emision});
+        continue;
+      }
       // Salvaguarda: el mismo numero no puede estar dos veces en la base
       if(numerosEnResultado[numF]){
         fiscalOmitidosList.push({numero:numF, clienteId:fs.clienteId, clienteNombre:fs.clienteNombre, saldo:fs.saldo, emision:fs.emision});
@@ -16012,7 +16613,7 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
   var docsDiferencia=0;
   for(var i=0;i<resultado.length;i++){ if(resultado[i].origenBase==='diferencia') docsDiferencia++; }
   return {resultado:resultado, coincidencias:coincidencias, docsDiferencia:docsDiferencia, fiscalSola:fiscalSola,
-    coincidenciasList:coincidenciasList, docsDiferenciaList:docsDiferenciaList, fiscalSolaList:fiscalSolaList, fiscalOmitidosList:fiscalOmitidosList,
+    coincidenciasList:coincidenciasList, docsDiferenciaList:docsDiferenciaList, fiscalSolaList:fiscalSolaList, fiscalOmitidosList:fiscalOmitidosList, fiscalAnterioresList:fiscalAnterioresList,
     descAplicadosList:descAplicadosList, descFechaDistintaList:descFechaDistintaList, descSinFacturaList:descSinFacturaList, descIgnorados:descIgnorados};
 }
 
@@ -16210,6 +16811,9 @@ function verDetalleCargaCxC(detalleOverride){
   html+=seccion('Fiscales NO agregados (mismo numero ya existia en la base)', d.fiscalOmitidosList, 'var(--ambar)', function(item){
     return filaDoc(item, 'Emision: '+(item.emision||'')+' | Saldo: $'+formatearNumeroConMiles(item.saldo,2));
   });
+  html+=seccion('Fiscales anteriores a la serie sin nota (no se agregan)', d.fiscalAnterioresList, '#888', function(item){
+    return filaDoc(item, 'Emision: '+(item.emision||'')+' | Saldo: $'+formatearNumeroConMiles(item.saldo,2));
+  });
   html+=seccion('Fiscales descartados (cargas anteriores, sin match en Real)', d.descartadosFiscalList, 'var(--rojo)', function(item){
     return filaDoc(item, 'Emision: '+(item.emision||'')+' | Saldo: $'+formatearNumeroConMiles(item.saldo,2));
   });
@@ -16244,14 +16848,46 @@ function _cargarExcelCxCInterno(file, tipo, input){
   var nombreBase=(tipo==='real'?'REAL':'FISCAL');
   var modoCarga=document.getElementById('cxcModoCarga')?document.getElementById('cxcModoCarga').value:'reemplazar';
   var estadoEl=document.getElementById('cxcEstadoCarga');
+  var modoCargaPre=modoCarga;
+  var quitadosCancelados=[];
   estadoEl.innerHTML='<span style="color:#aaa">Leyendo archivo '+nombreBase+'...</span>';
   parsearExcelCxC(file,function(docs,error,diag){
     if(error){ estadoEl.innerHTML='<span style="color:var(--rojo)">'+error+'</span>'; return; }
-    if(!docs||docs.length===0){ estadoEl.innerHTML='<span style="color:var(--rojo)">No se encontraron documentos con saldo pendiente</span>'; return; }
+    if(diag && diag.monedaBs){
+      estadoEl.innerHTML='<span style="color:var(--rojo);font-weight:600">Este archivo esta en la moneda "'+diag.moneda+'" (no es US$). No se cargo nada. Vuelve a generar el reporte en Profit con Moneda US$.</span>';
+      input.value=''; return;
+    }
+    if(docs&&docs.length){
+      var enormes=docs.filter(function(d){ return d.saldo>=100000; });
+      if(enormes.length){
+        var okEnormes=confirm('Atencion: '+enormes.length+' documento(s) de este archivo tienen saldo de $100,000 o mas (por ejemplo el '+enormes[0].numero+' por '+formatearNumeroConMiles(enormes[0].saldo,2)+').\n\nEso suele significar que el reporte esta en BOLIVARES y no en dolares.\n\n¿Cargar de todas formas?');
+        if(!okEnormes){ estadoEl.innerHTML='<span style="color:var(--rojo)">Carga cancelada: montos sospechosos (posible archivo en Bs). Genera el reporte en US$ y vuelve a cargarlo.</span>'; input.value=''; return; }
+      }
+    }
+    if(modoCarga==='reemplazar'){
+      var baseActualN=(tipo==='real'?CUENTAS_COBRAR_REAL:CUENTAS_COBRAR_FISCAL).length;
+      var pocos=docs && baseActualN>0 && docs.length<baseActualN*0.5;
+      var rangoCorto=diag && diag.rangoDias!==null && diag.rangoDias<=45;
+      if(pocos || rangoCorto){
+        var okRep=confirm('CUIDADO: este archivo parece PARCIAL'+(diag&&diag.rangoTxt?(' (fechas '+diag.rangoTxt+')'):'')+' y traes '+(docs?docs.length:0)+' documento(s).\n\nCon "Reemplazar" se BORRAN los '+baseActualN+' documentos que hay hoy en la base '+nombreBase+' y solo quedan los de este archivo.\n\nSi es una carga de pocos dias, cancela y usa "Agregar/actualizar".\n\n¿Reemplazar de todas formas?');
+        if(!okRep){ estadoEl.innerHTML='<span style="color:var(--ambar);font-weight:600">Carga cancelada: no se cambio nada. Usa "Agregar/actualizar" para archivos de pocos dias.</span>'; input.value=''; return; }
+      }
+    }
+    if((!docs||docs.length===0) && !(diag && diag.cancelados && diag.cancelados.length && modoCargaPre==='agregar')){ estadoEl.innerHTML='<span style="color:var(--rojo)">No se encontraron documentos con saldo pendiente</span>'; return; }
+    docs=docs||[];
     var diagTxt=diag?(' <span style="color:'+(diag.encabezadoAprox?'var(--ambar)':'#888')+'">(hoja "'+diag.hoja+'", columna NUMERO en la posicion '+(diag.numeroCol+1)+(diag.encabezadoAprox?' — detectada por EMISION/VENCIMIENTO, la celda NUMERO venia dañada en este archivo':'')+' | '+diag.filasSaldoCero+' filas con saldo 0 descartadas, '+diag.filasVacias+' filas vacias, '+diag.filasTotal+' filas de total)</span>'):'';
     var nuevosEstaBase=[], actualizadosEstaBase=[];
     if(modoCarga==='agregar'){
-      var fusionDocs=fusionarDocsExcelConBase(tipo==='real'?CUENTAS_COBRAR_REAL:CUENTAS_COBRAR_FISCAL, docs);
+      var baseAntes=(tipo==='real'?CUENTAS_COBRAR_REAL:CUENTAS_COBRAR_FISCAL);
+      // Si Profit ya muestra el documento con saldo 0 (pagado), la copia vieja
+      // que quedo guardada se quita: antes se quedaba para siempre con su saldo viejo.
+      var canc={}; var cancList=(diag&&diag.cancelados)||[];
+      for(var ci=0;ci<cancList.length;ci++) canc[cancList[ci]]=true;
+      var baseDepurada=[];
+      for(var bi=0;bi<baseAntes.length;bi++){
+        if(canc[baseAntes[bi].numero]){ quitadosCancelados.push(baseAntes[bi].numero); } else { baseDepurada.push(baseAntes[bi]); }
+      }
+      var fusionDocs=fusionarDocsExcelConBase(baseDepurada, docs);
       if(tipo==='real'){ CUENTAS_COBRAR_REAL = fusionDocs.resultado; } else { CUENTAS_COBRAR_FISCAL = fusionDocs.resultado; }
       nuevosEstaBase=fusionDocs.nuevosList;
       actualizadosEstaBase=fusionDocs.actualizadosList;
@@ -16282,10 +16918,16 @@ function _cargarExcelCxCInterno(file, tipo, input){
         // cruce nuevo se mantiene, en vez de perderse en silencio.
         var numerosEnCruceNuevo={};
         for(var i=0;i<docsFinal.length;i++){ numerosEnCruceNuevo[docsFinal[i].numero]=true; }
+        // Documentos que Profit muestra ahora con saldo 0 (pagados del todo): no se
+        // "protegen" aunque tengan abono en la app, porque Profit ya lo reflejo.
+        var cancMerged={};
+        if(modoCarga==='agregar' && diag && diag.cancelados){
+          for(var qi=0;qi<diag.cancelados.length;qi++){ cancMerged[diag.cancelados[qi]]=true; if(tipo==='fiscal') cancMerged[numeroFiscalConSerie(diag.cancelados[qi])]=true; }
+        }
         var protegidosPorDesaparicion=[];
         for(var i=0;i<CUENTAS_COBRAR.length;i++){
           var viejo=CUENTAS_COBRAR[i];
-          if(viejo.abonadoEnApp && !numerosEnCruceNuevo[viejo.numero]){
+          if(viejo.abonadoEnApp && !numerosEnCruceNuevo[viejo.numero] && !cancMerged[viejo.numero]){
             docsFinal.push(viejo);
             protegidosPorDesaparicion.push(viejo.numero);
           }
@@ -16297,13 +16939,14 @@ function _cargarExcelCxCInterno(file, tipo, input){
         }).then(function(){
           var faltaOtra=(tipo==='real' && CUENTAS_COBRAR_FISCAL.length===0) || (tipo==='fiscal' && CUENTAS_COBRAR_REAL.length===0);
           var modoTxt=modoCarga==='agregar'?'Modo: agregado/actualizado sin borrar lo demas. ':'Modo: base reemplazada por completo. ';
+          if(quitadosCancelados.length) modoTxt+=quitadosCancelados.length+' doc. ya pagados en Profit se quitaron ('+quitadosCancelados.slice(0,8).join(', ')+(quitadosCancelados.length>8?'...':'')+'). ';
           estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+modoTxt+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.fiscalSola>0?' | '+fusion.fiscalSola+' fiscal(es) sin nota agregados como documento':'')+(fusion.descAplicadosList.length>0?' | '+fusion.descAplicadosList.length+' diferencia(s) del 35% tomadas del archivo de descuentos':'')+(fusion.descFechaDistintaList.length>0?' | <span style="color:var(--ambar)">'+fusion.descFechaDistintaList.length+' factura(s) con descuento de fecha distinta (no aplicadas)</span>':'')+(fusion.fiscalOmitidosList.length>0?' | <span style="color:var(--ambar)">'+fusion.fiscalOmitidosList.length+' fiscal(es) no agregados por numero repetido</span>':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+(protegidosPorDesaparicion.length>0?' | '+protegidosPorDesaparicion.length+' protegidos de desaparicion temporal (doc. '+protegidosPorDesaparicion.join(', ')+')':'')+(liberadosList.length>0?' | <strong style="color:var(--rojo)">'+liberadosList.length+' documento(s) perdieron su proteccion en esta carga (doc. '+liberadosList.map(function(l){return l.numero;}).join(', ')+') - revisa el detalle</strong>':'')+'</span>'+diagTxt+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'')+
             '<div style="margin-top:8px"><button class="btn btn-s btn-sm" onclick="verDetalleCargaCxC()">Ver detalle de esta carga</button></div>';
           ULTIMA_CARGA_CXC_DETALLE={
             tipo:tipo, nombreBase:nombreBase, modoCarga:modoCarga,
             nuevosEstaBase:nuevosEstaBase, actualizadosEstaBase:actualizadosEstaBase,
             coincidenciasList:fusion.coincidenciasList, docsDiferenciaList:fusion.docsDiferenciaList,
-            fiscalSolaList:fusion.fiscalSolaList, fiscalOmitidosList:fusion.fiscalOmitidosList, descFechaDistintaList:fusion.descFechaDistintaList, mantenidosList:mantenidosList,
+            fiscalSolaList:fusion.fiscalSolaList, fiscalOmitidosList:fusion.fiscalOmitidosList, fiscalAnterioresList:fusion.fiscalAnterioresList, descFechaDistintaList:fusion.descFechaDistintaList, mantenidosList:mantenidosList,
             protegidosPorDesaparicion:protegidosPorDesaparicion, liberadosList:liberadosList
           };
           guardarHistorialCargaCxC(ULTIMA_CARGA_CXC_DETALLE);
@@ -16505,19 +17148,106 @@ function confirmarEliminarDocCxC(numero){
 function ejecutarEliminarDocCxC(){
   if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))){ cerrarModal('mEliminarDocCxC'); return; }
   var numero=docCxCEliminandoNumero;
-  var idx=-1;
-  for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(CUENTAS_COBRAR[i].numero===numero){ idx=i; break; } }
-  if(idx<0){ cerrarModal('mEliminarDocCxC'); toast('No se encontro el documento (puede que ya se haya eliminado)'); return; }
-  CUENTAS_COBRAR.splice(idx,1);
-  db.collection('config').doc('cuentas_cobrar').set({
-    data:JSON.stringify(CUENTAS_COBRAR),
-    actualizado:new Date().toISOString()
-  }).then(function(){
+  var existe=false;
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(CUENTAS_COBRAR[i].numero===numero){ existe=true; break; } }
+  if(!existe){ cerrarModal('mEliminarDocCxC'); toast('No se encontro el documento (puede que ya se haya eliminado)'); return; }
+  quitarDocsCxCCompleto([numero], function(err){
     cerrarModal('mEliminarDocCxC');
+    if(err){ toast('Error eliminando en Firebase, intenta de nuevo'); return; }
     toast('Documento '+numero+' eliminado');
     renderResumenCxC();
-  }).catch(function(){
-    toast('Error eliminando en Firebase, intenta de nuevo');
+  });
+}
+
+// Quita documentos de la lista de Cuentas por Cobrar Y de las bases Real/Fiscal
+// de donde vienen. Antes solo se quitaban de la lista final, y el siguiente
+// cruce los volvia a crear desde las bases.
+function quitarDocsCxCCompleto(numeros, callback){
+  var set={}; for(var i=0;i<numeros.length;i++) set[numeros[i]]=true;
+  var quitarFiscal={}, quitarReal={};
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){
+    var d=CUENTAS_COBRAR[i];
+    if(!set[d.numero]) continue;
+    if(d.origenBase==='fiscal'){
+      quitarFiscal[d.numeroFiscalOriginal||d.numero]=true;
+      if(d.notaRelacionada) quitarReal[d.notaRelacionada]=true;
+    } else if(d.origenBase==='real'){
+      quitarReal[d.numero]=true;
+    }
+  }
+  CUENTAS_COBRAR=CUENTAS_COBRAR.filter(function(d){ return !(set[d.numero] || (d.documentoRelacionado && set[d.documentoRelacionado])); });
+  CUENTAS_COBRAR_FISCAL=CUENTAS_COBRAR_FISCAL.filter(function(d){ return !quitarFiscal[d.numero]; });
+  CUENTAS_COBRAR_REAL=CUENTAS_COBRAR_REAL.filter(function(d){ return !quitarReal[d.numero]; });
+  var ahora=new Date().toISOString();
+  Promise.all([
+    db.collection('config').doc('cuentas_cobrar').set({data:JSON.stringify(CUENTAS_COBRAR),actualizado:ahora}),
+    db.collection('config').doc('cuentas_cobrar_fiscal').set({data:JSON.stringify(CUENTAS_COBRAR_FISCAL),actualizado:ahora}),
+    db.collection('config').doc('cuentas_cobrar_real').set({data:JSON.stringify(CUENTAS_COBRAR_REAL),actualizado:ahora})
+  ]).then(function(){ callback(null); }).catch(function(e){ callback(e||new Error('fb')); });
+}
+
+// ═══ DEPURAR CXC: documentos sospechosos (montos enormes / residuales viejos) ═══
+var DEPCXC={sel:{},lista:[]};
+function _depEsc(t){ return String(t===undefined||t===null?'':t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function abrirDepurarCxC(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))){ toast('Solo 01 y 20'); return; }
+  DEPCXC.sel={};
+  document.getElementById('mDepurarCxC').classList.add('open');
+  renderDepurarCxC();
+}
+function depurarFiltrados(){
+  var modo=(document.getElementById('depCxcModo')||{}).value||'enormes';
+  var out=[];
+  for(var i=0;i<CUENTAS_COBRAR.length;i++){
+    var d=CUENTAS_COBRAR[i];
+    if(d.saldo<=0.009) continue;
+    var dias=diasDesdeEmision(d.emision); if(dias===null) dias=0;
+    var ok=false;
+    if(modo==='enormes') ok=d.saldo>=50000;
+    else if(modo==='residuales') ok=d.saldo<=25 && dias>60;
+    else if(modo==='solofiscal') ok=!!d.soloFiscal && dias>60;
+    else if(modo==='viejos') ok=dias>90;
+    if(ok) out.push({d:d,dias:dias});
+  }
+  out.sort(function(a,b){ return b.d.saldo-a.d.saldo; });
+  return out;
+}
+function renderDepurarCxC(){
+  var lista=depurarFiltrados(); DEPCXC.lista=lista;
+  var el=document.getElementById('depCxcLista'); if(!el) return;
+  if(!lista.length){ el.innerHTML='<div style="color:#aaa;text-align:center;padding:14px;font-size:13px">No hay documentos con este criterio</div>'; depurarActualizarResumen(); return; }
+  var h='';
+  for(var i=0;i<lista.length;i++){
+    var d=lista[i].d;
+    var origen=d.origenBase==='diferencia'?'Dif DCTO.':(d.soloFiscal?'Solo fiscal':(d.tieneCruce?'Cruzado':'Nota'));
+    var cli=d.clienteNombre||d.clienteId;
+    h+='<label style="display:flex;gap:8px;align-items:flex-start;padding:8px 4px;border-bottom:1px solid #eee;font-size:12px;cursor:pointer">'+
+      '<input type="checkbox" data-n="'+_depEsc(d.numero)+'" '+(DEPCXC.sel[d.numero]?'checked ':'')+'onchange="depurarSel(this.dataset.n,this.checked)" style="margin-top:2px">'+
+      '<div style="flex:1;min-width:0"><div style="font-weight:600">Doc.'+_depEsc(d.numero)+' — '+_depEsc(cli)+'</div>'+
+      '<div style="color:#777">'+_depEsc(d.emision)+' · '+lista[i].dias+' dias · VEND '+_depEsc(d.vendedor)+' · '+origen+(d.abonadoEnApp?' · <span style="color:var(--ambar)">⚠ tiene abono en la app</span>':'')+'</div></div>'+
+      '<div style="font-weight:700;color:var(--azul);white-space:nowrap">$'+formatearNumeroConMiles(d.saldo,2)+'</div></label>';
+  }
+  el.innerHTML=h; depurarActualizarResumen();
+}
+function depurarSel(n,v){ if(v) DEPCXC.sel[n]=true; else delete DEPCXC.sel[n]; depurarActualizarResumen(); }
+function depurarToggleTodos(v){ DEPCXC.sel={}; if(v){ for(var i=0;i<DEPCXC.lista.length;i++) DEPCXC.sel[DEPCXC.lista[i].d.numero]=true; } renderDepurarCxC(); }
+function depurarActualizarResumen(){
+  var n=0,tot=0;
+  for(var i=0;i<DEPCXC.lista.length;i++){ if(DEPCXC.sel[DEPCXC.lista[i].d.numero]){ n++; tot+=DEPCXC.lista[i].d.saldo; } }
+  var el=document.getElementById('depCxcResumen'); if(el) el.textContent=DEPCXC.lista.length+' en la lista · '+n+' marcados · $'+formatearNumeroConMiles(tot,2);
+  var b=document.getElementById('depCxcBtn'); if(b) b.disabled=(n===0);
+}
+function depurarQuitar(){
+  if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))) return;
+  var nums=Object.keys(DEPCXC.sel); if(!nums.length) return;
+  var conAbono=0; for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(DEPCXC.sel[CUENTAS_COBRAR[i].numero] && CUENTAS_COBRAR[i].abonadoEnApp) conAbono++; }
+  if(!confirm('Se van a quitar '+nums.length+' documento(s) de Cuentas por Cobrar y de las bases Real/Fiscal.'+(conAbono?('\n\n⚠ '+conAbono+' tienen abonos hechos en la app.'):'')+'\n\nNo se puede deshacer (hay respaldo previo en Respaldos). ¿Continuar?')) return;
+  crearRespaldoCompleto('pre-depurar-cxc', function(){
+    quitarDocsCxCCompleto(nums, function(err){
+      if(err){ toast('Error guardando en Firebase, intenta de nuevo'); return; }
+      toast(nums.length+' documento(s) quitados');
+      DEPCXC.sel={}; renderDepurarCxC(); renderResumenCxC();
+    });
   });
 }
 
@@ -16988,6 +17718,8 @@ function renderListaCxCAdmin(){
   if(!el) return;
   var btnCr=document.getElementById('btnVerCrucesCxC');
   if(btnCr) btnCr.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'inline-block':'none';
+  var btnDep=document.getElementById('btnDepurarCxC');
+  if(btnDep) btnDep.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'inline-block':'none';
   var qEl=document.getElementById('cxcBusqDoc');
   var q=qEl?qEl.value.toLowerCase():'';
   var docs=CUENTAS_COBRAR.filter(function(d){ return Math.abs(d.saldo)>0.009; });
@@ -19812,7 +20544,7 @@ function cerrarSesion(){
 // archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
 // y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
 // el publicado es distinto, la app se recarga sola con la version nueva.
-var APP_VERSION='2026-11-19-0905';
+var APP_VERSION='2026-11-19-1655';
 function revisarVersionApp(){
   try{
     if(typeof fetch!=='function') return;
@@ -19899,7 +20631,7 @@ function iniciarControlInactividad(){
   INACT_TIMER=setInterval(revisarInactividad, 1000);
 }
 
-function cerrarModal(id){document.getElementById(id).classList.remove('open');}
+function cerrarModal(id){document.getElementById(id).classList.remove('open'); if(id==='mDespReporte'){ try{ despRestaurarFiltroTransp(); }catch(e){} }}
 
 function toast(msg){
   var t=document.getElementById('toast');
