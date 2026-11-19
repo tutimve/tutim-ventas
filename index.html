@@ -708,6 +708,7 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-comisiones" onclick="adminTab('comisiones')">Comisiones</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-tasas" onclick="adminTab('tasas')">Tasas BCV</button>
       <button class="btn btn-s btn-sm admin-tab-btn" id="atab-iva" onclick="adminTab('iva')">IVA</button>
+      <button class="btn btn-s btn-sm admin-tab-btn" id="atab-despacho" onclick="adminTab('despacho')">Despacho</button>
     </div>
 
     <!-- TAB INVENTARIO -->
@@ -948,7 +949,17 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
       </div>
       <div class="card" style="background:var(--azul-c)">
         <div class="card-title" style="color:var(--azul)">Cargar bases de Cuentas por Cobrar</div>
-        <p style="font-size:12px;color:#666;margin-bottom:8px">Sube los Excel exportados de Profit (Facturas por Numero, condicion "Sin Cancelar") de cada sistema. La app cruza ambas bases por cliente + fecha exacta, comparando la <strong>base imponible</strong> (neto − IVA). Si coincide, o si la base fiscal es 35% menor a la real, usa el documento <strong>FISCAL</strong> y crea aparte un documento con la diferencia. Los documentos de Real sin pareja se mantienen igual; los de Fiscal sin pareja en Real se descartan. Si un documento ya tenia un pago confirmado y la nueva carga todavia no lo refleja, la app respeta lo ya confirmado.</p>
+        <p style="font-size:12px;color:#666;margin-bottom:8px">Sube los Excel exportados de Profit (Facturas por Numero, condicion "Sin Cancelar") de cada sistema. La app cruza ambas bases por cliente + fecha exacta, comparando la <strong>base imponible</strong> (neto − IVA). Si coincide, o si la base fiscal es 35% menor a la real, usa el documento <strong>FISCAL</strong> y crea aparte un documento con la diferencia. Los documentos de Real sin pareja se mantienen igual; los de Fiscal sin pareja en Real (factura sin nota) se agregan tal como vienen de la fiscal. Si un documento ya tenia un pago confirmado y la nueva carga todavia no lo refleja, la app respeta lo ya confirmado.</p>
+        <div style="background:#fff;border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Serie de las facturas fiscales</div>
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div class="field" style="margin-bottom:0;width:90px"><label>Prefijo</label><input type="text" id="cxcSeriePrefijo" maxlength="4"></div>
+            <div class="field" style="margin-bottom:0;flex:1;min-width:130px"><label>Desde la factura Nº</label><input type="number" id="cxcSerieDesde" min="1"></div>
+            <button class="btn btn-p btn-sm" onclick="guardarCxCSerie()">Guardar</button>
+          </div>
+          <div id="cxcSerieEjemplo" style="font-size:11px;color:#666;margin-top:6px"></div>
+          <div style="font-size:11px;color:#888;margin-top:2px">Evita que una factura y una nota con el mismo numero se confundan. No cambies esto si ya hay facturas con prefijo y abonos aplicados.</div>
+        </div>
         <div class="field">
           <label>Modo de carga</label>
           <select id="cxcModoCarga">
@@ -964,6 +975,15 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
           <input type="file" id="cxcExcelInputFiscal" accept=".xlsx,.xls" onchange="cargarExcelCxC(this,'fiscal')">
         </div>
         <div id="cxcEstadoCarga" style="font-size:13px;margin-top:8px"></div>
+        <div style="background:#fff;border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin-top:10px">
+          <div style="font-size:12px;font-weight:700;margin-bottom:2px">Descuentos del 35% por factura (para facturas sin nota)</div>
+          <div style="font-size:11px;color:#666;margin-bottom:6px">Sube el reporte de Profit "Facturas por cliente % Desc" (NUMERO, EMISION, PORC DESC, MONTO DESC). Al cargar o recalcular las facturas fiscales, la app busca cada una por <strong>numero + fecha de emision</strong>; si trae 35%, crea el documento de diferencia con ese monto, igual que cuando hay nota. Los descuentos distintos a 35% se guardan pero no generan documento. Siempre se agrega/actualiza: nunca borra los descuentos ya guardados.</div>
+          <input type="file" id="cxcExcelInputDesc" accept=".xlsx,.xls" onchange="cargarExcelDescuentos(this)">
+          <div id="cxcEstadoDesc" style="font-size:13px;margin-top:6px"></div>
+          <details style="margin-top:6px"><summary id="cxcDescResumen" style="font-size:12px;cursor:pointer;color:var(--azul)">Descuentos guardados</summary>
+            <div id="cxcDescLista" style="margin-top:6px"></div>
+          </details>
+        </div>
         <button class="btn btn-s btn-sm" style="margin-top:8px" onclick="verHistorialCargasCxC()">Ver historial de cargas</button>
         <button class="btn btn-s btn-sm" style="margin-top:8px" onclick="recalcularCruceCxC()">Recalcular cruce con las bases guardadas</button>
       </div>
@@ -1155,6 +1175,49 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     </div>
 
     <!-- TAB IVA -->
+    <!-- TAB DESPACHO -->
+    <div id="adminTab-despacho" style="display:none">
+      <div class="card">
+        <div class="card-title">Despacho de pedidos</div>
+        <p style="font-size:12px;color:#666;margin-bottom:8px">Elige el rango de fechas, escribe el <strong>Nº de bulto</strong> de cada pedido, genera el reporte por Estado y Ciudad y marca los pedidos como <strong>Despachados</strong>. Los despachados dejan de aparecer en "Pendientes por despachar" y muestran la etiqueta <em>Despachado</em> en el estado del pedido.</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn btn-s btn-sm" onclick="despRango('hoy')">Hoy</button>
+          <button class="btn btn-s btn-sm" onclick="despRango('7')">Ultimos 7 dias</button>
+          <button class="btn btn-s btn-sm" onclick="despRango('mes')">Este mes</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:130px;margin-bottom:8px"><label>Desde</label><input type="date" id="despDesde" onchange="despRender()"></div>
+          <div class="field" style="flex:1;min-width:130px;margin-bottom:8px"><label>Hasta</label><input type="date" id="despHasta" onchange="despRender()"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:150px;margin-bottom:8px"><label>Mostrar</label>
+            <select id="despEstado" onchange="despRender()">
+              <option value="pend">Pendientes por despachar</option>
+              <option value="desp">Despachados</option>
+              <option value="todos">Todos</option>
+            </select></div>
+          <div class="field" style="flex:1;min-width:150px;margin-bottom:8px"><label>Vendedor</label>
+            <select id="despVend" onchange="despRender()"><option value="">Todos</option></select></div>
+        </div>
+        <div class="field" style="margin-bottom:8px"><label>Buscar (cliente, codigo o Nº de bulto)</label><input type="text" id="despBuscar" oninput="despRender()" placeholder="Buscar..."></div>
+        <label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:8px"><input type="checkbox" id="despSoloRecibidos" onchange="despRender()"> Solo pedidos ya recibidos por oficina</label>
+        <button class="btn btn-s btn-sm" onclick="despCargar(true)">Actualizar desde Firebase</button>
+      </div>
+      <div class="card">
+        <div id="despResumen" style="font-size:12px;color:#555;margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn btn-p btn-sm" onclick="despGuardarBultos()" id="despBtnGuardar">Guardar Nº de bulto</button>
+          <button class="btn btn-s btn-sm" onclick="despSelTodosConBulto()">Seleccionar los que tienen bulto</button>
+          <button class="btn btn-s btn-sm" onclick="despQuitarSel()">Quitar seleccion</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn btn-s btn-sm" onclick="despReporte()">Reporte de bultos por Estado y Ciudad</button>
+          <button class="btn btn-p btn-sm" style="background:#1E7B4F" onclick="despDespachar()" id="despBtnDespachar">Marcar despachados</button>
+        </div>
+        <div id="despLista"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando...</div></div>
+      </div>
+    </div>
+
     <div id="adminTab-iva" style="display:none">
       <div class="card">
         <div class="card-title">Tabla de IVA</div>
@@ -2085,6 +2148,16 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 </div>
 
 <!-- MODAL DETALLE DE CARGA DE CUENTAS POR COBRAR -->
+<div class="modal-bg" id="mDespReporte">
+  <div class="modal" style="max-width:640px">
+    <h3>Bultos por Estado y Ciudad</h3>
+    <div id="despReporteContenido" style="max-height:68vh;overflow-y:auto"></div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="despReporteExcel()">Descargar Excel</button>
+      <button class="btn btn-s" onclick="cerrarModal('mDespReporte')">Cerrar</button>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="mDetalleCargaCxC">
   <div class="modal">
     <h3>Detalle de la carga</h3>
@@ -2816,6 +2889,9 @@ var NUEVOS_TODOS_CACHE=[];
 var CUENTAS_COBRAR=[];
 var CUENTAS_COBRAR_REAL=[];
 var CUENTAS_COBRAR_FISCAL=[];
+// Descuentos por factura (reporte de Profit "Facturas por cliente % Desc"):
+// {numero, emision, vencimiento, clienteId, clienteNombre, vendedor, pct, montoDesc}
+var DESCUENTOS_FACTURA=[];
 var PAGOS_COBRANZA=[];
 var PAGOS_COBRANZA_TODOS=[];
 var cobroClienteSeleccionado=null;
@@ -3962,6 +4038,163 @@ function ivaInfoLista(lista){
   r.monto=Math.round(r.monto*100)/100; r.iva=Math.round(r.iva*100)/100; r.total=Math.round(r.total*100)/100;
   return r;
 }
+// ── Serie de las facturas fiscales en Cuentas por Cobrar ──
+// Las notas (base Real) y las facturas (base Fiscal) llevan numeraciones que
+// se van a superponer. Para que un numero identifique un solo documento, las
+// facturas fiscales desde cierto numero se guardan con prefijo (ej. F-1400).
+// Los documentos anteriores a ese numero y todas las notas conservan su
+// numero simple. Se configura en Admin -> Cuentas por Cobrar (config/cxc_serie).
+var CXC_SERIE={prefijoFiscal:'F-', fiscalDesde:1323};
+function cargarCxCSerieConfig(doc){
+  try{
+    if(doc && doc.exists){
+      var d=JSON.parse(doc.data().data||'{}');
+      if(d.prefijoFiscal!==undefined) CXC_SERIE.prefijoFiscal=String(d.prefijoFiscal);
+      if(!isNaN(parseInt(d.fiscalDesde,10))) CXC_SERIE.fiscalDesde=parseInt(d.fiscalDesde,10);
+    }
+  }catch(e){}
+  try{ renderCxCSerieAdmin(); }catch(e){}
+}
+function numeroFiscalConSerie(num){
+  var n=String(num===undefined||num===null?'':num).trim();
+  var pf=CXC_SERIE.prefijoFiscal;
+  if(!pf || n.indexOf(pf)===0) return n;
+  if(/^\d+$/.test(n) && parseInt(n,10)>=CXC_SERIE.fiscalDesde) return pf+n;
+  return n;
+}
+function numeroSinSerie(num){
+  var n=String(num===undefined||num===null?'':num).trim();
+  var pf=CXC_SERIE.prefijoFiscal;
+  return (pf && n.indexOf(pf)===0)?n.slice(pf.length):n;
+}
+function renderCxCSerieAdmin(){
+  var a=document.getElementById('cxcSeriePrefijo'), b=document.getElementById('cxcSerieDesde'), t=document.getElementById('cxcSerieEjemplo');
+  if(a) a.value=CXC_SERIE.prefijoFiscal;
+  if(b) b.value=CXC_SERIE.fiscalDesde;
+  if(t) t.textContent='Ejemplo: la factura '+CXC_SERIE.fiscalDesde+' se guardara como '+CXC_SERIE.prefijoFiscal+CXC_SERIE.fiscalDesde+'; la '+(CXC_SERIE.fiscalDesde-1)+' y las notas conservan su numero.';
+}
+function guardarCxCSerie(){
+  if(!VEND || !(VEND.codigo==='01'||VEND.codigo==='20')){ toast('Solo 01 y 20'); return; }
+  var pf=(document.getElementById('cxcSeriePrefijo').value||'').trim();
+  var desde=parseInt(document.getElementById('cxcSerieDesde').value,10);
+  if(!pf){ toast('Escribe el prefijo (ej. F-)'); return; }
+  if(isNaN(desde)||desde<1){ toast('Escribe un numero de factura valido'); return; }
+  var afectados=0;
+  if(desde<CXC_SERIE.fiscalDesde || pf!==CXC_SERIE.prefijoFiscal){
+    for(var i=0;i<CUENTAS_COBRAR.length;i++){ var d=CUENTAS_COBRAR[i]; if(d.origenBase==='fiscal' && (d.abonadoEnApp||d.numero.indexOf(CXC_SERIE.prefijoFiscal)===0)) afectados++; }
+  }
+  var msg='Las facturas fiscales desde el Nº '+desde+' se guardaran como '+pf+desde+'... Aplica a las proximas cargas (o al recalcular el cruce).';
+  if(afectados>0) msg+='\n\nATENCION: hay '+afectados+' documento(s) fiscales con prefijo o con abonos hechos en la app. Cambiar el prefijo o bajar el numero los renombraria y esos abonos podrian perderse. Continuar solo si estas seguro.';
+  if(!confirm(msg)) return;
+  db.collection('config').doc('cxc_serie').set({
+    data:JSON.stringify({prefijoFiscal:pf, fiscalDesde:desde}), actualizado:new Date().toISOString(), por:VEND.codigo
+  }).then(function(){
+    CXC_SERIE={prefijoFiscal:pf, fiscalDesde:desde};
+    renderCxCSerieAdmin();
+    toast('Serie fiscal guardada');
+  }).catch(function(){ toast('Error guardando en Firebase'); });
+}
+// ── Descuentos por factura (archivo de Profit "Facturas por cliente % Desc") ──
+// Cuando una factura fiscal no tiene nota (contrapartida) en la base Real, el
+// 35% pendiente se toma de este archivo: se busca la factura por NUMERO y
+// FECHA DE EMISION y, si el descuento es del 35%, se genera el mismo
+// documento de diferencia que se arma con la nota (numero de la factura + ".").
+var DESC_PCT_OBJETIVO=0.35;
+function numeroDesdeCelda(v){
+  if(typeof v==='number') return v;
+  var s=String(v===undefined||v===null?'':v).replace(/[\s$%]/g,'');
+  if(!s) return NaN;
+  var c=s.lastIndexOf(','), p=s.lastIndexOf('.');
+  if(c>=0 && p>=0){ if(c>p) s=s.replace(/\./g,'').replace(',','.'); else s=s.replace(/,/g,''); }
+  else if(c>=0){ s=s.replace(',','.'); }
+  return parseFloat(s);
+}
+function normalizarPctDesc(v){
+  var n=numeroDesdeCelda(v);
+  if(isNaN(n)) return 0;
+  if(n>1) n=n/100;
+  return Math.round(n*10000)/10000;
+}
+function esDescuentoObjetivo(e){ return !!e && Math.abs((e.pct||0)-DESC_PCT_OBJETIVO)<=0.005; }
+function normNumeroDesc(n){
+  var s=numeroSinSerie(n);
+  return /^\d+$/.test(s)?String(parseInt(s,10)):s;
+}
+function parsearExcelDescuentos(file, callback){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      var rows=null, headerIdx=-1, cols=null, hojaUsada=null;
+      function norm(x){ return String(x===undefined||x===null?'':x).toUpperCase().replace(/[ÁÀ]/g,'A').replace(/É/g,'E').replace(/Í/g,'I').replace(/Ó/g,'O').replace(/Ú/g,'U').replace(/\./g,' ').replace(/\s+/g,' ').trim(); }
+      for(var sIdx=0;sIdx<wb.SheetNames.length && headerIdx===-1;sIdx++){
+        var rowsHoja=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[sIdx]],{header:1,defval:null});
+        for(var i=0;i<rowsHoja.length && headerIdx===-1;i++){
+          if(!rowsHoja[i]) continue;
+          var m={};
+          for(var c=0;c<rowsHoja[i].length;c++){
+            var h=norm(rowsHoja[i][c]);
+            if(!h) continue;
+            if(h==='NUMERO' || h==='NRO' || h==='NUM') m.numero=c;
+            else if(h==='EMISION') m.emision=c;
+            else if(h==='VENCIMIENTO') m.vencimiento=c;
+            else if(h==='CODIGO CLIENTE' || h==='COD CLIENTE' || h==='CODIGO') m.clienteId=c;
+            else if(h==='CLIENTE') m.cliente=c;
+            else if(h==='VENDEDOR') m.vendedor=c;
+            else if(/^PORC/.test(h) || h==='% DESC' || h==='PORCENTAJE') m.pct=c;
+            else if(/^MONTO DESC/.test(h) || h==='DESCUENTO') m.monto=c;
+          }
+          if(m.numero!==undefined && m.emision!==undefined && m.pct!==undefined && m.monto!==undefined){ headerIdx=i; cols=m; rows=rowsHoja; hojaUsada=wb.SheetNames[sIdx]; }
+        }
+      }
+      if(headerIdx===-1){
+        callback(null,'No se encontraron las columnas NUMERO, EMISION, PORC DESC y MONTO DESC en ninguna hoja ('+wb.SheetNames.join(', ')+'). Verifica que sea el reporte "Facturas por cliente % Desc" de Profit.');
+        return;
+      }
+      var docs=[], vacias=0, totales=0, invalidas=0;
+      for(var i=headerIdx+1;i<rows.length;i++){
+        var r=rows[i];
+        if(!r || r[cols.numero]===null || r[cols.numero]===undefined || String(r[cols.numero]).trim()===''){ vacias++; continue; }
+        if(String(r[cols.numero]).trim().toLowerCase().indexOf('total')>=0){ totales++; continue; }
+        var monto=numeroDesdeCelda(r[cols.monto]);
+        var emision=formatearFechaExcel(r[cols.emision]);
+        if(isNaN(monto) || !emision){ invalidas++; continue; }
+        docs.push({
+          numero:String(r[cols.numero]).trim(),
+          emision:emision,
+          vencimiento:cols.vencimiento!==undefined?formatearFechaExcel(r[cols.vencimiento]):'',
+          clienteId:cols.clienteId!==undefined?String(r[cols.clienteId]===null||r[cols.clienteId]===undefined?'':r[cols.clienteId]).trim():'',
+          clienteNombre:cols.cliente!==undefined?String(r[cols.cliente]||'').trim():'',
+          vendedor:cols.vendedor!==undefined?String(r[cols.vendedor]===null||r[cols.vendedor]===undefined?'':r[cols.vendedor]).trim():'',
+          pct:normalizarPctDesc(r[cols.pct]),
+          montoDesc:Math.round(monto*100)/100
+        });
+      }
+      callback(docs,null,{hoja:hojaUsada, vacias:vacias, totales:totales, invalidas:invalidas});
+    }catch(err){ callback(null,'Error leyendo el archivo: '+err.message); }
+  };
+  reader.onerror=function(){ callback(null,'No se pudo leer el archivo'); };
+  reader.readAsArrayBuffer(file);
+}
+// Une los descuentos recien leidos con los ya guardados (misma factura =
+// mismo numero + misma emision se actualiza; los demas se conservan).
+function fusionarDescuentosConBase(base, nuevos){
+  var resultado=base.slice(), idx={};
+  for(var i=0;i<resultado.length;i++) idx[normNumeroDesc(resultado[i].numero)+'|'+resultado[i].emision]=i;
+  var nuevosList=[], actualizadosList=[];
+  for(var i=0;i<nuevos.length;i++){
+    var n=nuevos[i], k=normNumeroDesc(n.numero)+'|'+n.emision;
+    if(idx[k]!==undefined){ resultado[idx[k]]=n; actualizadosList.push(n); }
+    else { idx[k]=resultado.length; resultado.push(n); nuevosList.push(n); }
+  }
+  return {resultado:resultado, nuevosList:nuevosList, actualizadosList:actualizadosList};
+}
+function cargarDescuentosConfig(doc){
+  try{
+    if(doc && doc.exists){ DESCUENTOS_FACTURA=JSON.parse(doc.data().data||'[]'); }
+  }catch(e){}
+  try{ renderDescuentosAdmin(); }catch(e){}
+}
 function cargarIvaConfig(doc){
   try{
     if(doc && doc.exists){
@@ -4545,7 +4778,9 @@ function renderPedidoCard(p){
     itemsTxt+=(j>0?', ':'')+p.items[ids[j]]+' bto '+(prod?prod.nombre:ids[j]);
   }
   var enviadoBadge='';
-  if(p.recibidoOficina){
+  if(p.despachado){
+    enviadoBadge=badgeDespachado(p,'font-size:10px');
+  } else if(p.recibidoOficina){
     enviadoBadge='<span class="tag tag-a" style="font-size:10px;background:#1B2A6B;color:#fff">Recibido x Oficina '+p.fechaRecibidoOficina+'</span>';
   } else if(p.enviado){
     enviadoBadge='<span class="tag tag-v" style="font-size:10px">Enviado '+p.fechaEnvio+'</span>';
@@ -4555,7 +4790,7 @@ function renderPedidoCard(p){
     enviadoBadge='<span class="tag" style="background:#FFF3CD;color:#856404;font-size:10px">Pendiente</span>';
   }
   var anulado=p.anulado;
-  var cardBorder=anulado?'var(--rojo)':(p.recibidoOficina?'var(--azul)':(p.enviado?'var(--verde)':'var(--borde)'));
+  var cardBorder=anulado?'var(--rojo)':(p.despachado?'#1E7B4F':(p.recibidoOficina?'var(--azul)':(p.enviado?'var(--verde)':'var(--borde)')));
   var cardOpacity=anulado?'opacity:.55':'';
   var puedeEditarSiempre=(VEND && (VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20'));
   var btnEditar=(p.recibidoOficina && !puedeEditarSiempre)
@@ -4648,7 +4883,8 @@ function verDetallePedidoLista(id){
   var alertaHtml=esNuevo(cli)?'<div class="alerta-nvo">CLIENTE NUEVO - crear en Profit antes de facturar</div>':'';
   var estadoTxt=ped.anulado
     ?'<span class="tag tag-r">Anulado</span>'
-    :(ped.recibidoOficina?'<span class="tag tag-a" style="background:#1B2A6B;color:#fff">Recibido x Oficina '+(ped.fechaRecibidoOficina||'')+'</span>'
+    :(ped.despachado?badgeDespachado(ped,'')
+    :ped.recibidoOficina?'<span class="tag tag-a" style="background:#1B2A6B;color:#fff">Recibido x Oficina '+(ped.fechaRecibidoOficina||'')+'</span>'
       :(ped.enviado?'<span class="tag tag-v">Enviado '+(ped.fechaEnvio||'')+'</span>'
         :'<span class="tag" style="background:#FFF3CD;color:#856404">Pendiente'+(ped.fueModificadoDespuesRecibido?' (por modificacion)':'')+'</span>'));
 
@@ -6813,6 +7049,15 @@ function guardarEdicion(){
         delete ped.fechaRecibidoOficina;
         delete ped.recibidoPor;
         ped.fueModificadoDespuesRecibido = true;
+        ped.fechaModificacion = new Date().toLocaleString('es-VE');
+        ped.modificadoPor = VEND.nombre+' (VEND '+VEND.codigo+')';
+      }
+      // Un pedido ya despachado que se modifica NO vuelve a pendientes de
+      // despacho (evita despacharlo dos veces); queda marcado para que la
+      // oficina note que cambio despues de salir.
+      if(ped.despachado){
+        ped.modificadoDespuesDespacho = true;
+        ped.despachoTs = new Date().toISOString();
         ped.fechaModificacion = new Date().toLocaleString('es-VE');
         ped.modificadoPor = VEND.nombre+' (VEND '+VEND.codigo+')';
       }
@@ -9775,7 +10020,8 @@ function verDetallePedidoRpt(pedId){
   itemsHtml+='</table></div>';
   var formaPagoTxt={'01':'Contado','05':'Prepagado','02':'Credito 7 dias','03':'Credito 15 dias','04':'Credito 30 dias'}[p.formaPago]||p.formaPago||'';
   var factTxt=({'fiscal':'100% Fiscal','nota':'Solo N.Entrega','mixto':'50% Fiscal / 50% N.Entrega'}[p.tipoFact])||p.tipoFactL||(typeof FF_LABELS!=='undefined'&&FF_LABELS[p.tipoFact])||p.tipoFact||'';
-  var estadoTxt=p.anulado?'<span class="tag tag-r">Anulado</span>':(p.recibidoOficina?'<span class="tag tag-v">Recibido x Oficina</span>':(p.enviado?'<span class="tag tag-a">Enviado</span>':'<span class="tag" style="background:#FFF3CD;color:#856404">Pendiente'+(p.fueModificadoDespuesRecibido?' (por modificacion)':'')+'</span>'));
+  var estadoTxt=p.anulado?'<span class="tag tag-r">Anulado</span>':(p.despachado?badgeDespachado(p,'')
+    :p.recibidoOficina?'<span class="tag tag-v">Recibido x Oficina</span>':(p.enviado?'<span class="tag tag-a">Enviado</span>':'<span class="tag" style="background:#FFF3CD;color:#856404">Pendiente'+(p.fueModificadoDespuesRecibido?' (por modificacion)':'')+'</span>'));
   var html=
     '<div style="margin-bottom:10px">'+
       '<strong style="font-size:15px">'+p.cliente.nombre+'</strong> '+estadoTxt+
@@ -10071,6 +10317,347 @@ function guardarLimiteDeudaPedidos(){
   }).catch(function(){ toast('Error guardando en Firebase'); });
 }
 
+// ═══ DESPACHO DE PEDIDOS (solo 00 / 01 / 20) ═══
+// Datos que se guardan dentro del propio pedido (en el documento de su
+// vendedor): nroBulto, despachado, fechaDespacho, horaDespacho,
+// despachadoPor, despachoTs (marca de tiempo del ultimo cambio) y
+// modificadoDespuesDespacho.
+var DESP={peds:[], dirty:{}, sel:{}};
+function despPuede(){ return !!VEND && (VEND.codigo==='00'||VEND.codigo==='01'||VEND.codigo==='20'); }
+function despKey(p){ return String(p.vendedor||'')+'|'+String(p.id); }
+function despISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function despVal(id){ var e=document.getElementById(id); return e?e.value:''; }
+function badgeDespachado(p, extraStyle){
+  return '<span class="tag" style="'+(extraStyle?extraStyle+';':'')+'background:#1E7B4F;color:#fff">Despachado '+escUbic(p.fechaDespacho||'')+(p.nroBulto?' · Bulto '+escUbic(p.nroBulto):'')+'</span>';
+}
+function despRango(tipo){
+  var h=new Date(), d=new Date();
+  if(tipo==='7') d.setDate(d.getDate()-6);
+  else if(tipo==='mes') d=new Date(h.getFullYear(), h.getMonth(), 1);
+  document.getElementById('despDesde').value=despISO(d);
+  document.getElementById('despHasta').value=despISO(h);
+  despRender();
+}
+function despInit(){
+  if(!despPuede()) return;
+  var d=document.getElementById('despDesde'), h=document.getElementById('despHasta');
+  if(d && !d.value){ var f=new Date(); f.setDate(f.getDate()-6); d.value=despISO(f); }
+  if(h && !h.value) h.value=despISO(new Date());
+  var sel=document.getElementById('despVend');
+  if(sel && sel.options.length<=1){
+    for(var i=0;i<VENDEDORES.length;i++){
+      var o=document.createElement('option'); o.value=VENDEDORES[i].id; o.textContent='VEND '+VENDEDORES[i].id+' - '+(VENDEDORES[i].nombre||'');
+      sel.appendChild(o);
+    }
+  }
+  // Si hay Nº de bulto escritos sin guardar, no se recarga para no perderlos
+  if(Object.keys(DESP.dirty).length>0){ despRender(); return; }
+  despCargar(false);
+}
+function despCargar(manual){
+  if(manual && Object.keys(DESP.dirty).length>0 && !confirm('Hay Nº de bulto sin guardar. Si actualizas se perderan. Continuar?')) return;
+  var lista=document.getElementById('despLista');
+  if(lista) lista.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando pedidos de todos los vendedores...</div>';
+  cargarTodosFirebase(function(todos){
+    DESP.peds=todos||[]; DESP.dirty={}; DESP.sel={};
+    cargarUbicaciones(function(){ despRender(); });
+  });
+}
+function despUbic(p, mapa){
+  var cli=(mapa&&mapa[p.cliente.id])||p.cliente;
+  var u=ubicacionDeCliente(cli);
+  return {estado:u.estado||UBIC_SIN, ciudad:u.ciudad||(u.estado?'(Sin ciudad)':UBIC_SIN)};
+}
+function despBultoEfectivo(p){
+  var k=despKey(p);
+  return (DESP.dirty[k]!==undefined)?DESP.dirty[k]:(p.nroBulto||'');
+}
+function despFiltrados(){
+  var desde=despVal('despDesde'), hasta=despVal('despHasta'), vend=despVal('despVend'), est=despVal('despEstado')||'pend';
+  var q=despVal('despBuscar').trim().toLowerCase();
+  var soloRec=!!(document.getElementById('despSoloRecibidos')&&document.getElementById('despSoloRecibidos').checked);
+  return DESP.peds.filter(function(p){
+    if(p.anulado) return false;
+    var f=fechaToISO(p.fecha||'');
+    if(desde && f<desde) return false;
+    if(hasta && f>hasta) return false;
+    if(vend && p.vendedor!==vend) return false;
+    if(est==='pend' && p.despachado) return false;
+    if(est==='desp' && !p.despachado) return false;
+    if(soloRec && !p.recibidoOficina && !p.despachado) return false;
+    if(q){
+      var txt=((p.cliente&&p.cliente.nombre)||'')+' '+((p.cliente&&p.cliente.id)||'')+' '+despBultoEfectivo(p);
+      if(txt.toLowerCase().indexOf(q)<0) return false;
+    }
+    return true;
+  });
+}
+function despCmpEstado(a,b){ if(a===UBIC_SIN) return 1; if(b===UBIC_SIN) return -1; return a.localeCompare(b,'es'); }
+function despRender(){
+  var cont=document.getElementById('despLista'); if(!cont) return;
+  var lista=despFiltrados();
+  var mapa=mapaClientesUbic();
+  var prodPorId={}; PRODUCTOS.forEach(function(x){ prodPorId[x.id]=x; });
+  var items=lista.map(function(p){ var u=despUbic(p,mapa); return {p:p, est:u.estado, ciu:u.ciudad}; });
+  items.sort(function(a,b){
+    return despCmpEstado(a.est,b.est) || a.ciu.localeCompare(b.ciu,'es') ||
+      (fechaToISO(a.p.fecha||'')<fechaToISO(b.p.fecha||'')?-1:(fechaToISO(a.p.fecha||'')>fechaToISO(b.p.fecha||'')?1:0)) ||
+      String((a.p.cliente&&a.p.cliente.nombre)||'').localeCompare(String((b.p.cliente&&b.p.cliente.nombre)||''),'es');
+  });
+  var cntE={}, cntC={};
+  items.forEach(function(it){ cntE[it.est]=(cntE[it.est]||0)+1; var kc=it.est+'|'+it.ciu; cntC[kc]=(cntC[kc]||0)+1; });
+  var html='', estAct=null, ciuAct=null;
+  items.forEach(function(it){
+    if(it.est!==estAct){
+      estAct=it.est; ciuAct=null;
+      html+='<div style="background:var(--azul);color:#fff;font-weight:700;font-size:13px;padding:6px 10px;border-radius:6px;margin:12px 0 4px">'+escUbic(it.est)+' <span style="font-weight:400;opacity:.85">('+cntE[it.est]+' pedido'+(cntE[it.est]!==1?'s':'')+')</span></div>';
+    }
+    if(it.ciu!==ciuAct){
+      ciuAct=it.ciu;
+      html+='<div style="font-size:12px;font-weight:700;color:var(--azul);padding:4px 2px;border-bottom:1px solid var(--borde);margin-top:6px">'+escUbic(it.ciu)+' <span style="font-weight:400;color:#888">('+cntC[it.est+'|'+it.ciu]+')</span></div>';
+    }
+    html+=despFila(it.p, prodPorId);
+  });
+  if(!items.length) html='<div style="color:#aaa;font-size:13px;text-align:center;padding:14px">No hay pedidos con este filtro</div>';
+  cont.innerHTML=html;
+  despActualizarBarra(lista);
+}
+function despFila(p, prodPorId){
+  var k=despKey(p), ka=escUbic(k);
+  var esDesp=!!p.despachado;
+  var itemsTxt=Object.keys(p.items||{}).filter(function(id){ return p.items[id]; }).map(function(id){
+    var pr=prodPorId[id]; return p.items[id]+' bto '+(pr?pr.nombre:id);
+  }).join(', ');
+  var tag;
+  if(esDesp) tag=badgeDespachado(p,'font-size:10px');
+  else if(p.recibidoOficina) tag='<span class="tag" style="font-size:10px;background:#1B2A6B;color:#fff">Recibido x Oficina</span>';
+  else tag='<span class="tag" style="font-size:10px;background:#FFF3CD;color:#856404">Pendiente</span>';
+  if(p.modificadoDespuesDespacho) tag+=' <span class="tag" style="font-size:10px;background:#FCE4D6;color:#9C4221;font-weight:700">Modificado despues de despachar</span>';
+  var ctrl;
+  if(esDesp){
+    ctrl='<button onclick="despDeshacer(this.getAttribute(&quot;data-k&quot;))" data-k="'+ka+'" style="background:none;border:1px solid var(--rojo);color:var(--rojo);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer">Deshacer</button>';
+  } else {
+    ctrl='<input type="text" data-k="'+ka+'" value="'+escUbic(despBultoEfectivo(p))+'" maxlength="30" placeholder="Nº bulto" oninput="despBultoCambio(this)" style="width:96px;padding:5px 6px;border:1px solid var(--borde);border-radius:6px;font-size:13px">';
+  }
+  return '<div style="padding:8px 2px;border-bottom:1px solid var(--borde)">'+
+    '<div style="display:flex;gap:8px;align-items:flex-start">'+
+      '<input type="checkbox" data-k="'+ka+'" '+(DESP.sel[k]&&!esDesp?'checked':'')+(esDesp?' disabled':'')+' onchange="despToggleSel(this)" style="width:17px;height:17px;margin-top:2px;flex-shrink:0">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="display:flex;justify-content:space-between;gap:6px"><strong style="font-size:13px">'+escUbic((p.cliente&&p.cliente.nombre)||'')+'</strong><span style="font-size:11px;color:#888;white-space:nowrap">'+escUbic(p.fecha||'')+'</span></div>'+
+        '<div style="font-size:11px;color:#666">Cod '+escUbic((p.cliente&&p.cliente.id)||'')+' · VEND '+escUbic(p.vendedor||'')+' · '+(p.bultos||0)+' bultos · $'+formatearNumeroConMiles(p.monto||0,2)+'</div>'+
+        '<div style="font-size:11px;color:#888;margin:2px 0">'+escUbic(itemsTxt)+'</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px"><div>'+tag+'</div><div>'+ctrl+'</div></div>'+
+      '</div>'+
+    '</div></div>';
+}
+function despBultoCambio(el){
+  var k=el.getAttribute('data-k');
+  var p=DESP.peds.find(function(x){ return despKey(x)===k; });
+  var v=(el.value||'').trim();
+  if(p && v===(p.nroBulto||'')) delete DESP.dirty[k]; else DESP.dirty[k]=v;
+  despActualizarBarra();
+}
+function despToggleSel(el){
+  var k=el.getAttribute('data-k');
+  if(el.checked) DESP.sel[k]=true; else delete DESP.sel[k];
+  despActualizarBarra();
+}
+function despSelTodosConBulto(){
+  despFiltrados().forEach(function(p){ if(!p.despachado && despBultoEfectivo(p)) DESP.sel[despKey(p)]=true; });
+  despRender();
+}
+function despQuitarSel(){ DESP.sel={}; despRender(); }
+function despSeleccionados(){
+  var vis={}; despFiltrados().forEach(function(p){ vis[despKey(p)]=p; });
+  return Object.keys(DESP.sel).filter(function(k){ return vis[k] && !vis[k].despachado; }).map(function(k){ return vis[k]; });
+}
+function despActualizarBarra(lista){
+  lista=lista||despFiltrados();
+  var conBulto=0, desp=0, btos=0, monto=0;
+  lista.forEach(function(p){ if(p.despachado) desp++; if(despBultoEfectivo(p)) conBulto++; btos+=p.bultos||0; monto+=p.monto||0; });
+  var nSel=despSeleccionados().length, nDirty=Object.keys(DESP.dirty).length;
+  var r=document.getElementById('despResumen');
+  if(r) r.innerHTML='<strong>'+lista.length+'</strong> pedido(s) · '+btos+' bultos de producto · $'+formatearNumeroConMiles(monto,2)+' · '+conBulto+' con Nº de bulto · '+desp+' despachado(s)'+
+    (nDirty?' · <span style="color:var(--ambar);font-weight:700">'+nDirty+' Nº de bulto sin guardar</span>':'');
+  var bg=document.getElementById('despBtnGuardar'); if(bg) bg.textContent='Guardar Nº de bulto'+(nDirty?' ('+nDirty+')':'');
+  var bd=document.getElementById('despBtnDespachar'); if(bd) bd.textContent='Marcar despachados'+(nSel?' ('+nSel+')':'');
+}
+// Aplica cambios a los pedidos en el documento de su vendedor. changes:
+// [{p:pedido, set:{campo:valor}, del:[campos]}]. Lee cada documento justo
+// antes de escribir, para no pisar cambios recientes de otros campos.
+function despAsignar(obj, c){
+  Object.keys(c.set||{}).forEach(function(f){ obj[f]=c.set[f]; });
+  (c.del||[]).forEach(function(f){ delete obj[f]; });
+}
+function despAplicarCambios(changes, cb){
+  var porVend={};
+  changes.forEach(function(c){ var v=c.p.vendedor; if(!porVend[v]) porVend[v]=[]; porVend[v].push(c); });
+  var vids=Object.keys(porVend), pend=vids.length, errores=[], okKeys=[];
+  if(!pend){ cb(okKeys,errores); return; }
+  vids.forEach(function(vid){
+    var ref=db.collection('vendedores').doc(vid);
+    ref.get().then(function(doc){
+      if(!doc.exists) throw new Error('no existe el documento del vendedor');
+      var arr=[];
+      try{ arr=doc.data().pedidos?JSON.parse(doc.data().pedidos):[]; }catch(e){ throw new Error('no se pudieron leer sus pedidos'); }
+      var aplicados=[];
+      porVend[vid].forEach(function(c){
+        var found=null;
+        for(var i=0;i<arr.length;i++){ if(String(arr[i].id)===String(c.p.id) && (!arr[i].vendedor||arr[i].vendedor===vid)){ found=arr[i]; break; } }
+        if(!found){ errores.push('Pedido '+c.p.id+' (VEND '+vid+') no se encontro'); return; }
+        despAsignar(found,c); aplicados.push(c);
+      });
+      if(!aplicados.length) return null;
+      return ref.set({pedidos:JSON.stringify(arr), ultimaActualizacion:new Date().toISOString()},{merge:true}).then(function(){
+        aplicados.forEach(function(c){
+          despAsignar(c.p,c);
+          // mantener al dia las otras listas en memoria (Pedidos / Reportes)
+          [PEDIDOS, RPT_PEDIDOS].forEach(function(L){
+            for(var i=0;i<L.length;i++){ if(L[i]!==c.p && String(L[i].id)===String(c.p.id) && L[i].vendedor===c.p.vendedor){ despAsignar(L[i],c); } }
+          });
+          okKeys.push(despKey(c.p));
+        });
+      });
+    }).catch(function(e){ errores.push('VEND '+vid+': '+((e&&e.message)||'error al guardar')); }).then(function(){
+      pend--; if(pend===0) cb(okKeys,errores);
+    });
+  });
+}
+function despCambioBulto(p, valor, ts){
+  var c={p:p, set:{despachoTs:ts}, del:[]};
+  if(valor) c.set.nroBulto=valor; else c.del.push('nroBulto');
+  return c;
+}
+function despGuardarBultos(){
+  var keys=Object.keys(DESP.dirty);
+  if(!keys.length){ toast('No hay Nº de bulto nuevos para guardar'); return; }
+  var ts=new Date().toISOString();
+  var changes=[];
+  keys.forEach(function(k){
+    var p=DESP.peds.find(function(x){ return despKey(x)===k; });
+    if(p) changes.push(despCambioBulto(p, DESP.dirty[k], ts));
+  });
+  var btn=document.getElementById('despBtnGuardar'); if(btn) btn.disabled=true;
+  despAplicarCambios(changes,function(ok,errores){
+    if(btn) btn.disabled=false;
+    ok.forEach(function(k){ delete DESP.dirty[k]; });
+    despRender();
+    toast(errores.length?('Guardados '+ok.length+'. Error: '+errores.join(' | ')):('Nº de bulto guardado en '+ok.length+' pedido(s)'));
+  });
+}
+function despDespachar(){
+  var sel=despSeleccionados();
+  if(!sel.length){ toast('Selecciona los pedidos que salieron'); return; }
+  var sinBulto=sel.filter(function(p){ return !despBultoEfectivo(p); }).length;
+  var msg='Marcar '+sel.length+' pedido(s) como DESPACHADOS? Dejaran de salir en "Pendientes por despachar".';
+  if(sinBulto) msg+='\n\nATENCION: '+sinBulto+' de ellos no tiene Nº de bulto.';
+  if(!confirm(msg)) return;
+  var ahora=new Date(), ts=ahora.toISOString();
+  var fecha=String(ahora.getDate()).padStart(2,'0')+'/'+String(ahora.getMonth()+1).padStart(2,'0')+'/'+ahora.getFullYear();
+  var hora=String(ahora.getHours()).padStart(2,'0')+':'+String(ahora.getMinutes()).padStart(2,'0');
+  var quien=VEND.nombre+' (VEND '+VEND.codigo+')';
+  var changes=sel.map(function(p){
+    var bulto=despBultoEfectivo(p);
+    var c={p:p, set:{despachado:true, fechaDespacho:fecha, horaDespacho:hora, despachadoPor:quien, despachoTs:ts}, del:['modificadoDespuesDespacho']};
+    if(bulto) c.set.nroBulto=bulto; else c.del.push('nroBulto');
+    return c;
+  });
+  var btn=document.getElementById('despBtnDespachar'); if(btn) btn.disabled=true;
+  despAplicarCambios(changes,function(ok,errores){
+    if(btn) btn.disabled=false;
+    ok.forEach(function(k){ delete DESP.dirty[k]; delete DESP.sel[k]; });
+    despRender();
+    toast(errores.length?('Despachados '+ok.length+'. Error: '+errores.join(' | ')):(ok.length+' pedido(s) despachado(s)'));
+  });
+}
+function despDeshacer(k){
+  var p=DESP.peds.find(function(x){ return despKey(x)===k; });
+  if(!p) return;
+  if(!confirm('Deshacer el despacho de "'+((p.cliente&&p.cliente.nombre)||'')+'"? Volvera a "Pendientes por despachar".')) return;
+  despAplicarCambios([{p:p, set:{despachado:false, despachoTs:new Date().toISOString()}, del:['fechaDespacho','horaDespacho','despachadoPor','modificadoDespuesDespacho']}],function(ok,errores){
+    despRender();
+    toast(errores.length?('Error: '+errores.join(' | ')):'Despacho deshecho');
+  });
+}
+// Reporte: pedidos con Nº de bulto (segun los filtros activos), por Estado y Ciudad
+function despTokensBulto(s){
+  var out=[];
+  String(s||'').split(/[,;\s]+/).forEach(function(t){
+    t=t.trim(); if(!t) return;
+    var m=/^(\d+)\s*-\s*(\d+)$/.exec(t);
+    if(m){ var a=parseInt(m[1],10), b=parseInt(m[2],10); if(b>=a && b-a<=200){ for(var i=a;i<=b;i++) out.push(String(i)); return; } }
+    out.push(t.toUpperCase());
+  });
+  return out;
+}
+function despDatosReporte(){
+  var lista=despFiltrados().filter(function(p){ return p.nroBulto; });
+  var mapa=mapaClientesUbic(), estados={};
+  function nuevo(){ return {peds:[], bultos:{}, btosProd:0, monto:0}; }
+  function sumar(x,p){
+    x.peds.push(p); x.btosProd+=p.bultos||0; x.monto+=p.monto||0;
+    despTokensBulto(p.nroBulto).forEach(function(t){ x.bultos[t]=true; });
+  }
+  var tot=nuevo();
+  lista.forEach(function(p){
+    var u=despUbic(p,mapa);
+    var E=estados[u.estado]||(estados[u.estado]=Object.assign(nuevo(),{nombre:u.estado,ciudades:{}}));
+    var C=E.ciudades[u.ciudad]||(E.ciudades[u.ciudad]=Object.assign(nuevo(),{nombre:u.ciudad}));
+    sumar(E,p); sumar(C,p); sumar(tot,p);
+  });
+  var cmpB=function(a,b){ return String(a.nroBulto).localeCompare(String(b.nroBulto),'es',{numeric:true}) || String((a.cliente&&a.cliente.nombre)||'').localeCompare(String((b.cliente&&b.cliente.nombre)||''),'es'); };
+  var lst=Object.keys(estados).sort(despCmpEstado).map(function(k){
+    var E=estados[k];
+    E.lstCiudades=Object.keys(E.ciudades).sort(function(a,b){ return a.localeCompare(b,'es'); }).map(function(c){ var C=E.ciudades[c]; C.peds.sort(cmpB); return C; });
+    return E;
+  });
+  return {estados:lst, tot:tot, desde:despVal('despDesde'), hasta:despVal('despHasta'),
+    filtro:({pend:'Pendientes por despachar',desp:'Despachados',todos:'Todos'})[despVal('despEstado')||'pend']};
+}
+function despListaBultos(x){ return Object.keys(x.bultos).sort(function(a,b){ return a.localeCompare(b,'es',{numeric:true}); }); }
+function despReporte(){
+  if(Object.keys(DESP.dirty).length){ toast('Guarda primero los Nº de bulto'); return; }
+  var R=despDatosReporte();
+  if(!R.tot.peds.length){ toast('No hay pedidos con Nº de bulto en este filtro'); return; }
+  var html='<div style="font-size:12px;color:#888;margin-bottom:8px">Periodo: '+escUbic(R.desde||'inicio')+' al '+escUbic(R.hasta||'hoy')+' — '+escUbic(R.filtro)+'</div>'+
+    '<div style="font-size:13px;font-weight:700;margin-bottom:10px">TOTAL: '+R.tot.peds.length+' pedidos · '+Object.keys(R.tot.bultos).length+' bultos (Nº distintos) · '+R.tot.btosProd+' bultos de producto · $'+formatearNumeroConMiles(R.tot.monto,2)+'</div>';
+  R.estados.forEach(function(E){
+    html+='<div style="background:var(--azul);color:#fff;font-weight:700;font-size:13px;padding:6px 10px;border-radius:6px;margin:12px 0 4px">'+escUbic(E.nombre)+' <span style="font-weight:400;opacity:.9">— '+E.peds.length+' pedido(s) · '+Object.keys(E.bultos).length+' bultos · $'+formatearNumeroConMiles(E.monto,2)+'</span></div>';
+    E.lstCiudades.forEach(function(C){
+      html+='<div style="font-size:12px;font-weight:700;color:var(--azul);margin:8px 0 2px">'+escUbic(C.nombre)+' <span style="font-weight:400;color:#666">— '+C.peds.length+' pedido(s) · '+Object.keys(C.bultos).length+' bultos: '+escUbic(despListaBultos(C).join(', '))+'</span></div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+      C.peds.forEach(function(p){
+        html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:3px 4px;font-weight:700;white-space:nowrap">'+escUbic(p.nroBulto)+'</td><td style="padding:3px 4px">'+escUbic((p.cliente&&p.cliente.nombre)||'')+'<div style="color:#888">Cod '+escUbic((p.cliente&&p.cliente.id)||'')+' · VEND '+escUbic(p.vendedor||'')+'</div></td><td style="padding:3px 4px;white-space:nowrap">'+escUbic(p.fecha||'')+'</td><td style="padding:3px 4px;text-align:right;white-space:nowrap">'+(p.bultos||0)+' btos<div style="color:#888">$'+formatearNumeroConMiles(p.monto||0,2)+'</div></td><td style="padding:3px 4px">'+(p.despachado?'<span style="color:#1E7B4F;font-weight:700">Despachado</span>':'<span style="color:#856404">Pendiente</span>')+'</td></tr>';
+      });
+      html+='</table>';
+    });
+  });
+  document.getElementById('despReporteContenido').innerHTML=html;
+  document.getElementById('mDespReporte').classList.add('open');
+}
+function despReporteExcel(){
+  var R=despDatosReporte();
+  if(!R.tot.peds.length){ toast('No hay datos para exportar'); return; }
+  var resumen=[['Despacho - Bultos por Estado y Ciudad'],['Periodo: '+(R.desde||'inicio')+' al '+(R.hasta||'hoy')+' — '+R.filtro],[],['Estado','Ciudad','Pedidos','Bultos (Nº distintos)','Nº de bulto','Bultos de producto','Monto $']];
+  var detalle=[['Estado','Ciudad','Nº de bulto','Fecha pedido','Cod. cliente','Cliente','Vendedor','Bultos de producto','Monto $','Estado de despacho','Fecha despacho','Despachado por']];
+  R.estados.forEach(function(E){
+    resumen.push([E.nombre,'(TOTAL ESTADO)',E.peds.length,Object.keys(E.bultos).length,'',E.btosProd,Math.round(E.monto*100)/100]);
+    E.lstCiudades.forEach(function(C){
+      resumen.push([E.nombre,C.nombre,C.peds.length,Object.keys(C.bultos).length,despListaBultos(C).join(', '),C.btosProd,Math.round(C.monto*100)/100]);
+      C.peds.forEach(function(p){
+        detalle.push([E.nombre,C.nombre,p.nroBulto,p.fecha||'',(p.cliente&&p.cliente.id)||'',(p.cliente&&p.cliente.nombre)||'',p.vendedor||'',p.bultos||0,Math.round((p.monto||0)*100)/100,p.despachado?'Despachado':'Pendiente',p.fechaDespacho?(p.fechaDespacho+(p.horaDespacho?' '+p.horaDespacho:'')):'',p.despachadoPor||'']);
+      });
+    });
+  });
+  resumen.push(['TOTAL','',R.tot.peds.length,Object.keys(R.tot.bultos).length,'',R.tot.btosProd,Math.round(R.tot.monto*100)/100]);
+  var wb=XLSX.utils.book_new(), w1=XLSX.utils.aoa_to_sheet(resumen), w2=XLSX.utils.aoa_to_sheet(detalle);
+  w1['!cols']=[{wch:20},{wch:26},{wch:9},{wch:12},{wch:34},{wch:12},{wch:13}];
+  w2['!cols']=[{wch:20},{wch:24},{wch:12},{wch:12},{wch:10},{wch:38},{wch:9},{wch:10},{wch:12},{wch:14},{wch:16},{wch:28}];
+  XLSX.utils.book_append_sheet(wb,w1,'Resumen');
+  XLSX.utils.book_append_sheet(wb,w2,'Detalle');
+  XLSX.writeFile(wb,'despacho_bultos_'+(R.desde||'inicio')+'_a_'+(R.hasta||'hoy')+'.xlsx');
+}
+
 // ═══ ADMIN ═══
 var vendEditandoId = null;
 
@@ -10097,7 +10684,7 @@ function ajustarModoCargaCxC(){
 }
 
 function adminTab(tab){
-  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico','reposicion','comisiones','tasas','iva'];
+  var tabs=['inventario','precios','vendedores','clientes','docs','cxc','historico','reposicion','comisiones','tasas','iva','despacho'];
   for(var i=0;i<tabs.length;i++){
     var el=document.getElementById('adminTab-'+tabs[i]);
     if(el) el.style.display=(tabs[i]===tab)?'block':'none';
@@ -10108,6 +10695,7 @@ function adminTab(tab){
   }
   if(tab==='inventario') renderAdminInv();
   if(tab==='iva') renderAdminIva();
+  if(tab==='despacho') despInit();
   if(tab==='tasas'){
     renderAdminTasasBCV();
     cargarTasasBCV(function(){
@@ -10161,12 +10749,14 @@ function adminTab(tab){
     Promise.all([
       db.collection('config').doc('cuentas_cobrar').get(),
       db.collection('config').doc('cuentas_cobrar_real').get(),
-      db.collection('config').doc('cuentas_cobrar_fiscal').get()
+      db.collection('config').doc('cuentas_cobrar_fiscal').get(),
+      db.collection('config').doc('descuentos_factura').get()
     ]).then(function(docs){
       try{
         if(docs[0] && docs[0].exists) CUENTAS_COBRAR=JSON.parse(docs[0].data().data||'[]');
         if(docs[1] && docs[1].exists) CUENTAS_COBRAR_REAL=JSON.parse(docs[1].data().data||'[]');
         if(docs[2] && docs[2].exists) CUENTAS_COBRAR_FISCAL=JSON.parse(docs[2].data().data||'[]');
+        if(docs[3] && docs[3].exists) DESCUENTOS_FACTURA=JSON.parse(docs[3].data().data||'[]');
       }catch(e){}
       renderResumenCxC();
     }).catch(function(){
@@ -14093,7 +14683,7 @@ function vincularArchivosHuerfanosACliente(idx, clienteId){
 // documentos completos (carga de clientes, etc.) y tambien de forma
 // periodica. Se guardan los ultimos 10 respaldos, borrando
 // automaticamente los mas viejos.
-var CONFIG_DOCS_RESPALDABLES=['catalogo_productos','clientes','comisiones_registros','compras_registradas','cuentas_cobrar','cuentas_cobrar_fiscal','cuentas_cobrar_real','historial_agotado','historial_cargas_cxc','historial_inventario','inventario','iva','limite_deuda','precios','promo_display','promociones_custom','reposicion','reposicion_historial','stock_estimado','storage_huerfanos_descartados','vendedores'];
+var CONFIG_DOCS_RESPALDABLES=['catalogo_productos','cxc_serie','clientes','comisiones_registros','compras_registradas','cuentas_cobrar','cuentas_cobrar_fiscal','cuentas_cobrar_real','descuentos_factura','historial_agotado','historial_cargas_cxc','historial_inventario','inventario','iva','limite_deuda','precios','promo_display','promociones_custom','reposicion','reposicion_historial','stock_estimado','storage_huerfanos_descartados','vendedores'];
 var MAX_RESPALDOS_GUARDADOS=10;
 
 // Crea un respaldo completo. "tipo" es solo informativo (ej:
@@ -14871,10 +15461,14 @@ function cargarConfigFirebase(callback){
     db.collection('config').doc('historial_inventario').get(),
     db.collection('config').doc('compras_registradas').get(),
     db.collection('config').doc('comisiones_registros').get(),
-    db.collection('config').doc('iva').get()
+    db.collection('config').doc('iva').get(),
+    db.collection('config').doc('cxc_serie').get(),
+    db.collection('config').doc('descuentos_factura').get()
   ];
   Promise.all(promesas).then(function(docs){
     cargarIvaConfig(docs[18]);
+    cargarCxCSerieConfig(docs[19]);
+    cargarDescuentosConfig(docs[20]);
     // Catalogo completo de productos (reemplaza el listado inicial si ya
     // se ha usado la gestion de productos en Admin - permite agregar
     // articulos nuevos, fotos, sabores/tipos libres, etc.)
@@ -15254,7 +15848,9 @@ function tipoCoincidenciaMontoRealFiscal(baseReal, baseFiscal){
 // factura fiscal + un punto, ej. "123.") con esa diferencia como su propio
 // saldo pendiente, para poder cobrarla aparte. Los documentos REAL sin
 // pareja se muestran igual, tal como vienen de su base. Los documentos
-// FISCAL que no encuentran match en Real se DESCARTAN por completo.
+// FISCAL que no encuentran match en Real (factura sin nota) YA NO se
+// descartan: son un documento valido de cuentas por cobrar y se agregan tal
+// como vienen de la base fiscal.
 function fusionarBasesRealFiscal(realDocs, fiscalDocs){
   var fiscalPorGrupo={};
   for(var i=0;i<fiscalDocs.length;i++){
@@ -15285,11 +15881,14 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
       var f=candidatos[matchIdx];
       var fusionado={};
       for(var k in f) fusionado[k]=f[k];
+      fusionado.numero=numeroFiscalConSerie(f.numero);          // F-1450 desde el umbral de la serie
+      if(fusionado.numero!==f.numero) fusionado.numeroFiscalOriginal=f.numero;
+      fusionado.notaRelacionada=r.numero;                        // nota con la que cruzo
       fusionado.origenBase='fiscal';
       fusionado.tieneCruce=true;
       resultado.push(fusionado);
       coincidencias++;
-      coincidenciasList.push({numero:f.numero, clienteId:f.clienteId, clienteNombre:f.clienteNombre, tipo:tipoMatch});
+      coincidenciasList.push({numero:fusionado.numero, clienteId:f.clienteId, clienteNombre:f.clienteNombre, tipo:tipoMatch});
       if(tipoMatch==='diferencia35'){
         // La diferencia del 35% es la BASE del documento real menos la BASE del
         // fiscal (ambas sin IVA). Antes se restaba el saldo del fiscal, que ya
@@ -15299,7 +15898,7 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
         if(diferencia>r.saldo) diferencia=Math.round(r.saldo*100)/100;
         if(diferencia>0.009){
           resultado.push({
-            numero: f.numero+'.',
+            numero: fusionado.numero+'.',
             emision: f.emision,
             vencimiento: f.vencimiento,
             clienteId: f.clienteId,
@@ -15311,9 +15910,9 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
             saldo: diferencia,
             origenBase: 'diferencia',
             tieneCruce: true,
-            documentoRelacionado: f.numero
+            documentoRelacionado: fusionado.numero
           });
-          docsDiferenciaList.push({numero:f.numero+'.', clienteId:f.clienteId, clienteNombre:f.clienteNombre, saldo:diferencia, documentoRelacionado:f.numero});
+          docsDiferenciaList.push({numero:fusionado.numero+'.', clienteId:f.clienteId, clienteNombre:f.clienteNombre, saldo:diferencia, documentoRelacionado:fusionado.numero});
         }
       }
     } else {
@@ -15324,23 +15923,97 @@ function fusionarBasesRealFiscal(realDocs, fiscalDocs){
       resultado.push(copiaR);
     }
   }
-  // Los documentos FISCAL que no tuvieron ninguna coincidencia con Real se
-  // descartan (no quedan reflejados en la app).
-  var descartadosFiscal=0;
-  var descartadosFiscalList=[];
+  // Los documentos FISCAL que no tuvieron coincidencia con Real (factura sin
+  // nota) se agregan como documento de cuentas por cobrar, tal como vienen
+  // de la base fiscal. Todo lo demas del cruce queda igual.
+  var fiscalSola=0;
+  var fiscalSolaList=[];
+  var fiscalOmitidosList=[];
+  var numerosEnResultado={};
+  for(var i=0;i<resultado.length;i++){ numerosEnResultado[resultado[i].numero]=true; }
   for(var key in fiscalPorGrupo){
     var candidatos=fiscalPorGrupo[key];
     for(var j=0;j<candidatos.length;j++){
-      if(!usados[key+'#'+j]){
-        descartadosFiscal++;
-        descartadosFiscalList.push({numero:candidatos[j].numero, clienteId:candidatos[j].clienteId, clienteNombre:candidatos[j].clienteNombre, saldo:candidatos[j].saldo, emision:candidatos[j].emision});
+      if(usados[key+'#'+j]) continue;
+      var fs=candidatos[j];
+      var numF=numeroFiscalConSerie(fs.numero);
+      // Salvaguarda: el mismo numero no puede estar dos veces en la base
+      if(numerosEnResultado[numF]){
+        fiscalOmitidosList.push({numero:numF, clienteId:fs.clienteId, clienteNombre:fs.clienteNombre, saldo:fs.saldo, emision:fs.emision});
+        continue;
       }
+      var copiaF={};
+      for(var k in fs) copiaF[k]=fs[k];
+      copiaF.numero=numF;
+      if(numF!==fs.numero) copiaF.numeroFiscalOriginal=fs.numero;
+      copiaF.origenBase='fiscal';
+      copiaF.tieneCruce=false;
+      copiaF.soloFiscal=true;
+      resultado.push(copiaF);
+      numerosEnResultado[numF]=true;
+      fiscalSola++;
+      fiscalSolaList.push({numero:numF, clienteId:fs.clienteId, clienteNombre:fs.clienteNombre, saldo:fs.saldo, emision:fs.emision});
+    }
+  }
+  // Descuentos del 35% segun el archivo de Profit "Facturas por cliente % Desc":
+  // cada factura fiscal se busca por NUMERO + FECHA DE EMISION; si el archivo la
+  // trae con 35%, se genera el documento de diferencia (numero + ".") con el
+  // MONTO DESC. Si la nota ya genero esa diferencia, no se duplica.
+  var descAplicadosList=[], descFechaDistintaList=[], descSinFacturaList=[], descIgnorados=0;
+  var descPorNumero={};
+  for(var i=0;i<DESCUENTOS_FACTURA.length;i++){
+    var de=DESCUENTOS_FACTURA[i];
+    if(!esDescuentoObjetivo(de)){ descIgnorados++; continue; }
+    var kd=normNumeroDesc(de.numero);
+    if(!descPorNumero[kd]) descPorNumero[kd]=[];
+    descPorNumero[kd].push(de);
+  }
+  var numerosFiscalBase={};
+  for(var i=0;i<fiscalDocs.length;i++) numerosFiscalBase[normNumeroDesc(fiscalDocs[i].numero)]=true;
+  var numerosEnRes={};
+  for(var i=0;i<resultado.length;i++) numerosEnRes[resultado[i].numero]=true;
+  var descUsados={};
+  var nResBase=resultado.length;
+  for(var i=0;i<nResBase;i++){
+    var dF=resultado[i];
+    if(dF.origenBase!=='fiscal') continue;
+    var kF=normNumeroDesc(dF.numeroFiscalOriginal||dF.numero);
+    var cands=descPorNumero[kF];
+    if(!cands) continue;
+    var ed=null;
+    for(var c=0;c<cands.length;c++){ if(cands[c].emision===dF.emision){ ed=cands[c]; break; } }
+    if(!ed){
+      descFechaDistintaList.push({numero:dF.numero, clienteId:dF.clienteId, clienteNombre:dF.clienteNombre, emision:dF.emision, emisionArchivo:cands[0].emision, saldo:cands[0].montoDesc});
+      continue;
+    }
+    descUsados[kF+'|'+ed.emision]=true;
+    var numDif=dF.numero+'.';
+    if(numerosEnRes[numDif]) continue;   // la nota ya genero esta diferencia
+    var montoD=Math.round((ed.montoDesc||0)*100)/100;
+    if(montoD<=0.009) continue;
+    resultado.push({
+      numero:numDif, emision:dF.emision, vencimiento:dF.vencimiento, clienteId:dF.clienteId,
+      clienteNombre:dF.clienteNombre, vendedor:dF.vendedor, iva:0, otros:0, neto:montoD, saldo:montoD,
+      origenBase:'diferencia', tieneCruce:true, documentoRelacionado:dF.numero, origenDiferencia:'descuentos', pctDesc:ed.pct
+    });
+    numerosEnRes[numDif]=true;
+    var itD={numero:numDif, clienteId:dF.clienteId, clienteNombre:dF.clienteNombre, saldo:montoD, documentoRelacionado:dF.numero, origen:'descuentos'};
+    if(ed.clienteId && dF.clienteId && ed.clienteId!==dF.clienteId) itD.clienteArchivo=ed.clienteId;
+    docsDiferenciaList.push(itD);
+    descAplicadosList.push(itD);
+  }
+  for(var kk in descPorNumero){
+    if(numerosFiscalBase[kk]) continue;
+    for(var c=0;c<descPorNumero[kk].length;c++){
+      var es=descPorNumero[kk][c];
+      descSinFacturaList.push({numero:es.numero, clienteId:es.clienteId, clienteNombre:es.clienteNombre, emision:es.emision, saldo:es.montoDesc, key:kk+'|'+es.emision});
     }
   }
   var docsDiferencia=0;
   for(var i=0;i<resultado.length;i++){ if(resultado[i].origenBase==='diferencia') docsDiferencia++; }
-  return {resultado:resultado, coincidencias:coincidencias, docsDiferencia:docsDiferencia, descartadosFiscal:descartadosFiscal,
-    coincidenciasList:coincidenciasList, docsDiferenciaList:docsDiferenciaList, descartadosFiscalList:descartadosFiscalList};
+  return {resultado:resultado, coincidencias:coincidencias, docsDiferencia:docsDiferencia, fiscalSola:fiscalSola,
+    coincidenciasList:coincidenciasList, docsDiferenciaList:docsDiferenciaList, fiscalSolaList:fiscalSolaList, fiscalOmitidosList:fiscalOmitidosList,
+    descAplicadosList:descAplicadosList, descFechaDistintaList:descFechaDistintaList, descSinFacturaList:descSinFacturaList, descIgnorados:descIgnorados};
 }
 
 // Combina una base existente con los documentos recien leidos de un Excel,
@@ -15410,6 +16083,8 @@ function buscarDocumentoEnHistorialCargas(){
     {campo:'actualizadosEstaBase', label:'Documento actualizado', color:'var(--azul)'},
     {campo:'coincidenciasList', label:'Cruzado entre Real y Fiscal', color:'var(--verde)'},
     {campo:'docsDiferenciaList', label:'Documento de diferencia (35%) creado', color:'#5b3fa0'},
+    {campo:'fiscalSolaList', label:'Fiscal sin nota agregado', color:'var(--verde)'},
+    {campo:'descFechaDistintaList', label:'Descuento 35% con fecha distinta (no aplicado)', color:'var(--ambar)'},
     {campo:'descartadosFiscalList', label:'Fiscal descartado (sin match en Real)', color:'var(--rojo)'},
     {campo:'mantenidosList', label:'Mantenido por pago ya confirmado', color:'var(--ambar)'},
     {campo:'liberadosList', label:'Perdio su proteccion en esta carga', color:'var(--rojo)'}
@@ -15474,7 +16149,7 @@ function verHistorialCargasCxC(){
     var html='';
     for(var i=0;i<historial.length;i++){
       var h=historial[i];
-      var totalCambios=(h.nuevosEstaBase||[]).length+(h.actualizadosEstaBase||[]).length+(h.coincidenciasList||[]).length+(h.descartadosFiscalList||[]).length;
+      var totalCambios=(h.nuevosEstaBase||[]).length+(h.actualizadosEstaBase||[]).length+(h.coincidenciasList||[]).length+(h.fiscalSolaList||[]).length+(h.descartadosFiscalList||[]).length;
       html+='<div onclick="verDetalleCargaCxC(HISTORIAL_CARGAS_CXC_CACHE['+i+'])" style="border-bottom:1px solid var(--borde);padding:10px 4px;cursor:pointer">'+
         '<div style="font-weight:600;font-size:13px">Base '+h.nombreBase+' — '+(h.modoCarga==='agregar'?'Agregar/actualizar':'Reemplazar todo')+'</div>'+
         '<div style="font-size:11px;color:#888">'+new Date(h.fecha).toLocaleString('es-VE')+' — '+(h.realizadoPor||'')+'</div>'+
@@ -15521,9 +16196,21 @@ function verDetalleCargaCxC(detalleOverride){
     return filaDoc(item, item.tipo==='diferencia35'?'Coincidencia con diferencia del 35% (IVA)':'Coincidencia exacta');
   });
   html+=seccion('Documentos de diferencia (35%) creados', d.docsDiferenciaList, '#5b3fa0', function(item){
-    return filaDoc(item, 'Saldo: $'+formatearNumeroConMiles(item.saldo,2)+' — relacionado al documento '+item.documentoRelacionado);
+    return filaDoc(item, 'Saldo: $'+formatearNumeroConMiles(item.saldo,2)+' — relacionado al documento '+item.documentoRelacionado+(item.origen==='descuentos'?' — segun el archivo de descuentos de Profit':'')+(item.clienteArchivo?' — OJO: el archivo trae otro codigo de cliente ('+item.clienteArchivo+')':''));
   });
-  html+=seccion('Fiscales descartados (sin match en Real)', d.descartadosFiscalList, 'var(--rojo)', function(item){
+  html+=seccion('Descuentos 35% con fecha distinta a la factura fiscal (NO aplicados)', d.descFechaDistintaList, 'var(--ambar)', function(item){
+    return filaDoc(item, 'Fecha en la factura fiscal: '+(item.emision||'')+' | Fecha en el archivo de descuentos: '+(item.emisionArchivo||'')+' | Monto: $'+formatearNumeroConMiles(item.saldo,2));
+  });
+  html+=seccion('Descuentos 35% sin factura fiscal pendiente en la app', d.descSinFacturaList, '#888', function(item){
+    return filaDoc(item, 'Emision: '+(item.emision||'')+' | Monto: $'+formatearNumeroConMiles(item.saldo,2)+' — se aplicara si esa factura aparece en la base fiscal');
+  });
+  html+=seccion('Fiscales sin nota agregados (sin match en Real)', d.fiscalSolaList, 'var(--verde)', function(item){
+    return filaDoc(item, 'Emision: '+(item.emision||'')+' | Saldo: $'+formatearNumeroConMiles(item.saldo,2));
+  });
+  html+=seccion('Fiscales NO agregados (mismo numero ya existia en la base)', d.fiscalOmitidosList, 'var(--ambar)', function(item){
+    return filaDoc(item, 'Emision: '+(item.emision||'')+' | Saldo: $'+formatearNumeroConMiles(item.saldo,2));
+  });
+  html+=seccion('Fiscales descartados (cargas anteriores, sin match en Real)', d.descartadosFiscalList, 'var(--rojo)', function(item){
     return filaDoc(item, 'Emision: '+(item.emision||'')+' | Saldo: $'+formatearNumeroConMiles(item.saldo,2));
   });
   html+=seccion('Mantenidos por pago ya confirmado en la app', d.mantenidosList, 'var(--ambar)', function(item){
@@ -15610,18 +16297,19 @@ function _cargarExcelCxCInterno(file, tipo, input){
         }).then(function(){
           var faltaOtra=(tipo==='real' && CUENTAS_COBRAR_FISCAL.length===0) || (tipo==='fiscal' && CUENTAS_COBRAR_REAL.length===0);
           var modoTxt=modoCarga==='agregar'?'Modo: agregado/actualizado sin borrar lo demas. ':'Modo: base reemplazada por completo. ';
-          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+modoTxt+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.descartadosFiscal>0?' | '+fusion.descartadosFiscal+' fiscales descartados (sin match en Real)':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+(protegidosPorDesaparicion.length>0?' | '+protegidosPorDesaparicion.length+' protegidos de desaparicion temporal (doc. '+protegidosPorDesaparicion.join(', ')+')':'')+(liberadosList.length>0?' | <strong style="color:var(--rojo)">'+liberadosList.length+' documento(s) perdieron su proteccion en esta carga (doc. '+liberadosList.map(function(l){return l.numero;}).join(', ')+') - revisa el detalle</strong>':'')+'</span>'+diagTxt+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'')+
+          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+modoTxt+CUENTAS_COBRAR_REAL.length+' doc. REAL, '+CUENTAS_COBRAR_FISCAL.length+' doc. FISCAL — '+fusion.coincidencias+' cruzados por base imponible'+(fusion.docsDiferencia>0?' | '+fusion.docsDiferencia+' documentos de diferencia (35%) creados':'')+(fusion.fiscalSola>0?' | '+fusion.fiscalSola+' fiscal(es) sin nota agregados como documento':'')+(fusion.descAplicadosList.length>0?' | '+fusion.descAplicadosList.length+' diferencia(s) del 35% tomadas del archivo de descuentos':'')+(fusion.descFechaDistintaList.length>0?' | <span style="color:var(--ambar)">'+fusion.descFechaDistintaList.length+' factura(s) con descuento de fecha distinta (no aplicadas)</span>':'')+(fusion.fiscalOmitidosList.length>0?' | <span style="color:var(--ambar)">'+fusion.fiscalOmitidosList.length+' fiscal(es) no agregados por numero repetido</span>':'')+(mantenidos>0?' | '+mantenidos+' mantenidos por pago ya confirmado':'')+(protegidosPorDesaparicion.length>0?' | '+protegidosPorDesaparicion.length+' protegidos de desaparicion temporal (doc. '+protegidosPorDesaparicion.join(', ')+')':'')+(liberadosList.length>0?' | <strong style="color:var(--rojo)">'+liberadosList.length+' documento(s) perdieron su proteccion en esta carga (doc. '+liberadosList.map(function(l){return l.numero;}).join(', ')+') - revisa el detalle</strong>':'')+'</span>'+diagTxt+(faltaOtra?'<div style="color:var(--ambar);margin-top:4px">Falta cargar la base '+(tipo==='real'?'FISCAL':'REAL')+' para completar el cruce</div>':'')+
             '<div style="margin-top:8px"><button class="btn btn-s btn-sm" onclick="verDetalleCargaCxC()">Ver detalle de esta carga</button></div>';
           ULTIMA_CARGA_CXC_DETALLE={
             tipo:tipo, nombreBase:nombreBase, modoCarga:modoCarga,
             nuevosEstaBase:nuevosEstaBase, actualizadosEstaBase:actualizadosEstaBase,
             coincidenciasList:fusion.coincidenciasList, docsDiferenciaList:fusion.docsDiferenciaList,
-            descartadosFiscalList:fusion.descartadosFiscalList, mantenidosList:mantenidosList,
+            fiscalSolaList:fusion.fiscalSolaList, fiscalOmitidosList:fusion.fiscalOmitidosList, descFechaDistintaList:fusion.descFechaDistintaList, mantenidosList:mantenidosList,
             protegidosPorDesaparicion:protegidosPorDesaparicion, liberadosList:liberadosList
           };
           guardarHistorialCargaCxC(ULTIMA_CARGA_CXC_DETALLE);
           toast('Base de Cuentas por Cobrar actualizada');
           renderResumenCxC();
+          renderDescuentosAdmin();
           input.value='';
         }).catch(function(){
           estadoEl.innerHTML='<span style="color:var(--rojo)">Error guardando en Firebase</span>';
@@ -15633,12 +16321,135 @@ function _cargarExcelCxCInterno(file, tipo, input){
   });
 }
 
+
+// Cruza las bases con los descuentos ya guardados, concilia con los abonos de
+// la app (igual que una carga normal) y guarda las cuentas por cobrar.
+function ejecutarCruceCxCYGuardar(callback){
+  var fusion=fusionarBasesRealFiscal(CUENTAS_COBRAR_REAL, CUENTAS_COBRAR_FISCAL);
+  reconciliarCxC(fusion.resultado,function(docsFinal,mantenidos,mantenidosList,liberadosList){
+    var numerosNuevo={};
+    for(var i=0;i<docsFinal.length;i++){ numerosNuevo[docsFinal[i].numero]=true; }
+    var protegidos=[];
+    for(var i=0;i<CUENTAS_COBRAR.length;i++){
+      var viejo=CUENTAS_COBRAR[i];
+      if(viejo.abonadoEnApp && !numerosNuevo[viejo.numero]){ docsFinal.push(viejo); protegidos.push(viejo.numero); }
+    }
+    CUENTAS_COBRAR=docsFinal;
+    db.collection('config').doc('cuentas_cobrar').set({
+      data:JSON.stringify(CUENTAS_COBRAR), actualizado:new Date().toISOString()
+    }).then(function(){
+      callback(null,{fusion:fusion, mantenidos:mantenidos, mantenidosList:mantenidosList, liberadosList:liberadosList, protegidos:protegidos});
+    }).catch(function(e){ callback(e||new Error('fb')); });
+  });
+}
+
+function cargarExcelDescuentos(input){
+  var file=input.files[0]; if(!file) return;
+  var estadoEl=document.getElementById('cxcEstadoDesc');
+  estadoEl.innerHTML='<span style="color:#aaa">Creando respaldo de seguridad antes de continuar...</span>';
+  crearRespaldoCompleto('pre-carga-descuentos', function(exito){
+    if(!exito) toast('No se pudo crear el respaldo previo, continuando de todas formas');
+    estadoEl.innerHTML='<span style="color:#aaa">Leyendo archivo de descuentos...</span>';
+    parsearExcelDescuentos(file,function(docs,error,diag){
+      if(error){ estadoEl.innerHTML='<span style="color:var(--rojo)">'+error+'</span>'; return; }
+      if(!docs || docs.length===0){ estadoEl.innerHTML='<span style="color:var(--rojo)">No se encontraron facturas con descuento en el archivo</span>'; return; }
+      var fus=fusionarDescuentosConBase(DESCUENTOS_FACTURA, docs);
+      var objetivoArchivo=docs.filter(esDescuentoObjetivo).length;
+      var ignoradosArchivo=docs.length-objetivoArchivo;
+      estadoEl.innerHTML='<span style="color:#aaa">Guardando descuentos...</span>';
+      db.collection('config').doc('descuentos_factura').set({
+        data:JSON.stringify(fus.resultado), actualizado:new Date().toISOString(), por:VEND?VEND.codigo:''
+      }).then(function(){
+        DESCUENTOS_FACTURA=fus.resultado;
+        var resumenArch=docs.length+' facturas en el archivo ('+objetivoArchivo+' al 35%'+(ignoradosArchivo?', '+ignoradosArchivo+' con otro porcentaje, no generan documento':'')+') — '+fus.nuevosList.length+' nuevas, '+fus.actualizadosList.length+' ya existian'+(diag&&diag.invalidas?' — '+diag.invalidas+' filas sin fecha/monto omitidas':'');
+        if(CUENTAS_COBRAR_FISCAL.length===0){
+          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+resumenArch+'.</span><div style="color:var(--ambar);margin-top:4px">Aun no hay facturas fiscales cargadas: los descuentos se aplicaran cuando cargues la base fiscal.</div>';
+          renderDescuentosAdmin(); input.value=''; return;
+        }
+        estadoEl.innerHTML='<span style="color:#aaa">Aplicando descuentos a las facturas fiscales...</span>';
+        ejecutarCruceCxCYGuardar(function(err,res){
+          if(err){ estadoEl.innerHTML='<span style="color:var(--rojo)">Los descuentos se guardaron, pero hubo un error guardando las cuentas por cobrar. Usa "Recalcular cruce con las bases guardadas".</span>'; return; }
+          var f=res.fusion;
+          var clavesArchivo={};
+          for(var i=0;i<docs.length;i++) clavesArchivo[normNumeroDesc(docs[i].numero)+'|'+docs[i].emision]=true;
+          var sinFacturaArchivo=f.descSinFacturaList.filter(function(x){ return clavesArchivo[x.key]; });
+          var fechaDistArchivo=f.descFechaDistintaList;
+          estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+resumenArch+'.</span>'+
+            '<div style="margin-top:4px;color:var(--verde);font-weight:600">'+f.descAplicadosList.length+' documento(s) de diferencia (35%) generados desde este archivo y las facturas fiscales.</div>'+
+            (fechaDistArchivo.length?'<div style="margin-top:4px;color:var(--ambar)">'+fechaDistArchivo.length+' factura(s) con el mismo numero pero fecha de emision distinta (no se aplicaron): '+fechaDistArchivo.map(function(x){return x.numero;}).join(', ')+'</div>':'')+
+            (sinFacturaArchivo.length?'<div style="margin-top:4px;color:#666">'+sinFacturaArchivo.length+' descuento(s) del archivo sin factura fiscal pendiente en la app (ya cobradas o aun no cargadas): '+sinFacturaArchivo.map(function(x){return x.numero;}).slice(0,30).join(', ')+'</div>':'')+
+            (res.liberadosList.length?'<div style="margin-top:4px;color:var(--rojo);font-weight:600">'+res.liberadosList.length+' documento(s) perdieron su proteccion de pago (doc. '+res.liberadosList.map(function(l){return l.numero;}).join(', ')+') - revisa el detalle</div>':'')+
+            '<div style="margin-top:8px"><button class="btn btn-s btn-sm" onclick="verDetalleCargaCxC()">Ver detalle de esta carga</button></div>';
+          ULTIMA_CARGA_CXC_DETALLE={
+            tipo:'descuentos', nombreBase:'DESCUENTOS', modoCarga:'agregar',
+            nuevosEstaBase:fus.nuevosList.map(function(x){ return {numero:x.numero, clienteId:x.clienteId, clienteNombre:x.clienteNombre, saldo:x.montoDesc}; }).slice(0,300),
+            actualizadosEstaBase:fus.actualizadosList.map(function(x){ return {numero:x.numero, clienteId:x.clienteId, clienteNombre:x.clienteNombre, saldo:x.montoDesc}; }).slice(0,300),
+            docsDiferenciaList:f.descAplicadosList, descFechaDistintaList:fechaDistArchivo,
+            descSinFacturaList:sinFacturaArchivo.slice(0,100),
+            mantenidosList:res.mantenidosList, protegidosPorDesaparicion:res.protegidos, liberadosList:res.liberadosList
+          };
+          guardarHistorialCargaCxC(ULTIMA_CARGA_CXC_DETALLE);
+          toast('Descuentos aplicados');
+          renderResumenCxC(); renderDescuentosAdmin(); input.value='';
+        });
+      }).catch(function(){ estadoEl.innerHTML='<span style="color:var(--rojo)">Error guardando los descuentos en Firebase</span>'; });
+    });
+  });
+}
+
+function parseFechaDMY(str){
+  var m=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(str||''));
+  return m?new Date(parseInt(m[3],10),parseInt(m[2],10)-1,parseInt(m[1],10)).getTime():0;
+}
+function renderDescuentosAdmin(){
+  var res=document.getElementById('cxcDescResumen'), lista=document.getElementById('cxcDescLista');
+  if(!res||!lista) return;
+  var objetivo=DESCUENTOS_FACTURA.filter(esDescuentoObjetivo).length;
+  res.textContent='Descuentos guardados: '+DESCUENTOS_FACTURA.length+' ('+objetivo+' al 35%)';
+  if(DESCUENTOS_FACTURA.length===0){ lista.innerHTML='<div style="font-size:12px;color:#aaa">Aun no has cargado el archivo de descuentos.</div>'; return; }
+  var docPorNumero={};
+  for(var i=0;i<CUENTAS_COBRAR.length;i++) docPorNumero[CUENTAS_COBRAR[i].numero]=CUENTAS_COBRAR[i];
+  var fiscalPorNum={};
+  for(var i=0;i<CUENTAS_COBRAR_FISCAL.length;i++){ var k=normNumeroDesc(CUENTAS_COBRAR_FISCAL[i].numero); if(!fiscalPorNum[k]) fiscalPorNum[k]=[]; fiscalPorNum[k].push(CUENTAS_COBRAR_FISCAL[i]); }
+  var ordenados=DESCUENTOS_FACTURA.slice().sort(function(a,b){ return parseFechaDMY(b.emision)-parseFechaDMY(a.emision) || (parseInt(b.numero,10)||0)-(parseInt(a.numero,10)||0); });
+  var html='<table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="color:#888;text-align:left"><th style="padding:3px">Factura</th><th>Emision</th><th>Cliente</th><th style="text-align:right">%</th><th style="text-align:right">Monto</th><th>Estado</th></tr>';
+  var max=100;
+  for(var i=0;i<ordenados.length && i<max;i++){
+    var e=ordenados[i], estado, color='#666';
+    if(!esDescuentoObjetivo(e)){ estado='No genera doc.'; color='#aaa'; }
+    else {
+      var cands=fiscalPorNum[normNumeroDesc(e.numero)]||[];
+      var fMatch=null; for(var c=0;c<cands.length;c++){ if(cands[c].emision===e.emision){ fMatch=cands[c]; break; } }
+      if(fMatch){
+        var dif=docPorNumero[numeroFiscalConSerie(fMatch.numero)+'.'];
+        if(dif){ estado='Aplicado: doc. '+dif.numero+(dif.saldo<=0.009?' (cobrado)':''); color='var(--verde)'; }
+        else { estado='Pendiente de recalcular'; color='var(--ambar)'; }
+      } else if(cands.length){ estado='Fecha distinta a la factura'; color='var(--ambar)'; }
+      else { estado='Sin factura fiscal pendiente'; color='#888'; }
+    }
+    html+='<tr style="border-top:1px solid var(--borde)"><td style="padding:3px"><strong>'+e.numero+'</strong></td><td>'+e.emision+'</td><td>'+(e.clienteNombre||'').slice(0,26)+'</td><td style="text-align:right">'+Math.round((e.pct||0)*100)+'%</td><td style="text-align:right">$'+formatearNumeroConMiles(e.montoDesc||0,2)+'</td><td style="color:'+color+'">'+estado+'</td></tr>';
+  }
+  html+='</table>';
+  if(ordenados.length>max) html+='<div style="font-size:11px;color:#888;margin-top:4px">Mostrando las '+max+' mas recientes de '+ordenados.length+'.</div>';
+  if(VEND && (VEND.codigo==='01'||VEND.codigo==='20')) html+='<button class="btn btn-s btn-sm" style="margin-top:8px;color:var(--rojo)" onclick="vaciarDescuentosFactura()">Borrar todos los descuentos guardados</button>';
+  lista.innerHTML=html;
+}
+function vaciarDescuentosFactura(){
+  if(!VEND || !(VEND.codigo==='01'||VEND.codigo==='20')){ toast('Solo 01 y 20'); return; }
+  if(!confirm('Borrar los '+DESCUENTOS_FACTURA.length+' descuentos guardados? Los documentos de diferencia generados desde este archivo se quitaran al recalcular el cruce (los que ya tengan abonos hechos en la app se conservan).')) return;
+  db.collection('config').doc('descuentos_factura').set({data:'[]', actualizado:new Date().toISOString(), por:VEND.codigo}).then(function(){
+    DESCUENTOS_FACTURA=[];
+    renderDescuentosAdmin();
+    toast('Descuentos borrados. Usa "Recalcular cruce" para actualizar las cuentas por cobrar');
+  }).catch(function(){ toast('Error guardando en Firebase'); });
+}
+
 // Recalcula el cruce Real/Fiscal con las dos bases ya guardadas, sin tener que
 // volver a subir los Excel. Sirve, por ejemplo, para que los documentos de
 // diferencia 35% tomen el calculo corregido.
 function recalcularCruceCxC(){
   if(!(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))){ toast('Solo 01 y 20'); return; }
-  if(CUENTAS_COBRAR_REAL.length===0 || CUENTAS_COBRAR_FISCAL.length===0){ toast('Faltan cargar las bases Real y Fiscal'); return; }
+  if(CUENTAS_COBRAR_REAL.length===0 && CUENTAS_COBRAR_FISCAL.length===0){ toast('Faltan cargar las bases Real o Fiscal'); return; }
   if(!confirm('Recalcular el cruce de Cuentas por Cobrar con las bases Real y Fiscal ya guardadas? Los documentos con abonos hechos en la app se respetan.')) return;
   var estadoEl=document.getElementById('cxcEstadoCarga');
   var antes={};
@@ -15662,9 +16473,10 @@ function recalcularCruceCxC(){
     db.collection('config').doc('cuentas_cobrar').set({
       data:JSON.stringify(CUENTAS_COBRAR), actualizado:new Date().toISOString()
     }).then(function(){
-      if(estadoEl) estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ Cruce recalculado. '+fusion.docsDiferencia+' documento(s) de diferencia 35%, '+cambios.length+' con monto corregido.</span>'+(cambios.length?'<div style="font-size:11px;color:#555;margin-top:4px">'+cambios.slice(0,30).join('<br>')+(cambios.length>30?'<br>... y '+(cambios.length-30)+' mas':'')+'</div>':'');
+      if(estadoEl) estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ Cruce recalculado. '+fusion.docsDiferencia+' documento(s) de diferencia 35% ('+fusion.descAplicadosList.length+' desde el archivo de descuentos), '+cambios.length+' con monto corregido.</span>'+(fusion.descFechaDistintaList.length?'<div style="color:var(--ambar);font-size:12px;margin-top:4px">'+fusion.descFechaDistintaList.length+' factura(s) con descuento de fecha distinta (no aplicadas): '+fusion.descFechaDistintaList.map(function(x){return x.numero;}).join(', ')+'</div>':'')+(cambios.length?'<div style="font-size:11px;color:#555;margin-top:4px">'+cambios.slice(0,30).join('<br>')+(cambios.length>30?'<br>... y '+(cambios.length-30)+' mas':'')+'</div>':'');
       toast('Cruce recalculado');
       renderResumenCxC();
+      renderDescuentosAdmin();
     }).catch(function(){ toast('Error guardando en Firebase'); });
   });
 }
@@ -16227,7 +17039,10 @@ function renderListaCxCAdmin(){
         ?' <span class="tag tag-v" style="font-size:9px">Credito</span>'
         :(d.origenBase==='diferencia'
           ?' <span class="tag" style="background:#e3d9fc;color:#5b3fa0;font-size:9px">Dif DCTO.</span>'
-          :(d.tieneCruce?' <span class="tag tag-v" style="font-size:9px">Cruzado</span>':''));
+          :(d.tieneCruce?' <span class="tag tag-v" style="font-size:9px">Cruzado</span>':(d.soloFiscal?' <span class="tag" style="background:#E3F2FD;color:#0D47A1;font-size:9px" title="Factura fiscal sin nota en la base Real">Solo fiscal</span>':'')));
+      if(d.origenBase==='fiscal' && d.notaRelacionada && d.notaRelacionada!==d.numero){
+        origenTxt+=' <span class="tag" style="background:#EEF0F4;color:#555;font-size:9px" title="Nota con la que cruzo esta factura">Nota '+d.notaRelacionada+'</span>';
+      }
       if(d.ajusteManual){
         origenTxt+=' <span class="tag" style="background:#FFF3CD;color:#856404;font-size:9px" title="'+(d.ajusteManual.realizadoPor||'')+' - '+(d.ajusteManual.fecha||'')+' - '+(d.ajusteManual.motivo||'').replace(/"/g,'&quot;')+'">Ajustado</span>';
       }
@@ -16419,7 +17234,8 @@ function buscarEmisionDocumento(numero){
   if(!numero) return null;
   for(var i=0;i<CUENTAS_COBRAR.length;i++){ if(CUENTAS_COBRAR[i].numero===numero) return CUENTAS_COBRAR[i].emision||null; }
   for(var i=0;i<CUENTAS_COBRAR_REAL.length;i++){ if(CUENTAS_COBRAR_REAL[i].numero===numero) return CUENTAS_COBRAR_REAL[i].emision||null; }
-  for(var i=0;i<CUENTAS_COBRAR_FISCAL.length;i++){ if(CUENTAS_COBRAR_FISCAL[i].numero===numero) return CUENTAS_COBRAR_FISCAL[i].emision||null; }
+  var sinSerie=numeroSinSerie(numero);
+  for(var i=0;i<CUENTAS_COBRAR_FISCAL.length;i++){ if(CUENTAS_COBRAR_FISCAL[i].numero===numero || CUENTAS_COBRAR_FISCAL[i].numero===sinSerie) return CUENTAS_COBRAR_FISCAL[i].emision||null; }
   return null;
 }
 
@@ -16500,7 +17316,7 @@ function renderDocsPendientesCliente(clienteId, preservarSeleccion){
            '<div style="font-size:11px;color:var(--verde)">Credito disponible — se descuenta automaticamente si se selecciona junto a otro documento</div>'
           :'<div style="font-size:13px;font-weight:600">Doc. '+d.numero+' &nbsp;<span style="color:var(--azul)">$'+formatearNumeroConMiles(d.saldo,2)+'</span></div>'+
            '<div style="font-size:11px;color:#888">Emision: '+d.emision+' &nbsp;|&nbsp; Vencimiento: '+d.vencimiento+'</div>')+
-        (d.origenBase==='diferencia'?'<div style="font-size:11px;color:#5b3fa0">Diferencia del 35% relacionada al documento '+d.documentoRelacionado+'</div>':'')+
+        (d.origenBase==='diferencia'?'<div style="font-size:11px;color:#5b3fa0">Diferencia del 35% relacionada al documento '+d.documentoRelacionado+(d.origenDiferencia==='descuentos'?' (segun descuentos de Profit)':'')+'</div>':'')+
         (diasTxt?'<div style="font-size:11px;margin-top:2px">'+diasTxt+'</div>':'')+
       '</div>'+
     '</label>';
@@ -18996,7 +19812,7 @@ function cerrarSesion(){
 // archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
 // y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
 // el publicado es distinto, la app se recarga sola con la version nueva.
-var APP_VERSION='2026-11-15-0500';
+var APP_VERSION='2026-11-19-0905';
 function revisarVersionApp(){
   try{
     if(typeof fetch!=='function') return;
