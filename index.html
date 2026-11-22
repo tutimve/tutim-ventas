@@ -1369,16 +1369,23 @@ input[type=file]:hover{border-color:var(--azul-m)}
     <div id="adminTab-tasas" style="display:none">
       <div class="card" id="tasaBinanceCard">
         <div class="card-title">Tasa Binance / paralelo (cobros en divisas)</div>
-        <p style="font-size:12px;color:#666;margin-bottom:10px">Se usa para calcular a cuanto equivale, en Bs a tasa BCV, un descuento dado en un pago en divisas (Divisas, Binance, Zelle). Un proceso automatico de GitHub anota la tasa USDT/VES de Binance P2P <strong>3 veces al dia (8:30 am, 1:00 pm y 5:00 pm)</strong>, todos los dias. La tasa de un dia es el <strong>promedio de sus lecturas</strong> y cada pago usa la del dia en que se hizo. Si se reporta el mismo dia, usa el promedio de las lecturas que haya hasta ese momento y queda guardado asi (no cambia despues); si se reporta otro dia, usa todas las lecturas del dia del pago. Si el proceso falla, se usa la ultima lectura disponible o el modo manual.</p>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Se usa para calcular a cuanto equivale, en Bs a tasa BCV, un descuento dado en un pago en divisas (Divisas, Binance, Zelle). Un proceso automatico anota la tasa USDT/VES de Binance P2P <strong>3 veces al dia (aprox. 8:30 am, 1:00 pm y 5:00 pm)</strong>, todos los dias. El boton <strong>Leer tasa ahora</strong> la consulta en el momento, solo para verla (no se guarda ni entra en el promedio). La tasa de un dia es el <strong>promedio de sus lecturas</strong> y cada pago usa la del dia en que se hizo. Si se reporta el mismo dia, usa el promedio de las lecturas que haya hasta ese momento y queda guardado asi (no cambia despues); si se reporta otro dia, usa todas las lecturas del dia del pago. Si el proceso falla, se usa la ultima lectura disponible o el modo manual.</p>
         <div id="tbResumen" style="margin-bottom:10px"></div>
-        <button class="btn btn-s btn-sm" onclick="botonConsultarTasaBinance()">Actualizar lecturas</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-s btn-sm" onclick="botonConsultarTasaBinance()">Actualizar lecturas</button>
+          <button class="btn btn-p btn-sm" onclick="botonLeerTasaAhora()">Leer tasa ahora</button>
+        </div>
         <div id="tbRes" style="margin-top:6px"></div>
+        <div id="tbAhora" style="margin-top:6px"></div>
         <div id="tbEditWrap" style="display:none;margin-top:12px">
           <div class="field"><label>Modo</label>
             <select id="tbModo" onchange="guardarModoTasaBinance()">
               <option value="auto">Automatico (promedio diario de las lecturas programadas)</option>
               <option value="manual">Manual (usa la ultima tasa que cargue aqui)</option>
             </select></div>
+          <div class="field"><label>Direccion del servicio de tasas (Cloudflare)</label><input type="text" id="tbWorkerUrl" placeholder="https://tutim-tasas.xxxx.workers.dev"></div>
+          <button class="btn btn-s btn-sm" onclick="guardarWorkerUrlTasas()">Guardar direccion</button>
+          <div style="border-top:1px solid var(--borde);margin:14px 0 10px"></div>
           <div class="field"><label>Cargar tasa a mano (Bs por dolar/USDT)</label><input type="text" inputmode="decimal" id="tbValor" placeholder="Ej: 640,50"></div>
           <button class="btn btn-p btn-sm" onclick="guardarTasaBinanceManual()">Guardar tasa ahora</button>
           <div style="border-top:1px solid var(--borde);margin:14px 0 10px"></div>
@@ -19165,6 +19172,7 @@ function renderAdminTasasBinance(){
   var puede=puedeEditarTasasBCV();
   var ew=document.getElementById('tbEditWrap'); if(ew) ew.style.display=puede?'block':'none';
   var md=document.getElementById('tbModo'); if(md) md.value=TASAS_BINANCE_MODO;
+  var wu=document.getElementById('tbWorkerUrl'); if(wu && document.activeElement!==wu) wu.value=TB_CFG.workerUrl||'';
   var rs=document.getElementById('tbResumen');
   var hoy=tasaBCVHoyISO(), bcv=tbBCVReferencia();
   if(rs){
@@ -19203,6 +19211,30 @@ function renderAdminTasasBinance(){
     }
     li.innerHTML=h;
   }
+}
+function botonLeerTasaAhora(){
+  var res=document.getElementById('tbAhora'); if(!res) return;
+  var caja=function(ok,txt){ res.innerHTML='<div style="font-size:12px;border-radius:6px;padding:6px 8px;'+(ok?'color:var(--verde);background:var(--verde-c)':'color:#856404;background:#FFF3CD')+'">'+txt+'</div>'; };
+  tbCargarCfg(function(){
+    if(!TB_CFG.workerUrl){ caja(false,'Falta la direccion del servicio de tasas. Se escribe en "Direccion del servicio de tasas (Cloudflare)" y se guarda.'); return; }
+    caja(true,'Consultando...');
+    tbFetchJson(TB_CFG.workerUrl+'/leer?t='+Date.now()).then(function(j){
+      if(j && j.valor>0){
+        var bcv=tbBCVReferencia();
+        caja(true,'<strong>Binance ahora: Bs '+formatearNumeroConMiles(j.valor,2)+'</strong> · leida a las '+tbFmtHora(j.t).replace('hoy ','')+(j.cache?' (lectura de hace '+Math.max(1,Math.round((j.edadSeg||0)/60))+' min)':'')+(bcv>0?' · BCV Bs '+formatearNumeroConMiles(bcv,2)+' · diferencia <strong>'+(Math.round((j.valor/bcv-1)*1000)/10)+'%</strong>':'')+'<br><span style="color:#666">Solo para consultar: no se guarda ni entra en el promedio del dia.</span>');
+      } else caja(false,'No se pudo leer la tasa'+(j&&j._error?(': '+escUbic(String(j._error))):' (el servicio no responde). Revisa la direccion y que el Worker este activo.'));
+    });
+  });
+}
+function guardarWorkerUrlTasas(){
+  if(!puedeEditarTasasBCV()){ toast('Solo los usuarios 00, 01 y 20 pueden cambiar esto'); return; }
+  var raw=(document.getElementById('tbWorkerUrl')||{}).value||'';
+  var u=tbLimpiarUrl(raw);
+  if(String(raw).trim()!=='' && !u){ toast('La direccion debe empezar con https://'); return; }
+  TB_CFG.workerUrl=u; TB_CFG_LEIDO=Date.now();
+  try{ db.collection('config').doc('tasas_binance_cfg').set({workerUrl:u, por:(VEND?VEND.codigo:''), actualizado:new Date().toISOString()},{merge:true}); }catch(e){}
+  toast(u?'Direccion guardada':'Direccion quitada');
+  cargarSerieBinance(function(){ renderAdminTasasBinance(); }, true);
 }
 function botonConsultarTasaBinance(){
   var res=document.getElementById('tbRes');
@@ -19248,11 +19280,12 @@ function guardarModoTasaBinance(){
   if(!puedeEditarTasasBCV()){ renderAdminTasasBinance(); return; }
   var m=document.getElementById('tbModo').value==='manual'?'manual':'auto';
   TASAS_BINANCE_MODO=m;
-  try{ db.collection('config').doc('tasas_binance_cfg').set({modo:m, por:(VEND?VEND.codigo:''), actualizado:new Date().toISOString()}); }catch(e){}
+  try{ db.collection('config').doc('tasas_binance_cfg').set({modo:m, por:(VEND?VEND.codigo:''), actualizado:new Date().toISOString()},{merge:true}); }catch(e){}
   toast(m==='manual'?'Modo manual: se usara la ultima tasa cargada':'Modo automatico activado');
 }
 function renderAdminTasasBCV(){
   cargarTasasBinance(function(){ renderAdminTasasBinance(); });
+  tbCargarCfg(function(){ renderAdminTasasBinance(); });
   cargarSerieBinance(function(){ renderAdminTasasBinance(); }, true);
   cargarTasasBinanceDias(function(){ renderAdminTasasBinance(); }, true);
   renderAdminTasasBinance();
@@ -19435,27 +19468,53 @@ var TB_SERIE_LEIDA=0;
 var TB_SERIE_ENCURSO=false;
 var TB_SERIE_COLA=[];
 var TB_LECTURAS_DIA=3;
+// Configuracion (config/tasas_binance_cfg): direccion del servicio de tasas (Cloudflare Worker)
+var TB_CFG={workerUrl:''};
+var TB_CFG_LEIDO=0;
+function tbLimpiarUrl(u){
+  u=String(u||'').trim().replace(/\/+$/,'');
+  return /^https:\/\/[^\s]+$/i.test(u)?u:'';
+}
+function tbCargarCfg(cb){
+  if(TB_CFG_LEIDO){ cb(); return; }
+  var fin=function(){ TB_CFG_LEIDO=Date.now(); cb(); };
+  try{
+    db.collection('config').doc('tasas_binance_cfg').get().then(function(d){
+      if(d && d.exists){ TB_CFG.workerUrl=tbLimpiarUrl(d.data().workerUrl); }
+      fin();
+    }).catch(function(e){ console.log('No se pudo leer la configuracion de tasas:', e); fin(); });
+  }catch(e){ fin(); }
+}
+// Pide un JSON con tiempo maximo de 8 s. Siempre responde (null si no hay respuesta)
+function tbFetchJson(url){
+  return new Promise(function(resolve){
+    if(typeof fetch!=='function'){ resolve(null); return; }
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var timer=ctrl?setTimeout(function(){ ctrl.abort(); }, 8000):null;
+    fetch(url,{cache:'no-store', signal:ctrl?ctrl.signal:undefined}).then(function(r){
+      return r.json().then(function(j){ if(!r.ok){ j=j||{}; j._error=j.error||('HTTP '+r.status); } return j; });
+    }).then(function(j){ if(timer) clearTimeout(timer); resolve(j); }, function(e){ if(timer) clearTimeout(timer); console.log('No se pudo leer '+url.split('?')[0]+':', e); resolve(null); });
+  });
+}
+// Lecturas programadas: se juntan las del archivo del repositorio (tasas_binance.json) y,
+// si esta configurado, las del servicio de Cloudflare. Se quitan duplicados por hora exacta.
 function cargarSerieBinance(cb, forzar){
   if(!forzar && TB_SERIE_LEIDA && (Date.now()-TB_SERIE_LEIDA)<600000){ if(cb) cb(); return; }
   if(cb) TB_SERIE_COLA.push(cb);
   if(TB_SERIE_ENCURSO) return;
   var fin=function(){ TB_SERIE_ENCURSO=false; TB_SERIE_LEIDA=Date.now(); var q=TB_SERIE_COLA; TB_SERIE_COLA=[]; q.forEach(function(f){ try{ f(); }catch(e){ console.log(e); } }); };
-  if(typeof fetch!=='function'){ fin(); return; }
   TB_SERIE_ENCURSO=true;
-  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
-  var timer=ctrl?setTimeout(function(){ ctrl.abort(); }, 8000):null;
-  fetch('tasas_binance.json?t='+Date.now(),{cache:'no-store', signal:ctrl?ctrl.signal:undefined}).then(function(r){
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    return r.json();
-  }).then(function(j){
-    if(timer) clearTimeout(timer);
-    var l=(j&&j.lecturas)||[];
-    TB_SERIE=l.filter(function(x){ return x && x.v>0 && /^\d{4}-\d{2}-\d{2}$/.test(x.f||''); }).sort(function(a,b){ return a.t>b.t?1:(a.t<b.t?-1:0); });
-    fin();
-  }, function(e){
-    if(timer) clearTimeout(timer);
-    console.log('No se pudo leer tasas_binance.json:', e);
-    fin();
+  tbCargarCfg(function(){
+    var fuentes=[tbFetchJson('tasas_binance.json?t='+Date.now())];
+    if(TB_CFG.workerUrl) fuentes.push(tbFetchJson(TB_CFG.workerUrl+'/lecturas?t='+Date.now()));
+    Promise.all(fuentes).then(function(rs){
+      var todas=[], vistos={}, respondio=false;
+      rs.forEach(function(j){
+        if(j && j.lecturas){ respondio=true; j.lecturas.forEach(function(x){ if(x && x.v>0 && /^\d{4}-\d{2}-\d{2}$/.test(x.f||'') && !vistos[x.t]){ vistos[x.t]=1; todas.push(x); } }); }
+      });
+      if(respondio) TB_SERIE=todas.sort(function(a,b){ return a.t>b.t?1:(a.t<b.t?-1:0); });
+      fin();
+    }).catch(function(e){ console.log(e); fin(); });
   });
 }
 function tbFechaDM(iso){ return (iso&&iso.length>=10)?(iso.slice(8,10)+'/'+iso.slice(5,7)):''; }
@@ -21624,7 +21683,7 @@ function cerrarSesion(){
 // archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
 // y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
 // el publicado es distinto, la app se recarga sola con la version nueva.
-var APP_VERSION='2026-11-22-1210';
+var APP_VERSION='2026-11-22-1340';
 function revisarVersionApp(){
   try{
     if(typeof fetch!=='function') return;
