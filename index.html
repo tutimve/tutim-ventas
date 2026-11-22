@@ -820,6 +820,12 @@ input[type=file]:hover{border-color:var(--azul-m)}
           <option value="15">15%</option>
         </select>
       </div>
+      <div class="field hidden" id="cobroDescManualWrap">
+        <label>Descuento manual (%)</label>
+        <input type="number" id="cobroDescuentoManual" min="0" max="40" step="0.01" inputmode="decimal" placeholder="Ej: 26" oninput="calcularValidacionCobro()">
+        <div style="font-size:11px;color:#888;margin-top:2px">Solo para pagos en divisas (Divisas, Binance o Zelle). Maximo 40%.</div>
+      </div>
+      <div id="cobroBinanceInfo" class="hidden" style="background:var(--azul-c);border-radius:10px;padding:10px 12px;margin-bottom:10px"></div>
       <div id="cobroRetencionWrap" class="hidden">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:10px;cursor:pointer">
           <input type="checkbox" id="cobroRetencionIVA" style="width:16px;height:16px" onchange="calcularValidacionCobro()">
@@ -1361,6 +1367,23 @@ input[type=file]:hover{border-color:var(--azul-m)}
 
     <!-- TAB TASAS BCV -->
     <div id="adminTab-tasas" style="display:none">
+      <div class="card" id="tasaBinanceCard">
+        <div class="card-title">Tasa Binance / paralelo (cobros en divisas)</div>
+        <p style="font-size:12px;color:#666;margin-bottom:10px">Se usa para calcular a cuanto equivale, en Bs a tasa BCV, un descuento dado en un pago en divisas (Divisas, Binance, Zelle). Un proceso automatico de GitHub anota la tasa USDT/VES de Binance P2P <strong>3 veces al dia (8:30 am, 1:00 pm y 5:00 pm)</strong>, todos los dias. La tasa de un dia es el <strong>promedio de sus lecturas</strong> y cada pago usa la del dia en que se hizo. Si se reporta el mismo dia, usa el promedio de las lecturas que haya hasta ese momento y queda guardado asi (no cambia despues); si se reporta otro dia, usa todas las lecturas del dia del pago. Si el proceso falla, se usa la ultima lectura disponible o el modo manual.</p>
+        <div id="tbResumen" style="margin-bottom:10px"></div>
+        <button class="btn btn-s btn-sm" onclick="botonConsultarTasaBinance()">Actualizar lecturas</button>
+        <div id="tbRes" style="margin-top:6px"></div>
+        <div id="tbEditWrap" style="display:none;margin-top:12px">
+          <div class="field"><label>Modo</label>
+            <select id="tbModo" onchange="guardarModoTasaBinance()">
+              <option value="auto">Automatico (promedio diario de las lecturas programadas)</option>
+              <option value="manual">Manual (usa la ultima tasa que cargue aqui)</option>
+            </select></div>
+          <div class="field"><label>Cargar tasa a mano (Bs por dolar/USDT)</label><input type="text" inputmode="decimal" id="tbValor" placeholder="Ej: 640,50"></div>
+          <button class="btn btn-p btn-sm" onclick="guardarTasaBinanceManual()">Guardar tasa ahora</button>
+        </div>
+        <div id="tbLista" style="margin-top:12px"></div>
+      </div>
       <div class="card">
         <div class="card-title">Historial de Tasas BCV</div>
         <p style="font-size:12px;color:#666;margin-bottom:10px">Al registrar un pago por transferencia, la app coloca la tasa de la fecha del deposito (redondeada a 2 decimales; el campo sigue siendo editable). Si esa fecha es fin de semana o feriado y no tiene tasa propia, se usa la del dia habil SIGUIENTE.</p>
@@ -2103,6 +2126,7 @@ input[type=file]:hover{border-color:var(--azul-m)}
   <div class="modal" style="max-width:860px">
     <div class="dsp-mhead"><div><h3 id="cvTitulo">Cobros del vendedor</h3><div class="dsp-sub" id="cvSub" style="margin-top:2px"></div></div><button class="dsp-x" onclick="cerrarModal('mCobrosVend')">✕</button></div>
     <div id="cvStats" class="dsp-stats"></div>
+    <div id="cvMonedas" class="dsp-note" style="margin:-4px 0 12px"></div>
     <div class="dsp-grid" style="margin-bottom:12px">
       <div class="dsp-f dsp-span2"><label>Buscar cliente o documento</label><input type="text" id="cvBuscar" oninput="cvRender()" placeholder="Nombre del cliente o N° de documento..."></div>
       <div class="dsp-f"><label>Ordenar por</label>
@@ -3892,6 +3916,7 @@ function goScreen(name){
       if(tasaAutoRellenarDepositos()) { renderDepositosCobro(); }
       if(typeof renderHistorialCobros==='function' && PAGOS_COBRANZA) renderHistorialCobros();
     };
+    try{ cargarSerieBinance(); }catch(e){}
     cargarTasasBCV(function(cambio){
       if(cambio) refrescarPorTasas();
       // Luego consulta la web por si ya hay una tasa nueva que agregar
@@ -8247,6 +8272,7 @@ function montoOriginalPago(p){
 }
 
 function generarReporteCobrosDescuentos(){
+  if(!TB_SERIE_LEIDA){ cargarSerieBinance(function(){ generarReporteCobrosDescuentos(); }); return; }
   var cont=document.getElementById('rptCobrosDescuentos');
   cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando pagos...</div>';
   var alcanceRptCob=alcanceVendedoresVisibles();
@@ -8274,11 +8300,12 @@ function generarReporteCobrosDescuentos(){
     // Agrupar por vendedor
     var porVendCob={};
     var totalCobrado=0, totalDescuentoMonto=0, totalOriginal=0;
+    var porMoneda={}; // lo mismo pero separado por moneda de pago: los descuentos en divisas no se comparan con los de Bs/BCV
     var porPctDesc={}; // cuantos pagos, cuanto se cobro y cuanto se dejo de cobrar en cada % de descuento
     for(var i=0;i<lista.length;i++){
       var p=lista[i];
       var vid=p.vendedor||'??';
-      if(!porVendCob[vid]) porVendCob[vid]={nombre:p.vendedorNombre||('VEND '+vid), cobrado:0, descuentoMonto:0, original:0, pagos:0, lista:[]};
+      if(!porVendCob[vid]) porVendCob[vid]={nombre:p.vendedorNombre||('VEND '+vid), cobrado:0, descuentoMonto:0, original:0, pagos:0, lista:[], descDiv:0, cobDiv:0};
       porVendCob[vid].lista.push(p);
       var original=montoOriginalPago(p);
       var descMonto=Math.max(0, Math.round((original-p.montoUSD)*100)/100);
@@ -8289,7 +8316,19 @@ function generarReporteCobrosDescuentos(){
       totalCobrado+=p.montoUSD;
       totalDescuentoMonto+=descMonto;
       totalOriginal+=original;
-      var pctKey=(p.descuentoPct||0)+'%';
+      var mon=monedaPago(p);
+      if(!porMoneda[mon]) porMoneda[mon]={pagos:0, cobrado:0, descuentoMonto:0, original:0};
+      porMoneda[mon].pagos++; porMoneda[mon].cobrado+=p.montoUSD; porMoneda[mon].descuentoMonto+=descMonto; porMoneda[mon].original+=original;
+      if(mon==='divisas'){
+        porVendCob[vid].descDiv+=descMonto; porVendCob[vid].cobDiv+=p.montoUSD;
+        if(descMonto>0){
+          var eqP=descEquivBCVPago(p);
+          if(eqP!==null){ porMoneda[mon].eqBase=(porMoneda[mon].eqBase||0)+original; porMoneda[mon].eqMonto=(porMoneda[mon].eqMonto||0)+original*eqP/100; porMoneda[mon].eqN=(porMoneda[mon].eqN||0)+1;
+            porVendCob[vid].eqBase=(porVendCob[vid].eqBase||0)+original; porVendCob[vid].eqMonto=(porVendCob[vid].eqMonto||0)+original*eqP/100; }
+          else porMoneda[mon].sinTasa=(porMoneda[mon].sinTasa||0)+1;
+        }
+      }
+      var pctKey=(p.descuentoPct||0)+'%'+(mon==='divisas'?' · divisas':'');
       if(!porPctDesc[pctKey]) porPctDesc[pctKey]={pagos:0, cobrado:0, descuentoMonto:0};
       porPctDesc[pctKey].pagos++;
       porPctDesc[pctKey].cobrado+=p.montoUSD;
@@ -8305,14 +8344,27 @@ function generarReporteCobrosDescuentos(){
       '<div class="metric"><div class="num" style="font-size:18px">'+(dpTotal?dpTotal.dias+' d':'-')+'</div><div class="lbl">Dias prom. de cobro (ponderado por $ cobrado)</div></div>'+
     '</div>';
 
-    html+='<div style="font-weight:700;font-size:12px;color:#666;margin:10px 0 6px">Por vendedor <span style="font-weight:400;color:#999">· toca un vendedor para ver su detalle</span></div>';
+    html+='<div style="font-weight:700;font-size:12px;color:#666;margin:10px 0 6px">Por moneda de pago</div>';
+    ['bs','divisas','mixto'].forEach(function(k){
+      var m=porMoneda[k]; if(!m) return;
+      var pm=m.original>0?Math.round(m.descuentoMonto/m.original*1000)/10:0;
+      html+='<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--borde);font-size:12px">'+
+        '<span><strong>'+etiquetaMonedaPago(k)+'</strong> — '+m.pagos+' pago'+(m.pagos!==1?'s':'')+'</span>'+
+        '<span style="text-align:right"><strong>$'+formatearNumeroConMiles(m.cobrado,2)+'</strong> cobrado'+(m.descuentoMonto>0?' <span style="color:var(--rojo)">(-$'+formatearNumeroConMiles(m.descuentoMonto,2)+' dcto. · '+pm+'% del original)</span>':'')+'</span></div>';
+      if(k==='divisas' && m.eqN){
+        html+='<div style="font-size:11px;color:var(--azul);padding:2px 0 5px;text-align:right">Equivalente a tasa BCV: <strong>-$'+formatearNumeroConMiles(m.eqMonto,2)+'</strong> ('+(m.eqBase>0?Math.round(m.eqMonto/m.eqBase*1000)/10:0)+'% del original) en '+m.eqN+' pago'+(m.eqN!==1?'s':'')+', segun la tasa Binance de cada cobro</div>';
+      }
+      if(k==='divisas' && m.sinTasa) html+='<div style="font-size:11px;color:#888;text-align:right">'+m.sinTasa+' pago'+(m.sinTasa!==1?'s':'')+' con descuento sin tasa Binance guardada (no entran en el equivalente)</div>';
+    });
+    if(porMoneda.divisas) html+='<div style="font-size:11px;color:#888;margin:4px 0 0">Los descuentos en divisas (Divisas, Binance, Zelle) pueden ser mayores porque compensan la diferencia entre la tasa BCV y el dolar; no son comparables con los de pagos en Bs.</div>';
+    html+='<div style="font-weight:700;font-size:12px;color:#666;margin:14px 0 6px">Por vendedor <span style="font-weight:400;color:#999">· toca un vendedor para ver su detalle</span></div>';
     var vidsCob=Object.keys(porVendCob).sort(function(a,b){return porVendCob[b].cobrado-porVendCob[a].cobrado;});
     for(var i=0;i<vidsCob.length;i++){
       var d=porVendCob[vidsCob[i]];
       var pctSobreOriginal=d.original>0?(Math.round(d.descuentoMonto/d.original*1000)/10):0;
       html+='<div class="cv-vend-row" data-v="'+escUbic(vidsCob[i])+'" onclick="abrirCobrosVendedor(this.getAttribute(&quot;data-v&quot;))" title="Ver el detalle de cobros de este vendedor">'+
         '<div><strong style="font-size:13px">VEND '+escUbic(vidsCob[i])+' - '+escUbic(d.nombre)+'</strong><div style="font-size:11px;color:#888">'+d.pagos+' pago'+(d.pagos!==1?'s':'')+(function(){ var dv=diasPromPonderado(d.lista), ds=diasPromSimple(d.lista); return dv?' · dias prom.: '+ds+' d simple / '+dv.dias+' d ponderado':''; })()+'</div><div class="cv-vend-go">Ver detalle ›</div></div>'+
-        '<div style="text-align:right"><strong style="font-size:14px;color:var(--verde)">$'+formatearNumeroConMiles(d.cobrado,2)+'</strong><div style="font-size:11px;color:var(--rojo)">-$'+formatearNumeroConMiles(d.descuentoMonto,2)+' dcto. ('+pctSobreOriginal+'% del original)</div></div>'+
+        '<div style="text-align:right"><strong style="font-size:14px;color:var(--verde)">$'+formatearNumeroConMiles(d.cobrado,2)+'</strong><div style="font-size:11px;color:var(--rojo)">-$'+formatearNumeroConMiles(d.descuentoMonto,2)+' dcto. ('+pctSobreOriginal+'% del original)</div>'+(d.descDiv>0?'<div style="font-size:10px;color:#888">de ese dcto., $'+formatearNumeroConMiles(d.descDiv,2)+' en divisas'+(d.eqBase>0?' (equivale a '+(Math.round(d.eqMonto/d.eqBase*1000)/10)+'% en Bs a BCV)':'')+'</div>':'')+'</div>'+
       '</div>';
     }
 
@@ -8490,7 +8542,7 @@ function abrirCobrosVendedor(vid){
     });
     var dd=docs.map(function(d){ return d.dias; }).filter(function(x){ return x!==null; });
     var pend=(p.montoAbonado!==undefined&&p.montoAbonado!==null&&p.sumaDocsOriginal!==undefined&&p.sumaDocsOriginal!==null)?Math.round((p.sumaDocsOriginal-p.montoAbonado)*100)/100:0;
-    return {diasPago:diasCobroPago(p), pend:pend>0.01?pend:0, id:p.id, fecha:p.fecha, clienteId:p.clienteId, cliente:p.clienteNombre||String(p.clienteId||''), cobrado:p.montoUSD||0, original:original, desc:desc,
+    return {diasPago:diasCobroPago(p), pend:pend>0.01?pend:0, moneda:monedaPago(p), eq:descEquivBCVPago(p), tb:tasaBinancePago(p), id:p.id, fecha:p.fecha, clienteId:p.clienteId, cliente:p.clienteNombre||String(p.clienteId||''), cobrado:p.montoUSD||0, original:original, desc:desc,
       pct:p.descuentoPct||0, docs:docs, docsRaw:(p.documentos||[]), diasMax:dd.length?Math.max.apply(null,dd):-1, diasLista:dd};
   });
   document.getElementById('cvTitulo').textContent='VEND '+vid+(CVD.nombre?' - '+CVD.nombre:'');
@@ -8533,6 +8585,14 @@ function cvRender(){
     st('$'+formatearNumeroConMiles(desc,2),'Descuentos otorgados ('+pctD+'% del original)','var(--rojo)')+
     st(pctC+'%','Descuento sobre lo cobrado','var(--rojo)')+
     st(v.length,'Pagos')+st(ndocs,'Documentos')+st(promS===null?'-':promS+' d','Dias prom. de cobro (simple)')+st(prom===null?'-':prom+' d','Dias prom. de cobro (ponderado por $ cobrado)');
+  var mg={bs:{c:0,d:0,o:0,eb:0,em:0},divisas:{c:0,d:0,o:0,eb:0,em:0},mixto:{c:0,d:0,o:0,eb:0,em:0}};
+  v.forEach(function(p){ var g=mg[p.moneda]||mg.bs; g.c+=p.cobrado; g.d+=p.desc; g.o+=p.cobrado+p.desc; if(p.eq!==null&&p.eq!==undefined){ g.eb+=p.cobrado+p.desc; g.em+=(p.cobrado+p.desc)*p.eq/100; } });
+  var partes=[];
+  ['bs','divisas','mixto'].forEach(function(k){
+    var g=mg[k]; if(!(g.c>0)&&!(g.d>0)) return;
+    partes.push('<b>'+etiquetaMonedaPago(k)+':</b> cobrado $'+formatearNumeroConMiles(g.c,2)+' · descuento $'+formatearNumeroConMiles(g.d,2)+' ('+(g.o>0?Math.round(g.d/g.o*1000)/10:0)+'% del original)'+(g.eb>0?' · <span style="color:var(--azul)">equivale a $'+formatearNumeroConMiles(g.em,2)+' ('+(Math.round(g.em/g.eb*1000)/10)+'%) en Bs a tasa BCV</span>':''));
+  });
+  var elMon=document.getElementById('cvMonedas'); if(elMon) elMon.innerHTML=partes.join('<br>');
   var cont=document.getElementById('cvLista');
   if(!v.length){ cont.innerHTML='<div class="rp-empty">No hay pagos con ese criterio</div>'; return; }
   var colorDias=function(d){ return d===null?'#bbb':(d>60?'var(--rojo)':(d>30?'var(--ambar)':'var(--verde)')); };
@@ -8545,7 +8605,7 @@ function cvRender(){
         return '<div class="cv-dr"><b>'+escUbic(d.numero)+'</b><span>'+escUbic(d.emision||'-')+'</span><span class="r" style="font-weight:700;color:'+colorDias(d.dias)+'">'+(d.dias===null?'-':d.dias+' d')+'</span><span class="r">$'+formatearNumeroConMiles(d.saldo,2)+'</span></div>';
       }).join(''):'<div class="dsp-meta" style="padding:8px 0">Sin detalle de documentos (pago antiguo)</div>';
     return '<div class="cv-pago" data-id="'+escUbic(p.id)+'" onclick="abrirDetallePagoCobro(this.getAttribute(&quot;data-id&quot;),event)" title="Ver el detalle de este cobro"><div class="cv-ph"><div style="min-width:0"><a class="cv-cli" data-c="'+escUbic(p.clienteId)+'" onclick="verFichaCliente(this.getAttribute(&quot;data-c&quot;))">'+escUbic(p.cliente)+'</a>'+
-      '<div class="dsp-meta">Pago '+escUbic(cvFmtFecha(p.fecha))+' · Cod '+escUbic(p.clienteId)+(p.diasPago!==null&&p.diasPago!==undefined?' · Cobrado a '+(Math.round(p.diasPago*10)/10)+' d':'')+(p.pend?' · <b style="color:var(--ambar)">Abono</b> · queda pendiente $'+formatearNumeroConMiles(p.pend,2):'')+'</div></div><div class="cv-money">'+money+'<div class="cv-go">Ver detalle ›</div></div></div><div class="cv-docs">'+docs+'</div></div>';
+      '<div class="dsp-meta">Pago '+escUbic(cvFmtFecha(p.fecha))+' · Cod '+escUbic(p.clienteId)+(p.moneda==='divisas'?' · <b style="color:var(--azul)">Divisas</b>'+(p.eq!==null&&p.eq!==undefined?' · equivale a '+formatearNumeroConMiles(p.eq,1)+'% en Bs (Binance Bs '+formatearNumeroConMiles(p.tb.valor,2)+' / BCV Bs '+formatearNumeroConMiles(p.tb.bcv,2)+')':''):(p.moneda==='mixto'?' · <b style="color:var(--azul)">Mixto</b>':''))+(p.diasPago!==null&&p.diasPago!==undefined?' · Cobrado a '+(Math.round(p.diasPago*10)/10)+' d':'')+(p.pend?' · <b style="color:var(--ambar)">Abono</b> · queda pendiente $'+formatearNumeroConMiles(p.pend,2):'')+'</div></div><div class="cv-money">'+money+'<div class="cv-go">Ver detalle ›</div></div></div><div class="cv-docs">'+docs+'</div></div>';
   }).join('');
 }
 function cvExcel(){
@@ -8572,7 +8632,7 @@ function descargarExcelCobrosDescuentos(){
     ['Cobros y Descuentos'],
     [ULTIMO_REPORTE_COBROS_DESCUENTOS.periodo],
     [],
-    ['Fecha','Vendedor','Cliente','Monto Original','% Descuento','Monto Descuento','Monto Cobrado','Forma de pago','Dias de cobro']
+    ['Fecha','Vendedor','Cliente','Monto Original','% Descuento','Monto Descuento','Monto Cobrado','Forma de pago','Dias de cobro','Pago en','Tasa Binance usada','Desc. equivalente a BCV %']
   ];
   for(var i=0;i<lista.length;i++){
     var p=lista[i];
@@ -8584,7 +8644,10 @@ function descargarExcelCobrosDescuentos(){
     filas.push([
       p.fecha, 'VEND '+(p.vendedor||'??')+' - '+(p.vendedorNombre||''), p.clienteNombre,
       Math.round(original*100)/100, (p.descuentoPct||0)+'%', descMonto, p.montoUSD, formaPagoTxt,
-      (function(){ var dd=diasCobroPago(p); return dd===null?'':Math.round(dd*10)/10; })()
+      (function(){ var dd=diasCobroPago(p); return dd===null?'':Math.round(dd*10)/10; })(),
+      etiquetaMonedaPago(monedaPago(p)),
+      (function(){ var tb=tasaBinancePago(p); return tb?tb.valor:''; })(),
+      (function(){ var e=descEquivBCVPago(p); return e===null?'':e+'%'; })()
     ]);
   }
   filas.push([]);
@@ -8602,6 +8665,16 @@ function descargarExcelCobrosDescuentos(){
   filas.push(['Total de descuentos otorgados', Math.round(totDesc*100)/100]);
   filas.push(['Monto original de los documentos', Math.round(totOriginal*100)/100]);
   filas.push(['% que representa el descuento del original', (totOriginal>0?(Math.round(totDesc/totOriginal*1000)/10):0)+'%']);
+  ['bs','divisas','mixto'].forEach(function(k){
+    var sub=lista.filter(function(x){ return monedaPago(x)===k; }); if(!sub.length) return;
+    var c=0,dm=0,o=0; sub.forEach(function(x){ var og=montoOriginalPago(x); o+=og; c+=x.montoUSD; dm+=Math.max(0,Math.round((og-x.montoUSD)*100)/100); });
+    filas.push(['Pagos '+etiquetaMonedaPago(k)+': cobrado / descuento / % del original', Math.round(c*100)/100, Math.round(dm*100)/100, (o>0?(Math.round(dm/o*1000)/10):0)+'%']);
+    if(k==='divisas'){
+      var eb=0, em=0, en=0;
+      sub.forEach(function(x){ var e=descEquivBCVPago(x); if(e!==null){ var og=montoOriginalPago(x); eb+=og; em+=og*e/100; en++; } });
+      if(en) filas.push(['   Equivalente a tasa BCV (segun la tasa Binance de cada cobro): descuento / % del original / pagos', Math.round(em*100)/100, (eb>0?(Math.round(em/eb*1000)/10):0)+'%', en]);
+    }
+  });
   var dpX=diasPromPonderado(lista);
   filas.push(['Dias promedio de cobro (simple, por documento)', diasPromSimple(lista)===null?'':diasPromSimple(lista)]);
   filas.push(['Dias promedio de cobro (ponderado por $ cobrado)', dpX?dpX.dias:'']);
@@ -8640,7 +8713,7 @@ function descargarExcelCobrosDescuentos(){
 
   var wb=XLSX.utils.book_new();
   var ws=XLSX.utils.aoa_to_sheet(filas);
-  ws['!cols']=[{wch:12},{wch:22},{wch:30},{wch:14},{wch:12},{wch:14},{wch:14},{wch:18},{wch:13}];
+  ws['!cols']=[{wch:12},{wch:22},{wch:30},{wch:14},{wch:12},{wch:14},{wch:14},{wch:18},{wch:13},{wch:11},{wch:16},{wch:18}];
   ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}},{s:{r:1,c:0},e:{r:1,c:7}}];
   XLSX.utils.book_append_sheet(wb, ws, 'Cobros y Descuentos');
   XLSX.writeFile(wb, 'cobros_descuentos_'+ULTIMO_REPORTE_COBROS_DESCUENTOS.periodo.replace(/[\/ ]/g,'_')+'.xlsx', {cellStyles:true});
@@ -18544,6 +18617,8 @@ function renderDocsPendientesCliente(clienteId, preservarSeleccion){
   var fechaHoyC=ahoraC.getFullYear()+'-'+String(ahoraC.getMonth()+1).padStart(2,'0')+'-'+String(ahoraC.getDate()).padStart(2,'0');
   document.getElementById('cobroFecha').value=fechaHoyC;
   document.getElementById('cobroDescuento').value='0';
+  var _dm=document.getElementById('cobroDescuentoManual'); if(_dm) _dm.value='';
+  try{ cargarTasasBinance(); }catch(e){}
   document.getElementById('cobroRetencionIVA').checked=false;
   cobroRetencionData=[];
   document.getElementById('cobroRetencionComprobante').value='';
@@ -18583,7 +18658,6 @@ function editarPagoRechazado(pagoId){
   document.getElementById('cobroCliSel').classList.remove('hidden');
   renderDocsPendientesCliente(pago.clienteId, true);
   document.getElementById('cobroFecha').value=pago.fecha;
-  document.getElementById('cobroDescuento').value=pago.descuentoPct||0;
   // La casilla de retencion se marca SOLO si el pago realmente abonó el IVA
   // retenido en su monto. La marca "Retencion IVA: SI" que se pone despues
   // en un pago confirmado (para comisiones) no abona nada, y si se heredara
@@ -18594,6 +18668,7 @@ function editarPagoRechazado(pagoId){
   cobroDepositos=(pago.depositos||[]).map(function(d){ var c={}; for(var k in d) c[k]=d[k]; if(!c.fecha) c.fecha=pago.fecha; if(c.formaPago==='transferencia' && c.tasa) c._tasaEditadaManual=true; return c; });
   if(cobroDepositos.length===0) cobroDepositos=[{formaPago:'transferencia', banco:'Venezuela', referencia:'', monto:'', tasa:'', fecha:pago.fecha}];
   renderDepositosCobro();
+  fijarDescuentoCobro(pago.descuentoPct||0);
   cobroComprobantesData=[];
   document.getElementById('cobroComprobantes').value='';
   document.getElementById('cobroComprobantesPrev').innerHTML='';
@@ -19079,7 +19154,72 @@ function consultarTasaBCV(){
     '<strong>'+formatearNumeroConMiles(ref.tasaExacta,4)+'</strong> (en cobranza se coloca '+formatearNumeroConMiles(ref.tasa,2)+')</div>';
 }
 
+function renderAdminTasasBinance(){
+  var puede=puedeEditarTasasBCV();
+  var ew=document.getElementById('tbEditWrap'); if(ew) ew.style.display=puede?'block':'none';
+  var md=document.getElementById('tbModo'); if(md) md.value=TASAS_BINANCE_MODO;
+  var rs=document.getElementById('tbResumen');
+  var hoy=tasaBCVHoyISO(), bcv=tbBCVReferencia();
+  if(rs){
+    var sr=tbTasaSerie(hoy), diff=function(v){ return bcv>0?(' · BCV Bs '+formatearNumeroConMiles(bcv,2)+' · diferencia <strong>'+(Math.round((v/bcv-1)*1000)/10)+'%</strong>'):''; };
+    if(sr && !sr.respaldo) rs.innerHTML='<div style="font-size:13px;color:#444">Tasa de hoy ('+tbFechaDM(hoy)+'): <strong>Bs '+formatearNumeroConMiles(sr.valor,2)+'</strong> · promedio de '+sr.n+' de '+TB_LECTURAS_DIA+' lecturas'+(sr.parcial?' <span style="color:#856404">(parcial)</span>':'')+diff(sr.valor)+'</div>';
+    else if(sr) rs.innerHTML='<div style="font-size:13px;color:#444">Hoy aun no hay lecturas. Ultima disponible ('+tbFechaDM(sr.fechaTasa)+'): <strong>Bs '+formatearNumeroConMiles(sr.valor,2)+'</strong>'+diff(sr.valor)+'</div>';
+    else rs.innerHTML='<div style="color:#856404;font-size:13px">Aun no hay lecturas programadas (el archivo tasas_binance.json esta vacio o no se ha publicado). Mientras tanto la app usa la web como respaldo al reportar un cobro.</div>';
+  }
+  var li=document.getElementById('tbLista');
+  if(li){
+    var dias={}, orden=[];
+    TB_SERIE.forEach(function(l){ if(!dias[l.f]){ dias[l.f]=[]; orden.push(l.f); } dias[l.f].push(l); });
+    orden.sort().reverse();
+    var h='';
+    if(orden.length){
+      h+='<div style="font-size:12px;color:#888;margin:4px 0">Lecturas programadas (ultimos 10 dias)</div>';
+      orden.slice(0,10).forEach(function(f){
+        var ls=dias[f], sum=0; ls.forEach(function(l){ sum+=l.v; });
+        var det=ls.map(function(l){ return (l.h||'')+' · '+formatearNumeroConMiles(l.v,2); }).join('  |  ');
+        h+='<div style="padding:5px 0;border-bottom:1px solid var(--borde);font-size:12px"><div style="display:flex;justify-content:space-between;gap:8px"><span>'+tbFechaDM(f)+' <span style="color:#999">('+ls.length+' lectura'+(ls.length>1?'s':'')+')</span></span><strong>Promedio Bs '+formatearNumeroConMiles(sum/ls.length,2)+'</strong></div><div style="color:#888;font-size:11px">'+det+'</div></div>';
+      });
+    }
+    var ult=TASAS_BINANCE_LOG.slice(-8).reverse();
+    if(ult.length){
+      h+='<div style="font-size:12px;color:#888;margin:10px 0 4px">Respaldo: registros de la web / manuales</div>'+ult.map(function(e){
+        return '<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--borde);font-size:12px"><span>'+tbFmtHora(e.t)+' <span style="color:#999">'+(e.o==='manual'?'manual'+(e.q?' (VEND '+escUbic(e.q)+')':''):'web')+'</span></span><strong>Bs '+formatearNumeroConMiles(e.v,2)+'</strong></div>';
+      }).join('');
+    }
+    li.innerHTML=h;
+  }
+}
+function botonConsultarTasaBinance(){
+  var res=document.getElementById('tbRes');
+  if(res) res.innerHTML='<div style="font-size:12px;color:#888">Actualizando lecturas...</div>';
+  cargarSerieBinance(function(){
+    var u=TB_SERIE[TB_SERIE.length-1];
+    if(res) res.innerHTML='<div style="font-size:12px;border-radius:6px;padding:6px 8px;'+(u?'color:var(--verde);background:var(--verde-c)':'color:#856404;background:#FFF3CD')+'">'+(u?('Lecturas cargadas: '+TB_SERIE.length+'. Ultima: '+tbFechaDM(u.f)+' '+(u.h||'')+' · Bs '+formatearNumeroConMiles(u.v,2)+'.'):'No hay lecturas todavia. Revisa que el proceso programado de GitHub (Actions) este activo y que tasas_binance.json este publicado junto a index.html.')+'</div>';
+    renderAdminTasasBinance();
+  }, true);
+}
+function guardarTasaBinanceManual(){
+  if(!puedeEditarTasasBCV()){ toast('Solo los usuarios 00, 01 y 20 pueden cargar la tasa'); return; }
+  var v=tasaBCVParseNumero(document.getElementById('tbValor').value);
+  if(!(v>0)){ toast('Escribe una tasa valida'); return; }
+  if(!tbPlausible(v)){ toast('Esa tasa esta muy lejos de la BCV. Revisala.'); return; }
+  TASA_BINANCE={valor:Math.round(v*10000)/10000, momento:new Date().toISOString(), fuente:'manual', t:Date.now(), origen:'manual'};
+  tbRegistrarLog(TASA_BINANCE.valor, 'manual', 'manual');
+  document.getElementById('tbValor').value='';
+  toast('Tasa Binance guardada');
+  renderAdminTasasBinance();
+}
+function guardarModoTasaBinance(){
+  if(!puedeEditarTasasBCV()){ renderAdminTasasBinance(); return; }
+  var m=document.getElementById('tbModo').value==='manual'?'manual':'auto';
+  TASAS_BINANCE_MODO=m;
+  try{ db.collection('config').doc('tasas_binance_cfg').set({modo:m, por:(VEND?VEND.codigo:''), actualizado:new Date().toISOString()}); }catch(e){}
+  toast(m==='manual'?'Modo manual: se usara la ultima tasa cargada':'Modo automatico activado');
+}
 function renderAdminTasasBCV(){
+  cargarTasasBinance(function(){ renderAdminTasasBinance(); });
+  cargarSerieBinance(function(){ renderAdminTasasBinance(); }, true);
+  renderAdminTasasBinance();
   var puede=puedeEditarTasasBCV();
   var wrap=document.getElementById('tasasBCVEditWrap');
   if(wrap) wrap.style.display=puede?'block':'none';
@@ -19201,6 +19341,7 @@ function renderDepositosCobro(){
           '<option value="efectivo"'+(d.formaPago==='efectivo'?' selected':'')+'>Efectivo</option>'+
           '<option value="divisas"'+(d.formaPago==='divisas'?' selected':'')+'>Divisas</option>'+
           '<option value="binance"'+(d.formaPago==='binance'?' selected':'')+'>Binance (USDT)</option>'+
+          '<option value="zelle"'+(d.formaPago==='zelle'?' selected':'')+'>Zelle</option>'+
         '</select></div>'+
       (esT?(
         '<div class="field"><label>Banco</label><select onchange="actualizarCampoDeposito('+i+',&quot;banco&quot;,this.value)">'+
@@ -19231,11 +19372,313 @@ function renderDepositosCobro(){
   if(tasaAutoCambio) calcularValidacionCobro();
 }
 
+
+// ═══ Tasa Binance / paralelo AUTOMATICA, con hora ═══
+// La tasa se mueve durante el dia, asi que no se guarda "una por dia": la app
+// la consulta en el momento en que se reporta un cobro en divisas, y esa tasa
+// (con su hora) queda GUARDADA DENTRO DEL COBRO. Asi el reporte siempre usa
+// la tasa que habia cuando se hizo el cobro, aunque despues cambie.
+// Ademas cada consulta se anota en un registro (config/tasas_binance_AAAA-MM)
+// y la admin (00, 01, 20) puede cargarla a mano o poner el modo manual.
+var TASAS_BINANCE_FUENTES=[{nombre:'ve.dolarapi.com (paralelo)', url:'https://ve.dolarapi.com/v1/dolares/paralelo'}];
+var TASA_BINANCE={valor:0, momento:'', fuente:'', t:0, origen:''};
+var TASAS_BINANCE_LOG=[];
+var TASAS_BINANCE_MODO='auto';
+var TASAS_BINANCE_LEIDO=0;
+var TB_ENCURSO=false;
+var TB_COLA=[];
+var TB_INTENTO=0;
+// ── Serie programada: GitHub Actions anota la tasa 3 veces al dia (8:30, 1:00 pm
+// y 5:00 pm, hora de Caracas) en tasas_binance.json, junto a la app. La tasa de un
+// dia es el PROMEDIO de sus lecturas. Un pago usa el promedio de las lecturas del
+// dia del pago HASTA EL MOMENTO DEL REPORTE y queda congelado: si se reporta el
+// mismo dia antes de las 3 lecturas usa las que haya (parcial); si se reporta otro
+// dia, usa todas las del dia del pago.
+var TB_SERIE=[];
+var TB_SERIE_LEIDA=0;
+var TB_SERIE_ENCURSO=false;
+var TB_SERIE_COLA=[];
+var TB_LECTURAS_DIA=3;
+function cargarSerieBinance(cb, forzar){
+  if(!forzar && TB_SERIE_LEIDA && (Date.now()-TB_SERIE_LEIDA)<600000){ if(cb) cb(); return; }
+  if(cb) TB_SERIE_COLA.push(cb);
+  if(TB_SERIE_ENCURSO) return;
+  var fin=function(){ TB_SERIE_ENCURSO=false; TB_SERIE_LEIDA=Date.now(); var q=TB_SERIE_COLA; TB_SERIE_COLA=[]; q.forEach(function(f){ try{ f(); }catch(e){ console.log(e); } }); };
+  if(typeof fetch!=='function'){ fin(); return; }
+  TB_SERIE_ENCURSO=true;
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=ctrl?setTimeout(function(){ ctrl.abort(); }, 8000):null;
+  fetch('tasas_binance.json?t='+Date.now(),{cache:'no-store', signal:ctrl?ctrl.signal:undefined}).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(j){
+    if(timer) clearTimeout(timer);
+    var l=(j&&j.lecturas)||[];
+    TB_SERIE=l.filter(function(x){ return x && x.v>0 && /^\d{4}-\d{2}-\d{2}$/.test(x.f||''); }).sort(function(a,b){ return a.t>b.t?1:(a.t<b.t?-1:0); });
+    fin();
+  }, function(e){
+    if(timer) clearTimeout(timer);
+    console.log('No se pudo leer tasas_binance.json:', e);
+    fin();
+  });
+}
+function tbFechaDM(iso){ return (iso&&iso.length>=10)?(iso.slice(8,10)+'/'+iso.slice(5,7)):''; }
+// Tasa del dia 'iso' (AAAA-MM-DD): promedio de sus lecturas; si ese dia no tiene
+// ninguna, la ultima lectura anterior (respaldo). null si no hay serie.
+function tbTasaSerie(iso, hastaMs){
+  if(!iso || !TB_SERIE.length) return null;
+  var tope=hastaMs?new Date(hastaMs).toISOString():'';
+  var dia=TB_SERIE.filter(function(l){ return l.f===iso && (!tope || l.t<=tope); });
+  if(dia.length){
+    var sum=0; dia.forEach(function(l){ sum+=l.v; });
+    return {valor:Math.round(sum/dia.length*10000)/10000, n:dia.length, parcial:(dia.length<TB_LECTURAS_DIA && iso>=tasaBCVHoyISO()), respaldo:false, fechaTasa:iso, momento:dia[dia.length-1].t, fuente:'Vzla.io (promedio del dia)', origen:'promedio', hasta:tope};
+  }
+  for(var i=TB_SERIE.length-1;i>=0;i--){
+    if(TB_SERIE[i].f<iso && (!tope || TB_SERIE[i].t<=tope)) return {valor:TB_SERIE[i].v, n:1, parcial:true, respaldo:true, fechaTasa:TB_SERIE[i].f, momento:TB_SERIE[i].t, fuente:'Vzla.io (ultima lectura previa)', origen:'respaldo', hasta:tope};
+  }
+  return null;
+}
+function tbCopiar(a,b){ var o={}; for(var k in a) o[k]=a[k]; if(b) for(var k2 in b) o[k2]=b[k2]; return o; }
+// Tasa de un pago ya guardado: la que quedo congelada al reportarlo
+function tasaBinancePago(p){
+  var t=p && p.tasaBinance; if(!t || !(t.valor>0)) return null;
+  return t;
+}
+function tbDescOrigen(t){
+  if(!t) return '';
+  if(t.origen==='promedio') return 'promedio de '+t.n+' lectura'+(t.n>1?'s':'')+' del '+tbFechaDM(t.fechaTasa)+(t.parcial?' · hasta '+(t.hasta?tbFmtHora(t.hasta):'el reporte')+', momento del reporte ('+t.n+' de '+TB_LECTURAS_DIA+' lecturas del dia)':'');
+  if(t.origen==='respaldo') return 'ultima lectura disponible, del '+tbFechaDM(t.fechaTasa)+' (no habia lecturas ese dia)';
+  return tbFmtHora(t.momento)+(t.estimada?', no actualizada':'');
+}
+function tbMesISO(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function tbBCVReferencia(iso){
+  var r=buscarTasaBCV(iso||tasaBCVHoyISO());
+  if(r && r.tasaExacta>0) return r.tasaExacta;
+  var f=TASAS_BCV_FECHAS; if(f.length) return TASAS_BCV[f[f.length-1]]||0;
+  return 0;
+}
+function tbPlausible(v){
+  if(!(v>0)) return false;
+  var b=tbBCVReferencia();
+  if(b>0){ var r=v/b; return r>=0.9 && r<=3; }
+  return true;
+}
+function tbExtraerValor(j){
+  if(!j) return 0;
+  var x=(j.promedio!==null&&j.promedio!==undefined)?j.promedio:((j.venta!==null&&j.venta!==undefined)?j.venta:j.compra);
+  x=parseFloat(x); return x>0?x:0;
+}
+function tbFmtHora(iso){
+  var d=new Date(iso); if(isNaN(d.getTime())) return '';
+  var hoy=new Date(), mismo=d.toDateString()===hoy.toDateString();
+  return (mismo?'hoy ':(('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+' '))+d.toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit'});
+}
+// Tasa vigente (la mas reciente conocida) y que tan vieja es
+function tasaBinanceVigente(){
+  if(!(TASA_BINANCE.valor>0)) return null;
+  var edad=(Date.now()-new Date(TASA_BINANCE.momento).getTime())/60000;
+  if(isNaN(edad)) edad=9999;
+  return {valor:TASA_BINANCE.valor, momento:TASA_BINANCE.momento, fuente:TASA_BINANCE.fuente, origen:TASA_BINANCE.origen, edadMin:Math.round(edad), estimada:edad>90};
+}
+// Descuento nominal en divisas -> descuento equivalente en Bs a tasa BCV
+// 1 - (1 - d) x (Binance / BCV). Ej: d=26%, Binance/BCV=1.15 -> 14.9%
+function descEquivBCVPct(d, binance, bcv){
+  if(!(binance>0)||!(bcv>0)) return null;
+  return Math.round((1-(1-d/100)*(binance/bcv))*10000)/100;
+}
+// Lo contrario: que % en divisas equivale a un % dado en Bs a tasa BCV
+function descDivisasParaEquivBCV(e, binance, bcv){
+  if(!(binance>0)||!(bcv>0)) return null;
+  return Math.round((1-(1-e/100)*(bcv/binance))*10000)/100;
+}
+function snapshotTasaBinance(fechaPago){
+  var bcv0=tbBCVReferencia(fechaPago);
+  var sr=(TASAS_BINANCE_MODO==='manual')?null:tbTasaSerie(fechaPago, Date.now());
+  if(sr) return {valor:sr.valor, momento:sr.momento, fuente:sr.fuente, origen:sr.origen, estimada:!!sr.respaldo, n:sr.n, parcial:!!sr.parcial, hasta:sr.hasta, fechaTasa:sr.fechaTasa, bcv:bcv0>0?bcv0:null};
+  var v=tasaBinanceVigente(); if(!v) return null;
+  var bcv=tbBCVReferencia(fechaPago);
+  return {valor:v.valor, momento:v.momento, fuente:v.fuente, origen:v.origen, estimada:v.estimada, bcv:bcv>0?bcv:null};
+}
+// Equivalente a BCV de un pago ya guardado (null si no aplica o no hay tasa)
+function descEquivBCVPago(p){
+  if(!p || !(p.descuentoPct>0) || monedaPago(p)!=='divisas') return null;
+  var t=tasaBinancePago(p); if(!t || !(t.valor>0) || !(t.bcv>0)) return null;
+  return descEquivBCVPct(p.descuentoPct, t.valor, t.bcv);
+}
+function tbRegistrarLog(valor, fuente, origen){
+  var ult=TASAS_BINANCE_LOG[TASAS_BINANCE_LOG.length-1];
+  if(ult && origen==='auto'){
+    var dif=Math.abs(valor/ult.v-1), min=(Date.now()-new Date(ult.t).getTime())/60000;
+    if(dif<0.003 && min<20) return;
+  }
+  var e={t:new Date().toISOString(), v:valor, f:fuente, o:origen, q:(typeof VEND!=='undefined'&&VEND)?VEND.codigo:''};
+  TASAS_BINANCE_LOG.push(e);
+  try{
+    var upd={actualizado:e.t}; upd['e'+Date.now()]=e;
+    db.collection('config').doc('tasas_binance_'+tbMesISO()).set(upd,{merge:true}).catch(function(err){ console.log('No se pudo anotar la tasa Binance:', err); });
+  }catch(err){}
+}
+function cargarTasasBinance(cb, forzar){
+  if(!forzar && TASAS_BINANCE_LEIDO && (Date.now()-TASAS_BINANCE_LEIDO)<300000){ if(cb) cb(); return; }
+  try{
+    Promise.all([db.collection('config').doc('tasas_binance_'+tbMesISO()).get(), db.collection('config').doc('tasas_binance_cfg').get()]).then(function(r){
+      var log=[];
+      if(r[0] && r[0].exists){ var d=r[0].data(); Object.keys(d).forEach(function(k){ if(/^e\d+$/.test(k) && d[k] && d[k].v>0) log.push(d[k]); }); }
+      log.sort(function(a,b){ return a.t>b.t?1:(a.t<b.t?-1:0); });
+      TASAS_BINANCE_LOG=log.slice(-300);
+      TASAS_BINANCE_MODO=(r[1] && r[1].exists && r[1].data().modo==='manual')?'manual':'auto';
+      var ult=log[log.length-1];
+      if(ult && (!TASA_BINANCE.valor || ult.t>TASA_BINANCE.momento)) TASA_BINANCE={valor:ult.v, momento:ult.t, fuente:ult.f, t:0, origen:ult.o==='manual'?'manual':'registro'};
+      TASAS_BINANCE_LEIDO=Date.now();
+      if(cb) cb();
+    }).catch(function(e){ console.log('No se pudo leer tasas Binance:', e); if(cb) cb(); });
+  }catch(e){ if(cb) cb(); }
+}
+function tbConsultarFuente(idx, cb){
+  if(idx>=TASAS_BINANCE_FUENTES.length){ cb(0,''); return; }
+  var f=TASAS_BINANCE_FUENTES[idx];
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=ctrl?setTimeout(function(){ ctrl.abort(); }, 8000):null;
+  fetch(f.url,{cache:'no-store', signal:ctrl?ctrl.signal:undefined}).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(j){
+    if(timer) clearTimeout(timer);
+    var v=tbExtraerValor(j);
+    if(tbPlausible(v)) cb(v, f.nombre);
+    else tbConsultarFuente(idx+1, cb);
+  }, function(e){
+    if(timer) clearTimeout(timer);
+    console.log('No se pudo consultar '+f.nombre+':', e);
+    tbConsultarFuente(idx+1, cb);
+  });
+}
+// Consulta la tasa en la web (maximo cada 5 min salvo opts.force). Siempre
+// termina llamando cb(tasaVigente|null): si la consulta falla queda la ultima
+// conocida (marcada como vieja si tiene mas de 90 min)
+function consultarTasaBinance(opts, cb){
+  opts=opts||{};
+  var fin=function(){ var q=TB_COLA; TB_COLA=[]; q.forEach(function(f){ try{ f(tasaBinanceVigente()); }catch(e){} }); };
+  if(cb) TB_COLA.push(cb);
+  if(TB_ENCURSO) return;
+  var reciente=TASA_BINANCE.t && (Date.now()-TASA_BINANCE.t)<300000;
+  if(TASAS_BINANCE_MODO==='manual' && !opts.web){ fin(); return; }
+  if(!opts.force && reciente){ fin(); return; }
+  if(typeof fetch!=='function'){ fin(); return; }
+  TB_ENCURSO=true; TB_INTENTO=Date.now();
+  tbConsultarFuente(0, function(v, nombre){
+    TB_ENCURSO=false;
+    if(v>0){
+      TASA_BINANCE={valor:Math.round(v*10000)/10000, momento:new Date().toISOString(), fuente:nombre, t:Date.now(), origen:'auto'};
+      tbRegistrarLog(TASA_BINANCE.valor, nombre, 'auto');
+    }
+    fin();
+  });
+}
+// Texto corto para mostrar la tasa con su hora
+function tbTextoVigente(v){
+  if(!v) return 'sin tasa disponible';
+  if(v.origen==='promedio' || v.origen==='respaldo') return 'Bs '+formatearNumeroConMiles(v.valor,2)+' · '+tbDescOrigen(v);
+  return 'Bs '+formatearNumeroConMiles(v.valor,2)+' · '+tbFmtHora(v.momento)+(v.origen==='manual'?' (manual)':(v.origen==='auto'?' (automatica)':' (ultimo registro)'));
+}
+// Recuadro del formulario de cobro cuando el pago es en divisas
+function renderInfoBinanceCobro(){
+  var el=document.getElementById('cobroBinanceInfo'); if(!el) return;
+  if(!cobroDescManualPermitido()){ el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  var fechaIso=(document.getElementById('cobroFecha')||{}).value||'';
+  var sr=(TASAS_BINANCE_MODO==='manual')?null:tbTasaSerie(fechaIso, Date.now());
+  var v=sr?tbCopiar(sr,{edadMin:0, estimada:!!sr.respaldo}):tasaBinanceVigente();
+  var bcv=tbBCVReferencia(fechaIso);
+  var pct=obtenerDescPctCobro();
+  if(!TB_SERIE_LEIDA && TASAS_BINANCE_MODO!=='manual' && !TB_SERIE_ENCURSO){ cargarSerieBinance(function(){ renderInfoBinanceCobro(); }); }
+  var h='<div style="font-size:12px;color:#444"><strong>Tasa Binance:</strong> '+tbTextoVigente(v)+(bcv>0?' · <strong>BCV:</strong> Bs '+formatearNumeroConMiles(bcv,2):'')+'</div>';
+  if(v && bcv>0){
+    h+='<div style="font-size:11px;color:#666;margin-top:2px">Diferencia Binance vs BCV: <strong>'+(Math.round((v.valor/bcv-1)*1000)/10)+'%</strong></div>';
+    if(pct>0){
+      var e=descEquivBCVPct(pct,v.valor,bcv);
+      h+='<div style="font-size:13px;margin-top:6px;color:var(--azul)">Un descuento de <strong>'+pct+'%</strong> en divisas equivale a <strong>'+formatearNumeroConMiles(e,1)+'%</strong> en Bs a tasa BCV.</div>';
+    }
+    var eqs=[5,10,15].map(function(x){ return x+'% en Bs ≈ <strong>'+formatearNumeroConMiles(descDivisasParaEquivBCV(x,v.valor,bcv),1)+'%</strong> en divisas'; });
+    h+='<div style="font-size:11px;color:#666;margin-top:4px">Referencia: '+eqs.join(' · ')+'</div>';
+    if(v.origen==='promedio' && v.parcial) h+='<div style="font-size:11px;color:#555;background:#F1F3F5;border-radius:5px;padding:4px 6px;margin-top:6px">Es el promedio de las lecturas de ese dia hasta este momento ('+v.n+' de '+TB_LECTURAS_DIA+'). El pago queda con esta tasa; no cambia despues.</div>';
+    else if(v.origen==='respaldo') h+='<div style="font-size:11px;color:#856404;background:#FFF3CD;border-radius:5px;padding:4px 6px;margin-top:6px">Aun no hay lecturas de ese dia hasta este momento; se usa la ultima disponible y el pago queda con esa tasa.</div>';
+    else if(v.estimada && v.origen!=='promedio') h+='<div style="font-size:11px;color:#856404;background:#FFF3CD;border-radius:5px;padding:4px 6px;margin-top:6px">Esta tasa tiene mas de 90 minutos. Se esta intentando actualizar; si no hay conexion el cobro se guardara con esta tasa marcada como no actualizada.</div>';
+  } else if(!v){
+    h+='<div style="font-size:11px;color:#856404;background:#FFF3CD;border-radius:5px;padding:4px 6px;margin-top:6px">'+(TB_ENCURSO?'Consultando la tasa...':'No hay tasa Binance disponible ahora. El cobro se guardara sin su equivalente a BCV.')+'</div>';
+  }
+  el.innerHTML=h;
+  if(!sr && !TB_ENCURSO && TB_SERIE_LEIDA && (!TASA_BINANCE.t || (Date.now()-TASA_BINANCE.t)>=300000) && (Date.now()-TB_INTENTO)>60000 && TASAS_BINANCE_MODO!=='manual'){
+    consultarTasaBinance({}, function(){ renderInfoBinanceCobro(); });
+  }
+}
+
 // Etiqueta legible de la forma de pago de un deposito (Binance se registra
 // en dolares/USDT, igual que Efectivo y Divisas: sin banco ni tasa)
 function etiquetaFormaPagoDeposito(d){
   var f=d&&d.formaPago;
-  return f==='transferencia'?'Transferencia':(f==='efectivo'?'Efectivo':(f==='binance'?'Binance (USDT)':'Divisas'));
+  return f==='transferencia'?'Transferencia':(f==='efectivo'?'Efectivo':(f==='binance'?'Binance (USDT)':(f==='zelle'?'Zelle':'Divisas')));
+}
+
+// ═══ Descuento manual: solo para pagos en DIVISAS (Divisas, Binance, Zelle) ═══
+// Un pago en divisas puede llevar un descuento mayor que uno en Bs a tasa BCV
+// (compensa la diferencia entre BCV y el dolar real), por eso se permite
+// escribirlo a mano, hasta DESC_MANUAL_MAX. Con Bs/transferencia/efectivo
+// solo existen los porcentajes de la lista.
+var DESC_ESTANDAR=[0,5,7,10,12,15];
+var DESC_MANUAL_MAX=40;
+var FORMAS_DIVISA=['divisas','binance','zelle'];
+function esDepositoDivisa(d){ return FORMAS_DIVISA.indexOf(d&&d.formaPago)>=0; }
+// Moneda del pago: 'divisas' si TODOS sus depositos son en divisas, 'bs' si
+// ninguno lo es, 'mixto' si hay de ambos
+function monedaPago(p){
+  var deps=(p&&p.depositos)||[];
+  if(!deps.length) return 'bs';
+  var n=deps.filter(esDepositoDivisa).length;
+  return n===deps.length?'divisas':(n===0?'bs':'mixto');
+}
+function etiquetaMonedaPago(m){ return m==='divisas'?'Divisas':(m==='mixto'?'Mixto':'Bs / BCV'); }
+function cobroDescManualPermitido(){
+  return (typeof cobroDepositos!=='undefined') && cobroDepositos.length>0 && cobroDepositos.every(esDepositoDivisa);
+}
+function actualizarOpcionesDescuento(extraPct){
+  var sel=document.getElementById('cobroDescuento'); if(!sel) return;
+  var permitido=cobroDescManualPermitido();
+  var extra=(extraPct!==undefined&&extraPct!==null&&DESC_ESTANDAR.indexOf(extraPct)<0&&!permitido)?extraPct:null;
+  var firma=(permitido?'M':'N')+'|'+(extra===null?'':extra);
+  if(sel.getAttribute('data-sig')!==firma){
+    var actual=sel.value, html='';
+    DESC_ESTANDAR.forEach(function(v){ html+='<option value="'+v+'">'+(v===0?'Sin descuento':v+'%')+'</option>'; });
+    if(extra!==null) html+='<option value="'+extra+'">'+extra+'%</option>';
+    if(permitido) html+='<option value="manual">Otro % (manual, solo divisas)</option>';
+    sel.innerHTML=html; sel.setAttribute('data-sig',firma);
+    var ok=Array.prototype.some.call(sel.options,function(o){ return o.value===actual; });
+    sel.value=ok?actual:'0';
+  }
+  var wrap=document.getElementById('cobroDescManualWrap');
+  var manual=permitido && sel.value==='manual';
+  if(wrap){ if(manual) wrap.classList.remove('hidden'); else wrap.classList.add('hidden'); }
+  if(!manual){ var inp=document.getElementById('cobroDescuentoManual'); if(inp && !permitido) inp.value=''; }
+}
+// % de descuento realmente elegido en el formulario (lista o manual)
+function obtenerDescPctCobro(){
+  var sel=document.getElementById('cobroDescuento'); if(!sel) return 0;
+  if(sel.value==='manual'){
+    if(!cobroDescManualPermitido()) return 0;
+    var v=parseFloat(String(document.getElementById('cobroDescuentoManual').value).replace(',','.'))||0;
+    return Math.round(Math.min(Math.max(v,0),DESC_MANUAL_MAX)*100)/100;
+  }
+  return parseFloat(sel.value)||0;
+}
+// Fija el descuento al editar un pago (acepta porcentajes fuera de la lista)
+function fijarDescuentoCobro(pct){
+  pct=pct||0;
+  var sel=document.getElementById('cobroDescuento'); if(!sel) return;
+  actualizarOpcionesDescuento(pct);
+  if(DESC_ESTANDAR.indexOf(pct)>=0) sel.value=String(pct);
+  else if(cobroDescManualPermitido()){ sel.value='manual'; document.getElementById('cobroDescuentoManual').value=pct; }
+  else sel.value=String(pct);
+  actualizarOpcionesDescuento(pct);
 }
 function calcularMontoUSDDeposito(d){
   var m=parseFloat(String(d.monto).replace(/,/g,''))||0;
@@ -19260,7 +19703,9 @@ function calcularValidacionCobro(){
     if(hayFiscal) wrapRet.classList.remove('hidden');
     else { wrapRet.classList.add('hidden'); document.getElementById('cobroRetencionIVA').checked=false; }
   }
-  var descPct=parseFloat(document.getElementById('cobroDescuento').value)||0;
+  actualizarOpcionesDescuento();
+  var descPct=obtenerDescPctCobro();
+  try{ renderInfoBinanceCobro(); }catch(e){}
   var faltaTasa=false;
   var montoUSD=0;
   for(var i=0;i<cobroDepositos.length;i++){
@@ -19382,6 +19827,25 @@ function htmlComprobantesRetencion(urls, tam){
 }
 
 function guardarPagoCobro(){
+  // Pago en divisas con descuento: se consulta la tasa Binance en este
+  // momento para guardarla dentro del cobro (maximo 8 s de espera)
+  if(cobroClienteSeleccionado && cobroDepositos.length>0 && cobroDescManualPermitido() && obtenerDescPctCobro()>0){
+    var btn=document.getElementById('btnGuardarCobro');
+    if(btn){ btn.disabled=true; btn.textContent='Consultando tasa Binance...'; }
+    var seguirGuardando=function(){
+      if(btn){ btn.disabled=false; btn.textContent='Reportar pago'; }
+      guardarPagoCobroInterno();
+    };
+    cargarSerieBinance(function(){
+      var fechaP=(document.getElementById('cobroFecha')||{}).value||'';
+      if(TASAS_BINANCE_MODO!=='manual' && tbTasaSerie(fechaP, Date.now())){ seguirGuardando(); return; }
+      consultarTasaBinance({}, seguirGuardando);
+    }, true);
+    return;
+  }
+  guardarPagoCobroInterno();
+}
+function guardarPagoCobroInterno(){
   if(!cobroClienteSeleccionado){ toast('Selecciona un cliente'); return; }
   if(cobroDocsSeleccionados.length===0){ toast('Selecciona al menos un documento'); return; }
   var fecha=document.getElementById('cobroFecha').value;
@@ -19429,7 +19893,13 @@ function guardarPagoCobro(){
     depositosFinal.push(dCopia);
   }
 
-  var descPct=parseFloat(document.getElementById('cobroDescuento').value)||0;
+  actualizarOpcionesDescuento();
+  var descPct=obtenerDescPctCobro();
+  if(document.getElementById('cobroDescuento').value==='manual'){
+    var vManual=parseFloat(String(document.getElementById('cobroDescuentoManual').value).replace(',','.'))||0;
+    if(vManual<=0){ toast('Indica el porcentaje de descuento manual'); return; }
+    if(vManual>DESC_MANUAL_MAX){ toast('El descuento manual no puede pasar de '+DESC_MANUAL_MAX+'%'); return; }
+  }
   var retencionMarcada=document.getElementById('cobroRetencionIVA')?document.getElementById('cobroRetencionIVA').checked:false;
   var docsSeleccionadosInfo=[];
   var sumaDocs=0, ivaTotalDocs=0, hayDocFiscal=false;
@@ -19480,6 +19950,7 @@ function guardarPagoCobro(){
     tasaConDiferencia:hayDifTasa,
     montoUSD:montoUSDTotal,
     descuentoPct:descPct,
+    descuentoManual:(document.getElementById('cobroDescuento').value==='manual'),
     montoEsperado:esperado,
     montoAbonado:montoAbonado,
     sumaDocsOriginal:sumaDocs,
@@ -19490,6 +19961,14 @@ function guardarPagoCobro(){
     estado:'pendiente',
     fechaReporte:new Date().toLocaleString('es-VE')
   };
+  if(cobroDescManualPermitido() && descPct>0){
+    var snapTB=snapshotTasaBinance(fecha);
+    if(snapTB){
+      pago.tasaBinance=snapTB;
+      var eqTB=descEquivBCVPct(descPct, snapTB.valor, snapTB.bcv);
+      if(eqTB!==null) pago.descuentoEquivBCV=eqTB;
+    }
+  }
   if(esEdicion){
     pago.editadoPor=VEND.nombre;
     pago.fechaEdicion=new Date().toLocaleString('es-VE');
@@ -19912,7 +20391,14 @@ function abrirDetallePagoCobro(pagoId, ev){
   html+=titulo('Montos');
   var abonado=(p.montoAbonado!==undefined&&p.montoAbonado!==null)?p.montoAbonado:p.montoEsperado;
   html+=fila('Total depositado', $(p.montoUSD));
-  if(p.descuentoPct) html+=fila('Descuento', p.descuentoPct+'%');
+  if(p.descuentoPct) html+=fila('Descuento', p.descuentoPct+'%'+(p.descuentoManual?' (manual, pago en divisas)':''));
+  var tbE=tasaBinancePago(p);
+  if(tbE){
+    html+=fila('Tasa Binance usada', 'Bs '+formatearNumeroConMiles(tbE.valor,2)+' ('+tbDescOrigen(tbE)+')');
+    if(tbE.bcv>0) html+=fila('Tasa BCV de referencia', 'Bs '+formatearNumeroConMiles(tbE.bcv,2));
+    var eqD=descEquivBCVPago(p);
+    if(eqD!==null) html+=fila('Equivale a (en Bs a tasa BCV)', formatearNumeroConMiles(eqD,1)+'%');
+  }
   var ivaRet=ivaRetenidoDePago(p);
   html+=fila('Retencion de IVA', p.retencionIVA?('Si'+(ivaRet>0.009?' ('+$(ivaRet)+' sin depositar)':'')):'No');
   html+=fila('Se abona a los documentos', $(abonado));
@@ -21028,7 +21514,7 @@ function cerrarSesion(){
 // archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
 // y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
 // el publicado es distinto, la app se recarga sola con la version nueva.
-var APP_VERSION='2026-11-21-2258';
+var APP_VERSION='2026-11-22-0030';
 function revisarVersionApp(){
   try{
     if(typeof fetch!=='function') return;
