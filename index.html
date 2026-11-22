@@ -823,7 +823,7 @@ input[type=file]:hover{border-color:var(--azul-m)}
       <div class="field hidden" id="cobroDescManualWrap">
         <label>Descuento manual (%)</label>
         <input type="number" id="cobroDescuentoManual" min="0" max="40" step="0.01" inputmode="decimal" placeholder="Ej: 26" oninput="calcularValidacionCobro()">
-        <div style="font-size:11px;color:#888;margin-top:2px">Solo para pagos en divisas (Divisas, Binance o Zelle). Maximo 40%.</div>
+        <div id="cobroDescManualNota" style="font-size:11px;color:#888;margin-top:2px">Solo para pagos en divisas (Divisas, Binance o Zelle). Maximo 40%.</div>
       </div>
       <div id="cobroBinanceInfo" class="hidden" style="background:var(--azul-c);border-radius:10px;padding:10px 12px;margin-bottom:10px"></div>
       <div id="cobroRetencionWrap" class="hidden">
@@ -19734,7 +19734,7 @@ function tbTextoVigente(v){
 // Recuadro del formulario de cobro cuando el pago es en divisas
 function renderInfoBinanceCobro(){
   var el=document.getElementById('cobroBinanceInfo'); if(!el) return;
-  if(!cobroDescManualPermitido()){ el.classList.add('hidden'); return; }
+  if(!cobroDescEsDivisas()){ el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
   var fechaIso=(document.getElementById('cobroFecha')||{}).value||'';
   var hoyIso=tasaBCVHoyISO();
@@ -19782,11 +19782,14 @@ function etiquetaFormaPagoDeposito(d){
   return f==='transferencia'?'Transferencia':(f==='efectivo'?'Efectivo':(f==='binance'?'Binance (USDT)':(f==='zelle'?'Zelle':'Divisas')));
 }
 
-// ═══ Descuento manual: solo para pagos en DIVISAS (Divisas, Binance, Zelle) ═══
-// Un pago en divisas puede llevar un descuento mayor que uno en Bs a tasa BCV
-// (compensa la diferencia entre BCV y el dolar real), por eso se permite
-// escribirlo a mano, hasta DESC_MANUAL_MAX. Con Bs/transferencia/efectivo
-// solo existen los porcentajes de la lista.
+// ═══ Descuento manual ═══
+// Un pago en DIVISAS (Divisas, Binance, Zelle) puede llevar un descuento mayor
+// que uno en Bs a tasa BCV (compensa la diferencia entre BCV y el dolar real),
+// por eso cualquier vendedor puede escribirlo a mano, hasta DESC_MANUAL_MAX.
+// Con Bs/transferencia/efectivo (o pagos mixtos) solo existen los porcentajes
+// de la lista... salvo para 01 y 20 (puedeAplicarDescuentos), que pueden
+// escribir un % manual con CUALQUIER forma de pago. La tasa Binance y el
+// equivalente a BCV solo se calculan cuando el pago es 100% en divisas.
 var DESC_ESTANDAR=[0,5,7,10,12,15];
 var DESC_MANUAL_MAX=40;
 var FORMAS_DIVISA=['divisas','binance','zelle'];
@@ -19800,19 +19803,26 @@ function monedaPago(p){
   return n===deps.length?'divisas':(n===0?'bs':'mixto');
 }
 function etiquetaMonedaPago(m){ return m==='divisas'?'Divisas':(m==='mixto'?'Mixto':'Bs / BCV'); }
-function cobroDescManualPermitido(){
+// Todos los depositos del formulario son en divisas (para la tasa Binance)
+function cobroDescEsDivisas(){
   return (typeof cobroDepositos!=='undefined') && cobroDepositos.length>0 && cobroDepositos.every(esDepositoDivisa);
+}
+// Se puede escribir un % manual: pago en divisas (cualquiera) o 01/20 (cualquier forma)
+function cobroDescManualPermitido(){
+  if(cobroDescEsDivisas()) return true;
+  return (typeof cobroDepositos!=='undefined') && cobroDepositos.length>0 && !!puedeAplicarDescuentos();
 }
 function actualizarOpcionesDescuento(extraPct){
   var sel=document.getElementById('cobroDescuento'); if(!sel) return;
   var permitido=cobroDescManualPermitido();
   var extra=(extraPct!==undefined&&extraPct!==null&&DESC_ESTANDAR.indexOf(extraPct)<0&&!permitido)?extraPct:null;
-  var firma=(permitido?'M':'N')+'|'+(extra===null?'':extra);
+  var libre=permitido && !cobroDescEsDivisas();
+  var firma=(permitido?'M':'N')+(libre?'L':'')+'|'+(extra===null?'':extra);
   if(sel.getAttribute('data-sig')!==firma){
     var actual=sel.value, html='';
     DESC_ESTANDAR.forEach(function(v){ html+='<option value="'+v+'">'+(v===0?'Sin descuento':v+'%')+'</option>'; });
     if(extra!==null) html+='<option value="'+extra+'">'+extra+'%</option>';
-    if(permitido) html+='<option value="manual">Otro % (manual, solo divisas)</option>';
+    if(permitido) html+='<option value="manual">'+(puedeAplicarDescuentos()?'Otro % (manual)':'Otro % (manual, solo divisas)')+'</option>';
     sel.innerHTML=html; sel.setAttribute('data-sig',firma);
     var ok=Array.prototype.some.call(sel.options,function(o){ return o.value===actual; });
     sel.value=ok?actual:'0';
@@ -19820,6 +19830,10 @@ function actualizarOpcionesDescuento(extraPct){
   var wrap=document.getElementById('cobroDescManualWrap');
   var manual=permitido && sel.value==='manual';
   if(wrap){ if(manual) wrap.classList.remove('hidden'); else wrap.classList.add('hidden'); }
+  var nota=document.getElementById('cobroDescManualNota');
+  if(nota) nota.textContent=puedeAplicarDescuentos()
+    ? 'Para cualquier forma de pago (solo 01 y 20). Maximo '+DESC_MANUAL_MAX+'%. En pagos en divisas se calcula ademas el equivalente a tasa BCV.'
+    : 'Solo para pagos en divisas (Divisas, Binance o Zelle). Maximo '+DESC_MANUAL_MAX+'%.';
   if(!manual){ var inp=document.getElementById('cobroDescuentoManual'); if(inp && !permitido) inp.value=''; }
 }
 // % de descuento realmente elegido en el formulario (lista o manual)
@@ -19991,7 +20005,7 @@ function htmlComprobantesRetencion(urls, tam){
 function guardarPagoCobro(){
   // Pago en divisas con descuento: se consulta la tasa Binance en este
   // momento para guardarla dentro del cobro (maximo 8 s de espera)
-  if(cobroClienteSeleccionado && cobroDepositos.length>0 && cobroDescManualPermitido() && obtenerDescPctCobro()>0){
+  if(cobroClienteSeleccionado && cobroDepositos.length>0 && cobroDescEsDivisas() && obtenerDescPctCobro()>0){
     var btn=document.getElementById('btnGuardarCobro');
     if(btn){ btn.disabled=true; btn.textContent='Consultando tasa Binance...'; }
     var seguirGuardando=function(){
@@ -20123,7 +20137,8 @@ function guardarPagoCobroInterno(){
     estado:'pendiente',
     fechaReporte:new Date().toLocaleString('es-VE')
   };
-  if(cobroDescManualPermitido() && descPct>0){
+  if(pago.descuentoManual && descPct>0 && VEND) pago.descuentoManualPor=VEND.codigo;
+  if(cobroDescEsDivisas() && descPct>0){
     if(COBRO_TASA_DIA_FECHA===fecha && String(COBRO_TASA_DIA_VAL||'').trim()!=='' && puedeEditarTasasBCV()){
       var tdv=tasaBCVParseNumero(COBRO_TASA_DIA_VAL);
       if(!(tdv>0)){ toast('La tasa Binance del dia no es valida'); return; }
@@ -20560,7 +20575,7 @@ function abrirDetallePagoCobro(pagoId, ev){
   html+=titulo('Montos');
   var abonado=(p.montoAbonado!==undefined&&p.montoAbonado!==null)?p.montoAbonado:p.montoEsperado;
   html+=fila('Total depositado', $(p.montoUSD));
-  if(p.descuentoPct) html+=fila('Descuento', p.descuentoPct+'%'+(p.descuentoManual?' (manual, pago en divisas)':''));
+  if(p.descuentoPct) html+=fila('Descuento', p.descuentoPct+'%'+(p.descuentoManual?(monedaPago(p)==='divisas'?' (manual, pago en divisas)':' (manual, autorizado por VEND '+(p.descuentoManualPor||'')+')'):''));
   var tbE=tasaBinancePago(p);
   if(tbE){
     html+=fila('Tasa Binance usada', 'Bs '+formatearNumeroConMiles(tbE.valor,2)+' ('+tbDescOrigen(tbE)+')');
@@ -21683,7 +21698,7 @@ function cerrarSesion(){
 // archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
 // y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
 // el publicado es distinto, la app se recarga sola con la version nueva.
-var APP_VERSION='2026-11-22-1340';
+var APP_VERSION='2026-11-22-1611';
 function revisarVersionApp(){
   try{
     if(typeof fetch!=='function') return;
