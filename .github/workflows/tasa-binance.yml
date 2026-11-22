@@ -34,8 +34,12 @@ jobs:
           fi
           curl --fail --silent --show-error --retry 3 --retry-delay 10 --max-time 30 \
             -H "Authorization: Bearer ${VZLA_TOKEN}" \
-            "https://app.vzla.io/api/quantis/v2/rates/markets/" \
+            "https://app.vzla.io/api/quantis/v3/rates/markets/" \
             -o "${RUNNER_TEMP}/respuesta.json"
+          # Datos de mercado (sin credenciales): se muestran para poder verificar el formato
+          echo "Respuesta de Vzla.io:"
+          head -c 3000 "${RUNNER_TEMP}/respuesta.json"
+          echo
 
       - name: Anotar la lectura
         run: python3 scripts/tasa_binance.py "${RUNNER_TEMP}/respuesta.json" tasas_binance.json
