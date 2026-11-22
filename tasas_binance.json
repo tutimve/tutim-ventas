@@ -2,8 +2,9 @@
  "version":1,
  "zona":"America/Caracas",
  "campo":"data.usdt.rate",
- "actualizado":"2026-11-22T05:19:13Z",
+ "actualizado":"2026-11-22T15:59:34Z",
  "lecturas":[
-  {"t":"2026-11-22T05:19:13Z","f":"2026-11-22","h":"01:19","v":1091.0737,"o":"workflow_dispatch"}
+  {"t":"2026-11-22T05:19:13Z","f":"2026-11-22","h":"01:19","v":1091.0737,"o":"workflow_dispatch"},
+  {"t":"2026-11-22T15:59:34Z","f":"2026-11-22","h":"11:59","v":1094.3383,"o":"workflow_dispatch"}
  ]
 }
