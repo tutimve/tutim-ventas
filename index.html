@@ -196,6 +196,206 @@ label{font-size:12px;color:#555;margin-bottom:4px;display:block;font-weight:600;
 
 h2{font-size:16px;font-weight:700;color:var(--azul)}
 .section-label{font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
+
+
+/* ═══ ADAPTACION A PANTALLAS (telefono / tablet / computador) ═══ */
+input[type=file]{padding:8px 10px;border-style:dashed;background:#FAFBFF;cursor:pointer;font-size:13px;color:#59608a}
+input[type=file]::file-selector-button{background:var(--azul);color:#fff;border:none;border-radius:6px;padding:8px 14px;margin-right:12px;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit}
+input[type=file]:hover{border-color:var(--azul-m)}
+@media(min-width:700px){
+  .modal-bg{align-items:center;justify-content:center;padding:24px}
+  .modal{max-width:720px;border-radius:16px;margin:0 auto;max-height:90vh}
+}
+@media(min-width:900px){
+  :root{--maxw:1400px}
+  .screen{max-width:var(--maxw);width:100%;margin:0 auto;padding:20px 32px}
+  .header{padding-left:max(16px,calc((100vw - var(--maxw))/2 + 32px));padding-right:max(16px,calc((100vw - var(--maxw))/2 + 32px))}
+  .nav{justify-content:center;gap:8px}
+  .nav-btn{flex:0 1 170px}
+}
+@media(min-width:1100px){
+  :root{--maxw:1760px}
+  #s-pedido,#s-visita{max-width:1100px}
+  #s-admin{max-width:1600px}
+  #s-cobros,#s-historial,#s-inventario{max-width:1400px}
+}
+
+/* ═══ DESPACHO: sistema de diseno propio (aislado del resto de la app) ═══ */
+
+.dsp-scope{--dsp-h:38px}
+.dsp-scope .dsp-card{background:#fff;border-radius:var(--radio);padding:18px;box-shadow:var(--sombra);margin-bottom:14px}
+.dsp-scope .dsp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.dsp-scope .dsp-title{font-size:17px;font-weight:700;color:var(--azul);line-height:1.2}
+.dsp-scope .dsp-sub{font-size:12px;color:#777;margin-top:4px;line-height:1.45;max-width:620px}
+.dsp-scope .dsp-sec{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8a90b0;margin:18px 0 10px;display:flex;align-items:center;gap:10px}
+.dsp-scope .dsp-sec:first-of-type{margin-top:0}
+.dsp-scope .dsp-sec::after{content:'';flex:1;height:1px;background:var(--borde)}
+.dsp-scope .dsp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 14px}
+.dsp-scope .dsp-f{display:flex;flex-direction:column;gap:5px;min-width:0;margin:0}
+.dsp-scope .dsp-f>label{margin:0;font-size:11px;font-weight:600;color:#6b7194;letter-spacing:.5px}
+.dsp-scope .dsp-f input,.dsp-scope .dsp-f select{height:var(--dsp-h);padding:0 11px;font-size:13px;border-radius:8px;border:1.5px solid var(--borde);background:#fff;width:100%;min-width:0}
+.dsp-scope .dsp-f input[type=date]{padding:0 8px}
+.dsp-scope .dsp-span2{grid-column:span 2}
+.dsp-scope .dsp-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.dsp-scope .dsp-chip{height:30px;padding:0 14px;border-radius:999px;border:1px solid var(--borde);background:#fff;color:var(--azul);font-size:12px;font-weight:600;cursor:pointer}
+.dsp-scope .dsp-chip:active,.dsp-scope .dsp-chip.on{background:var(--azul);color:#fff;border-color:var(--azul)}
+.dsp-scope .dsp-chiplbl{font-size:11px;color:#6b7194;font-weight:600;margin-right:2px}
+.dsp-scope .dsp-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--borde)}
+.dsp-scope .dsp-f>label.dsp-check,.dsp-scope .dsp-check{display:flex;align-items:center;gap:9px;margin:0;font-size:13px;font-weight:500;color:#333;text-transform:none;letter-spacing:0;cursor:pointer}
+.dsp-scope .dsp-f>label.dsp-check{font-size:13px;font-weight:500;color:#333;letter-spacing:0;text-transform:none}
+.dsp-scope .dsp-check input{width:18px;height:18px;padding:0;margin:0;flex-shrink:0;accent-color:var(--azul)}
+.dsp-scope .dsp-btn{height:var(--dsp-h);padding:0 14px;border-radius:8px;border:1px solid var(--borde);background:#fff;color:var(--azul);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px;width:auto}
+.dsp-scope .dsp-btn:active{background:var(--azul-c)}
+.dsp-scope .dsp-btn.pri{background:var(--azul);border-color:var(--azul);color:#fff}
+.dsp-scope .dsp-btn.pri:active{background:var(--azul-d)}
+.dsp-scope .dsp-btn.ok{background:#1E7B4F;border-color:#1E7B4F;color:#fff}
+.dsp-scope .dsp-btn.block{width:100%}
+.dsp-scope .dsp-btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.dsp-scope .dsp-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.dsp-scope .dsp-stat{background:var(--azul-c);border-radius:10px;padding:10px 14px}
+.dsp-scope .dsp-stat .n{font-size:21px;font-weight:700;color:var(--azul);line-height:1.15}
+.dsp-scope .dsp-stat .l{font-size:11px;color:#6b7194;margin-top:2px}
+.dsp-scope .dsp-stat.warn{background:var(--ambar-c)}
+.dsp-scope .dsp-stat.warn .n,.dsp-scope .dsp-stat.warn .l{color:#8a5a10}
+.dsp-scope .dsp-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:6px}
+@media(min-width:960px){.dsp-scope .dsp-actions{grid-template-columns:minmax(0,1.6fr) minmax(0,1.25fr) minmax(0,.75fr)}}
+.dsp-scope .dsp-grp{border:1px solid var(--borde);border-radius:10px;padding:10px 12px 12px;background:#FAFBFF;display:flex;flex-direction:column;gap:8px}
+.dsp-scope .dsp-grp-t{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8a90b0}
+.dsp-scope .dsp-estado{background:var(--azul);color:#fff;border-radius:10px;padding:10px 14px;margin-top:18px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.dsp-scope .dsp-estado .nm{font-size:14px;font-weight:700;letter-spacing:.2px}
+.dsp-scope .dsp-estado .mt{font-size:12px;opacity:.92;margin-top:2px}
+.dsp-scope .dsp-ciudad{background:var(--azul-c);color:var(--azul);border-left:4px solid var(--azul-m);padding:7px 12px;margin-top:8px;border-radius:0 8px 8px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.dsp-scope .dsp-ciudad .nm{font-size:13px;font-weight:700}
+.dsp-scope .dsp-ciudad .mt{font-size:11px;color:#59608a;margin-top:1px}
+.dsp-scope .dsp-tr{height:26px;padding:0 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;background:#fff;color:var(--azul);border:1px solid var(--azul)}
+.dsp-scope .dsp-tr.on-azul{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.55)}
+.dsp-scope .dsp-ped{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:6px 12px;padding:11px 10px 11px 12px;border-bottom:1px solid #eceff8;align-items:start}
+.dsp-scope .dsp-ped:last-child{border-bottom:none}
+.dsp-scope .dsp-ped>input[type=checkbox]{width:18px;height:18px;padding:0;margin:2px 0 0;accent-color:var(--azul)}
+.dsp-scope .dsp-nm{font-size:13px;font-weight:700;color:#1a1a18;line-height:1.3}
+.dsp-scope .dsp-meta{font-size:12px;color:#666;margin-top:2px;line-height:1.4}
+.dsp-scope .dsp-items{font-size:12px;color:#8a8a8a;margin-top:2px;line-height:1.4}
+.dsp-scope .dsp-trline{font-size:12px;color:var(--azul);margin-top:4px}
+.dsp-scope .dsp-trline a{color:var(--azul-m);text-decoration:underline;cursor:pointer}
+.dsp-scope .dsp-tags{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.dsp-scope .dsp-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;text-align:right}
+.dsp-scope .dsp-fecha{font-size:11px;color:#8a8a8a;white-space:nowrap}
+.dsp-scope .dsp-bl{display:flex;align-items:center;gap:6px;font-size:11px;color:#6b7194;font-weight:600}
+.dsp-scope .dsp-bin{width:68px;height:34px;padding:0 6px;border:1.5px solid var(--borde);border-radius:8px;font-size:15px;font-weight:700;text-align:center;color:var(--azul)}
+.dsp-scope .dsp-bin:focus{border-color:var(--azul)}
+.dsp-scope .dsp-undo{height:28px;padding:0 10px;background:#fff;border:1px solid var(--rojo);color:var(--rojo);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer}
+.dsp-scope .dsp-empty{color:#9aa0bd;font-size:13px;text-align:center;padding:26px 14px}
+@media(max-width:560px){
+  .dsp-scope .dsp-span2{grid-column:auto}
+  .dsp-scope .dsp-dates{grid-template-columns:1fr 1fr}
+  .dsp-scope .dsp-btnrow .dsp-btn{flex:1 1 140px}
+  .dsp-scope .dsp-head .dsp-btnrow{width:100%}
+  .dsp-scope .dsp-ped{grid-template-columns:22px minmax(0,1fr)}
+  .dsp-scope .dsp-side{grid-column:2;flex-direction:row;justify-content:space-between;align-items:center;text-align:left}
+}
+
+/* --- modales de despacho --- */
+.modal-bg.dsp-scope .modal{padding:20px 20px 18px;margin:0 auto;border-radius:18px 18px 0 0}
+@media(min-width:700px){.modal-bg.dsp-scope{align-items:center;padding:20px}.modal-bg.dsp-scope .modal{border-radius:16px;max-height:90vh}}
+.dsp-scope .dsp-mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
+.dsp-scope .dsp-mhead h3{margin:0;font-size:17px;color:var(--azul)}
+.dsp-scope .dsp-x{width:32px;height:32px;border-radius:8px;border:1px solid var(--borde);background:#fff;color:#6b7194;font-size:15px;cursor:pointer;flex-shrink:0;padding:0}
+.dsp-scope .dsp-mfoot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--borde);margin-top:14px;padding-top:14px}
+.dsp-scope .dsp-note{font-size:12px;color:#777;line-height:1.45;margin:0 0 14px}
+.dsp-scope .dsp-btn.sm{height:30px;padding:0 11px;font-size:12px}
+.dsp-scope .dsp-btn.danger{color:var(--rojo);border-color:#e3b9b9}
+.dsp-scope .dsp-item{border:1px solid var(--borde);border-radius:10px;padding:11px 12px;margin-bottom:8px;background:#fff}
+.dsp-scope .dsp-item-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.dsp-scope .dsp-item-t{font-size:13px;font-weight:700;color:#1a1a18;line-height:1.3}
+.dsp-scope .dsp-item-s{font-size:12px;color:#777;margin-top:2px;line-height:1.4}
+.dsp-scope .dsp-item-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.dsp-scope .dsp-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.dsp-scope .dsp-pill{font-size:11px;background:var(--azul-c);color:var(--azul);border-radius:999px;padding:3px 10px}
+.dsp-scope .dsp-pill b{font-weight:700}
+.dsp-scope .dsp-badge{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.dsp-scope .dsp-badge.ok{background:#1E7B4F;color:#fff}
+.dsp-scope .dsp-badge.par{background:#FCE4D6;color:#9C4221}
+.dsp-scope .dsp-badge.pen{background:#FFF3CD;color:#856404}
+.dsp-scope .dsp-info{background:var(--azul-c);color:#3b4377;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.45;margin-bottom:14px}
+.dsp-scope .dsp-banner{font-size:12px;margin-bottom:12px;padding:9px 12px;border-radius:10px}
+.dsp-scope .dsp-banner.ok{background:#E6F4EC;color:#1E7B4F}
+.dsp-scope .dsp-banner.par{background:#FCE4D6;color:#9C4221}
+.dsp-scope .dsp-banner.pen{background:#FFF3CD;color:#856404}
+.dsp-scope .rp-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 16px;font-size:12px;color:#555;margin-bottom:12px}
+.dsp-scope .rp-meta b{display:block;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#8a90b0;font-weight:700;margin-bottom:1px}
+.dsp-scope .rp-gen{grid-column:1/-1;font-size:11px;color:#999}
+.dsp-scope .rp-box{border:1px solid var(--borde);border-radius:10px;padding:10px 12px;margin-bottom:6px}
+.dsp-scope .rp-trow{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-top:1px solid #eef0f8}
+.dsp-scope .rp-trow:first-of-type{border-top:none}
+.dsp-scope .rp-row{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 6px 9px 10px;border-bottom:1px solid #eceff8}
+.dsp-scope .rp-qty{background:var(--azul-c);color:var(--azul);border-radius:8px;text-align:center;padding:5px 0;line-height:1.1}
+.dsp-scope .rp-qty b{display:block;font-size:17px}
+.dsp-scope .rp-qty small{font-size:10px;color:#6b7194}
+.dsp-scope .rp-r{text-align:right;font-size:12px;color:#666;display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+.dsp-scope .rp-r .mon{font-weight:700;color:#1a1a18;font-size:13px}
+.dsp-scope .rp-empty{color:#9aa0bd;font-size:13px;text-align:center;padding:22px 10px}
+.dsp-scope .dsp-bodyscroll{max-height:60vh;overflow-y:auto;margin:0 -4px;padding:0 4px}
+
+/* --- detalle de cobros por vendedor --- */
+.dsp-scope .cv-pago{border:1px solid var(--borde);border-radius:12px;margin-bottom:10px;background:#fff;overflow:hidden}
+.dsp-scope .cv-ph{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:10px 12px;background:var(--azul-c)}
+.dsp-scope .cv-cli{font-size:13px;font-weight:700;color:var(--azul);cursor:pointer;text-decoration:none;line-height:1.3}
+.dsp-scope .cv-cli:hover{text-decoration:underline}
+.dsp-scope .cv-money{text-align:right;white-space:nowrap}
+.dsp-scope .cv-money .cob{font-size:15px;font-weight:700;color:var(--verde)}
+.dsp-scope .cv-money .dsc{font-size:12px;font-weight:600;color:var(--rojo)}
+.dsp-scope .cv-money .sin{font-size:11px;color:#8a90b0}
+.dsp-scope .cv-money .org{font-size:11px;color:#8a90b0}
+.dsp-scope .cv-docs{padding:2px 12px 8px}
+.dsp-scope .cv-dh,.dsp-scope .cv-dr{display:grid;grid-template-columns:1.2fr 1fr .6fr 1fr;gap:8px;align-items:center}
+.dsp-scope .cv-dh{font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:#8a90b0;font-weight:700;padding:8px 0 4px}
+.dsp-scope .cv-dr{font-size:12px;padding:6px 0;border-top:1px solid #eef0f8}
+.dsp-scope .cv-dr:first-of-type{border-top:none}
+.dsp-scope .cv-dr .r,.dsp-scope .cv-dh .r{text-align:right}
+.dsp-scope .cv-dr b{font-weight:700}
+.dsp-scope .cv-vend-row{display:flex;justify-content:space-between;align-items:center;padding:9px 6px;border-bottom:1px solid var(--borde);cursor:pointer;border-radius:8px}
+.dsp-scope .cv-vend-row:hover,.cv-vend-row:hover{background:var(--azul-c)}
+.cv-vend-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--borde);cursor:pointer;border-radius:8px}
+.cv-vend-go{font-size:11px;color:var(--azul);font-weight:700;margin-top:2px}
+
+/* --- Cuentas x Cobrar (admin) --- */
+.dsp-scope .cx-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.dsp-scope .cx-h{font-size:17px;font-weight:700;color:var(--azul);margin:0}
+.dsp-scope .cx-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.dsp-scope .cx-tile{border:1px solid var(--borde);border-radius:12px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:6px;min-width:0}
+.dsp-scope .cx-tt{font-size:15px;font-weight:700;color:var(--azul)}
+.dsp-scope .cx-ts{font-size:11px;color:#8a90b0;margin-top:-4px}
+.dsp-scope .cx-last{font-size:12px;color:#555;background:var(--azul-c);border-radius:8px;padding:8px 10px;line-height:1.45;margin:4px 0}
+.dsp-scope .cx-last b{color:var(--azul)}
+.dsp-scope .cx-last.vacio{background:#f4f5fa;color:#9aa0bd}
+.dsp-scope .cx-drop{display:flex;align-items:center;gap:10px;border:1.5px dashed #b9c0e0;border-radius:10px;padding:12px;cursor:pointer;background:#FAFBFF;margin:0;text-transform:none;letter-spacing:0;position:relative;overflow:hidden}
+.dsp-scope .cx-drop:hover{border-color:var(--azul-m);background:var(--azul-c)}
+.dsp-scope .cx-dico{width:30px;height:30px;border-radius:8px;background:var(--azul);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+.dsp-scope .cx-dtxt{font-size:13px;font-weight:600;color:var(--azul)}
+.dsp-scope .cx-drop input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;padding:0;border:0}
+.dsp-scope .cx-det{margin-top:12px;border-top:1px solid var(--borde);padding-top:10px}
+.dsp-scope .cx-det>summary{font-size:12px;font-weight:600;color:var(--azul);cursor:pointer}
+.dsp-scope .cx-conf{padding:0}
+.dsp-scope .cx-conf>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;font-weight:700;color:var(--azul);font-size:15px}
+.dsp-scope .cx-conf>summary::-webkit-details-marker{display:none}
+.dsp-scope .cx-conf>summary::after{content:'▾';color:#8a90b0;font-size:14px}
+.dsp-scope .cx-conf[open]>summary::after{content:'▴'}
+.dsp-scope .cx-conf>.dsp-grid{padding:0 18px 18px;margin-top:0}
+.dsp-scope .cx-sumhint{font-size:11px;font-weight:500;color:#8a90b0;margin-left:auto}
+.dsp-scope .cx-box{border:1px solid var(--borde);border-radius:12px;padding:14px;background:#FAFBFF}
+.dsp-scope .cx-bt{font-size:13px;font-weight:700;color:var(--azul)}
+.dsp-scope .cx-inl{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+@media(max-width:760px){.dsp-scope .cx-tiles{grid-template-columns:1fr}.dsp-scope .cx-sumhint{display:none}}
+
+.dsp-scope .cx-row{padding:10px 2px;border-bottom:1px solid var(--borde);font-size:13px}
+.dsp-scope .cx-rowin{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.dsp-scope .cx-rowmain{flex:1;min-width:0;overflow-wrap:anywhere}
+.dsp-scope .cx-rowbtns{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:600px){.dsp-scope .cx-rowin{flex-direction:column;gap:8px}.dsp-scope .cx-rowbtns{justify-content:flex-start;width:100%}.dsp-scope .cx-rowbtns .btn{flex:1}}
+
+.dsp-scope .cv-pago{cursor:pointer;transition:box-shadow .15s,border-color .15s}
+.dsp-scope .cv-pago:hover{border-color:var(--azul-m);box-shadow:0 2px 10px rgba(30,45,120,.12)}
+.dsp-scope .cv-go{font-size:11px;font-weight:700;color:var(--azul);margin-top:4px}
 </style>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -937,78 +1137,93 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
     </div>
 
     <!-- TAB CUENTAS POR COBRAR -->
-    <div id="adminTab-cxc" style="display:none">
-      <!-- Limite de deuda para bloquear pedidos -->
-      <div class="card" style="background:#FFF3CD;border:2px solid var(--ambar)">
-        <div style="font-weight:700;font-size:14px;color:#856404">Bloqueo de pedidos por deuda</div>
-        <div style="font-size:12px;color:#856404;margin:4px 0 10px">Si un cliente tiene una deuda pendiente (segun Cuentas por Cobrar) mayor a este monto, no se le podra crear un pedido nuevo. Deja en 0 para desactivar el bloqueo.</div>
-        <div style="display:flex;gap:8px;align-items:flex-end">
-          <div class="field" style="flex:1;margin-bottom:0"><label>Monto limite (US$)</label><input type="number" id="limiteDeudaInput" placeholder="0.00" step="0.01"></div>
-          <button class="btn btn-p btn-sm" onclick="guardarLimiteDeudaPedidos()">Guardar</button>
+    <div id="adminTab-cxc" class="dsp-scope" style="display:none">
+      <div class="dsp-card">
+        <div class="cx-head">
+          <div><h3 class="cx-h">Cargar bases de Cuentas por Cobrar</h3>
+          <div class="dsp-sub">Sube los Excel de Profit (Facturas por Numero, "Sin Cancelar"). Cada casilla muestra cuándo y cuántos documentos se cargaron por última vez.</div></div>
+          <div class="dsp-btnrow"><button class="dsp-btn sm" onclick="verHistorialCargasCxC()">Historial de cargas</button><button class="dsp-btn sm" onclick="recalcularCruceCxC()">Recalcular cruce</button></div>
         </div>
-      </div>
-      <div class="card" style="background:var(--azul-c)">
-        <div class="card-title" style="color:var(--azul)">Cargar bases de Cuentas por Cobrar</div>
-        <p style="font-size:12px;color:#666;margin-bottom:8px">Sube los Excel exportados de Profit (Facturas por Numero, condicion "Sin Cancelar") de cada sistema. La app cruza ambas bases por cliente + fecha exacta, comparando la <strong>base imponible</strong> (neto − IVA). Si coincide, o si la base fiscal es 35% menor a la real, usa el documento <strong>FISCAL</strong> y crea aparte un documento con la diferencia. Los documentos de Real sin pareja se mantienen igual; los de Fiscal sin pareja en Real (factura sin nota) se agregan tal como vienen de la fiscal. Si un documento ya tenia un pago confirmado y la nueva carga todavia no lo refleja, la app respeta lo ya confirmado.</p>
-        <div style="background:#fff;border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin-bottom:10px">
-          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Serie de las facturas fiscales</div>
-          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-            <div class="field" style="margin-bottom:0;width:90px"><label>Prefijo</label><input type="text" id="cxcSeriePrefijo" maxlength="4"></div>
-            <div class="field" style="margin-bottom:0;flex:1;min-width:130px"><label>Desde la factura Nº</label><input type="number" id="cxcSerieDesde" min="1"></div>
-            <button class="btn btn-p btn-sm" onclick="guardarCxCSerie()">Guardar</button>
-          </div>
-          <div id="cxcSerieEjemplo" style="font-size:11px;color:#666;margin-top:6px"></div>
-          <div style="font-size:11px;color:#888;margin-top:2px">Evita que una factura y una nota con el mismo numero se confundan. No cambies esto si ya hay facturas con prefijo y abonos aplicados.</div>
-        </div>
-        <div class="field">
+        <div class="dsp-f" style="margin-bottom:12px;max-width:560px">
           <label>Modo de carga</label>
           <select id="cxcModoCarga">
             <option value="reemplazar">Reemplazar toda la base (actualizacion periodica completa, "Sin Cancelar" entero)</option>
             <option value="agregar">Agregar/actualizar sin borrar lo demas (solo subo unos documentos nuevos)</option>
           </select>
-          <div id="cxcModoCargaAviso" style="font-size:11px;color:#856404;margin-top:4px">⚠ Si subes un archivo con SOLO unos documentos nuevos, usa "Agregar/actualizar" — si eliges "Reemplazar" con un archivo parcial, se va a borrar todo lo que no venga en ese archivo.</div>
         </div>
-        <div class="field"><label>Base</label>
-          <input type="file" id="cxcExcelInputReal" accept=".xlsx,.xls" onchange="cargarExcelCxC(this,'real')">
+        <div id="cxcModoCargaAviso" class="dsp-banner pen">⚠ Si subes un archivo con SOLO unos documentos nuevos, usa "Agregar/actualizar" — si eliges "Reemplazar" con un archivo parcial, se va a borrar todo lo que no venga en ese archivo.</div>
+        <div class="cx-tiles">
+          <div class="cx-tile">
+            <div class="cx-tt">Base</div><div class="cx-ts">Notas · sistema real</div>
+            <div class="cx-last" id="cxMetaReal">Sin cargas registradas</div>
+            <label class="cx-drop"><span class="cx-dico">⬆</span><span class="cx-dtxt">Elegir archivo .xlsx</span><input type="file" id="cxcExcelInputReal" accept=".xlsx,.xls" onchange="cargarExcelCxC(this,'real')"></label>
+          </div>
+          <div class="cx-tile">
+            <div class="cx-tt">Base con IVA</div><div class="cx-ts">Facturas fiscales</div>
+            <div class="cx-last" id="cxMetaFiscal">Sin cargas registradas</div>
+            <label class="cx-drop"><span class="cx-dico">⬆</span><span class="cx-dtxt">Elegir archivo .xlsx</span><input type="file" id="cxcExcelInputFiscal" accept=".xlsx,.xls" onchange="cargarExcelCxC(this,'fiscal')"></label>
+          </div>
+          <div class="cx-tile">
+            <div class="cx-tt">Descuentos 35%</div><div class="cx-ts">Facturas sin nota</div>
+            <div class="cx-last" id="cxMetaDesc">Sin cargas registradas</div>
+            <label class="cx-drop"><span class="cx-dico">⬆</span><span class="cx-dtxt">Elegir archivo .xlsx</span><input type="file" id="cxcExcelInputDesc" accept=".xlsx,.xls" onchange="cargarExcelDescuentos(this)"></label>
+          </div>
         </div>
-        <div class="field"><label>Base con IVA</label>
-          <input type="file" id="cxcExcelInputFiscal" accept=".xlsx,.xls" onchange="cargarExcelCxC(this,'fiscal')">
-        </div>
-        <div id="cxcEstadoCarga" style="font-size:13px;margin-top:8px"></div>
-        <div style="background:#fff;border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin-top:10px">
-          <div style="font-size:12px;font-weight:700;margin-bottom:2px">Descuentos del 35% por factura (para facturas sin nota)</div>
-          <div style="font-size:11px;color:#666;margin-bottom:6px">Sube el reporte de Profit "Facturas por cliente % Desc" (NUMERO, EMISION, PORC DESC, MONTO DESC). Al cargar o recalcular las facturas fiscales, la app busca cada una por <strong>numero + fecha de emision</strong>; si trae 35%, crea el documento de diferencia con ese monto, igual que cuando hay nota. Los descuentos distintos a 35% se guardan pero no generan documento. Siempre se agrega/actualiza: nunca borra los descuentos ya guardados.</div>
-          <input type="file" id="cxcExcelInputDesc" accept=".xlsx,.xls" onchange="cargarExcelDescuentos(this)">
-          <div id="cxcEstadoDesc" style="font-size:13px;margin-top:6px"></div>
-          <details style="margin-top:6px"><summary id="cxcDescResumen" style="font-size:12px;cursor:pointer;color:var(--azul)">Descuentos guardados</summary>
-            <div id="cxcDescLista" style="margin-top:6px"></div>
-          </details>
-        </div>
-        <button class="btn btn-s btn-sm" style="margin-top:8px" onclick="verHistorialCargasCxC()">Ver historial de cargas</button>
-        <button class="btn btn-s btn-sm" style="margin-top:8px" onclick="recalcularCruceCxC()">Recalcular cruce con las bases guardadas</button>
+        <div id="cxcEstadoCarga" style="font-size:13px;margin-top:12px"></div>
+        <div id="cxcEstadoDesc" style="font-size:13px;margin-top:6px"></div>
+        <details class="cx-det"><summary id="cxcDescResumen">Descuentos guardados</summary>
+          <div class="dsp-note" style="margin-top:8px">Sube el reporte de Profit "Facturas por cliente % Desc" (NUMERO, EMISION, PORC DESC, MONTO DESC). Al cargar o recalcular las facturas fiscales, la app busca cada una por <strong>numero + fecha de emision</strong>; si trae 35%, crea el documento de diferencia con ese monto, igual que cuando hay nota. Los descuentos distintos a 35% se guardan pero no generan documento. Siempre se agrega/actualiza: nunca borra los descuentos ya guardados.</div>
+          <div id="cxcDescLista" style="margin-top:6px"></div>
+        </details>
+        <details class="cx-det"><summary>¿Cómo funciona el cruce?</summary>
+          <div class="dsp-note" style="margin-top:8px">Sube los Excel exportados de Profit (Facturas por Numero, condicion "Sin Cancelar") de cada sistema. La app cruza ambas bases por cliente + fecha exacta, comparando la <strong>base imponible</strong> (neto − IVA). Si coincide, o si la base fiscal es 35% menor a la real, usa el documento <strong>FISCAL</strong> y crea aparte un documento con la diferencia. Los documentos de Real sin pareja se mantienen igual; los de Fiscal sin pareja en Real (factura sin nota) se agregan tal como vienen de la fiscal. Si un documento ya tenia un pago confirmado y la nueva carga todavia no lo refleja, la app respeta lo ya confirmado.</div>
+        </details>
       </div>
-      <div class="metrics" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
-        <div class="metric" style="padding:8px"><div class="num" style="font-size:18px" id="cxcResumDocs">0</div><div class="lbl">Documentos pendientes</div></div>
-        <div class="metric" style="padding:8px"><div class="num" style="font-size:18px;color:var(--rojo)" id="cxcResumSaldo">$0</div><div class="lbl">Saldo total</div></div>
+
+      <details class="dsp-card cx-conf">
+        <summary><span>Configuración</span><span class="cx-sumhint">Bloqueo por deuda · Serie de facturas fiscales</span></summary>
+        <div class="dsp-grid" style="margin-top:14px;align-items:start">
+          <div class="cx-box">
+            <div class="cx-bt">Bloqueo de pedidos por deuda</div>
+            <div class="dsp-note">Si un cliente debe más que este monto (según Cuentas por Cobrar), no se le podrá crear un pedido nuevo. Deja 0 para desactivar.</div>
+            <div class="cx-inl"><div class="dsp-f" style="flex:1"><label>Monto límite (US$)</label><input type="number" id="limiteDeudaInput" placeholder="0.00" step="0.01"></div><button class="dsp-btn pri" onclick="guardarLimiteDeudaPedidos()">Guardar</button></div>
+          </div>
+          <div class="cx-box">
+            <div class="cx-bt">Serie de las facturas fiscales</div>
+            <div class="dsp-note">Evita que una factura y una nota con el mismo número se confundan. No lo cambies si ya hay facturas con prefijo y abonos aplicados.</div>
+            <div class="cx-inl"><div class="dsp-f" style="width:90px"><label>Prefijo</label><input type="text" id="cxcSeriePrefijo" maxlength="4"></div><div class="dsp-f" style="flex:1;min-width:120px"><label>Desde la factura Nº</label><input type="number" id="cxcSerieDesde" min="1"></div><button class="dsp-btn pri" onclick="guardarCxCSerie()">Guardar</button></div>
+            <div id="cxcSerieEjemplo" class="dsp-meta" style="margin-top:6px"></div>
+          </div>
+        </div>
+      </details>
+
+      <div class="dsp-stats" style="grid-template-columns:repeat(2,1fr)">
+        <div class="dsp-stat"><div class="n" id="cxcResumDocs">0</div><div class="l">Documentos pendientes</div></div>
+        <div class="dsp-stat warn"><div class="n" id="cxcResumSaldo" style="color:var(--rojo)">$0</div><div class="l">Saldo total</div></div>
       </div>
-      <div class="card">
-        <div class="card-title">Pagos pendientes por confirmar</div>
+
+      <div class="dsp-card">
+        <div class="cx-bt" style="font-size:15px;margin-bottom:10px">Pagos pendientes por confirmar</div>
         <div id="cxcPagosPendientesList"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Sin pagos pendientes</div></div>
       </div>
-      <div class="card">
-        <div class="card-title">Todas las cuentas por cobrar</div>
-        <div class="field">
-          <input type="text" id="cxcBusqDoc" placeholder="Buscar por cliente, codigo o RIF..." oninput="renderListaCxCAdmin()">
+
+      <div class="dsp-card">
+        <div class="cx-head" style="margin-bottom:12px">
+          <div class="cx-bt" style="font-size:15px">Todas las cuentas por cobrar</div>
+          <div class="dsp-btnrow">
+            <button class="dsp-btn sm" onclick="descargarExcelCxCActual()">Descargar Excel</button>
+            <button class="dsp-btn sm" id="btnVerCrucesCxC" style="display:none" onclick="abrirHistorialCruces()">Ver cruces</button>
+            <button class="dsp-btn sm" id="btnDepurarCxC" style="display:none" onclick="abrirDepurarCxC()">🧹 Depurar sospechosos</button>
+          </div>
         </div>
-        <button class="btn btn-s btn-sm" style="margin-bottom:10px" onclick="descargarExcelCxCActual()">Descargar CxC actual (Excel)</button>
-        <button class="btn btn-s btn-sm" id="btnVerCrucesCxC" style="margin-bottom:10px;display:none" onclick="abrirHistorialCruces()">Ver cruces de documentos</button>
-        <button class="btn btn-s btn-sm" id="btnDepurarCxC" style="margin-bottom:10px;display:none" onclick="abrirDepurarCxC()">🧹 Depurar documentos sospechosos</button>
+        <div class="dsp-f" style="margin-bottom:10px"><input type="text" id="cxcBusqDoc" placeholder="Buscar por cliente, codigo o RIF..." oninput="renderListaCxCAdmin()"></div>
         <div id="cxcListaCompleta"></div>
       </div>
-      <div class="card" id="cxcVerificadorCard" style="display:none">
-        <div class="card-title">Verificador de integridad de cobros</div>
-        <p style="font-size:12px;color:#666;margin-bottom:10px">Revisa si hay documentos duplicados en la base actual, o pagos ya confirmados cuyo documento cargado no refleja ese abono (por ejemplo, por una recarga de Excel que lo sobreescribio).</p>
-        <button class="btn btn-p btn-sm" onclick="verificarIntegridadCobros()">Verificar ahora</button>
+
+      <div class="dsp-card" id="cxcVerificadorCard" style="display:none">
+        <div class="cx-bt" style="font-size:15px">Verificador de integridad de cobros</div>
+        <div class="dsp-note" style="margin-top:4px">Revisa si hay documentos duplicados en la base actual, o pagos ya confirmados cuyo documento cargado no refleja ese abono (por ejemplo, por una recarga de Excel que lo sobreescribio).</div>
+        <button class="dsp-btn pri" onclick="verificarIntegridadCobros()">Verificar ahora</button>
         <div id="cxcVerificadorResultado" style="margin-top:10px"></div>
       </div>
     </div>
@@ -1177,59 +1392,85 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 
     <!-- TAB IVA -->
     <!-- TAB DESPACHO -->
-    <div id="adminTab-despacho" style="display:none">
-      <div class="card">
-        <div class="card-title">Despacho de pedidos</div>
-        <p style="font-size:12px;color:#666;margin-bottom:8px">Elige el rango de fechas, escribe la <strong>cantidad de bultos</strong> de cada pedido (los totales se calculan con ese numero), genera el reporte por Estado y Ciudad, guardalo e imprimelo, y marca los pedidos como <strong>Despachados</strong>. Los despachados dejan de aparecer en "Pendientes por despachar" y muestran la etiqueta <em>Despachado</em> en el estado del pedido.</p>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-          <button class="btn btn-s btn-sm" onclick="despRango('hoy')">Hoy</button>
-          <button class="btn btn-s btn-sm" onclick="despRango('7')">Ultimos 7 dias</button>
-          <button class="btn btn-s btn-sm" onclick="despRango('mes')">Este mes</button>
+    <div id="adminTab-despacho" class="dsp-scope" style="display:none">
+      <div class="dsp-card">
+        <div class="dsp-head">
+          <div>
+            <div class="dsp-title">Despacho de pedidos</div>
+            <div class="dsp-sub">Filtra los pedidos, escribe los <strong>bultos</strong> de cada uno, genera el reporte por Estado y Ciudad y marca como <strong>Despachados</strong>.</div>
+          </div>
+          <div class="dsp-btnrow">
+            <button class="dsp-btn" onclick="despCargar(true)">↻ Actualizar</button>
+            <button class="dsp-btn" onclick="despAbrirTransportes()">🚚 Transportes</button>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <div class="field" style="flex:1;min-width:130px;margin-bottom:8px"><label>Desde</label><input type="date" id="despDesde" onchange="despRender()"></div>
-          <div class="field" style="flex:1;min-width:130px;margin-bottom:8px"><label>Hasta</label><input type="date" id="despHasta" onchange="despRender()"></div>
+
+        <div class="dsp-sec">Periodo</div>
+        <div class="dsp-chips">
+          <span class="dsp-chiplbl">Atajos:</span>
+          <button class="dsp-chip" onclick="despRango('hoy')">Hoy</button>
+          <button class="dsp-chip" onclick="despRango('7')">Ultimos 7 dias</button>
+          <button class="dsp-chip" onclick="despRango('mes')">Este mes</button>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <div class="field" style="flex:1;min-width:150px;margin-bottom:8px"><label>Mostrar</label>
+        <div class="dsp-grid dsp-dates">
+          <div class="dsp-f"><label>Desde</label><input type="date" id="despDesde" onchange="despRender()"></div>
+          <div class="dsp-f"><label>Hasta</label><input type="date" id="despHasta" onchange="despRender()"></div>
+        </div>
+
+        <div class="dsp-sec">Filtros</div>
+        <div class="dsp-grid">
+          <div class="dsp-f"><label>Mostrar</label>
             <select id="despEstado" onchange="despRender()">
               <option value="pend">Pendientes por despachar</option>
               <option value="desp">Despachados</option>
               <option value="todos">Todos</option>
             </select></div>
-          <div class="field" style="flex:1;min-width:150px;margin-bottom:8px"><label>Vendedor</label>
+          <div class="dsp-f"><label>Vendedor</label>
             <select id="despVend" onchange="despRender()"><option value="">Todos</option></select></div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <div class="field" style="flex:1;min-width:150px;margin-bottom:8px"><label>Bultos cargados</label>
+          <div class="dsp-f"><label>Bultos cargados</label>
             <select id="despFiltroBulto" onchange="despRender()">
               <option value="todos">Todos</option>
-              <option value="con">Solo los que tienen bultos cargados</option>
-              <option value="sin">Solo los que NO tienen bultos cargados</option>
+              <option value="con">Solo los que tienen bultos</option>
+              <option value="sin">Solo los que NO tienen bultos</option>
             </select></div>
-          <div class="field" style="flex:1;min-width:150px;margin-bottom:8px"><label>Transporte</label>
+          <div class="dsp-f"><label>Transporte</label>
             <select id="despFiltroTransp" onchange="despRender()"><option value="">Todos</option></select></div>
-        </div>
-        <div class="field" style="margin-bottom:8px"><label>Buscar (cliente o codigo)</label><input type="text" id="despBuscar" oninput="despRender()" placeholder="Buscar..."></div>
-        <label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:8px"><input type="checkbox" id="despSoloRecibidos" onchange="despRender()"> Solo pedidos ya recibidos por oficina</label>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-s btn-sm" onclick="despCargar(true)">Actualizar desde Firebase</button>
-          <button class="btn btn-s btn-sm" onclick="despAbrirTransportes()">🚚 Administrar transportes</button>
+          <div class="dsp-f dsp-span2"><label>Buscar cliente o codigo</label><input type="text" id="despBuscar" oninput="despRender()" placeholder="Nombre o codigo del cliente..."></div>
+          <div class="dsp-f dsp-span2" style="justify-content:flex-end">
+            <label class="dsp-check" style="height:var(--dsp-h)"><input type="checkbox" id="despSoloRecibidos" onchange="despRender()"> Solo pedidos ya recibidos por oficina</label>
+          </div>
         </div>
       </div>
-      <div class="card">
-        <div id="despResumen" style="font-size:12px;color:#555;margin-bottom:8px"></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-          <button class="btn btn-p btn-sm" onclick="despGuardarBultos()" id="despBtnGuardar">Guardar bultos</button>
-          <button class="btn btn-s btn-sm" onclick="despSelTodosConBulto()">Seleccionar los que tienen bultos</button>
-          <button class="btn btn-s btn-sm" onclick="despQuitarSel()">Quitar seleccion</button>
+
+      <div class="dsp-card">
+        <div class="dsp-sec">Resumen</div>
+        <div id="despResumen" class="dsp-stats"></div>
+
+        <div class="dsp-sec">Acciones</div>
+        <div class="dsp-actions">
+          <div class="dsp-grp">
+            <div class="dsp-grp-t">1 · Bultos</div>
+            <div class="dsp-btnrow">
+              <button class="dsp-btn pri" onclick="despGuardarBultos()" id="despBtnGuardar">Guardar bultos</button>
+              <button class="dsp-btn" onclick="despSelTodosConBulto()">Seleccionar con bultos</button>
+              <button class="dsp-btn" onclick="despQuitarSel()">Quitar seleccion</button>
+            </div>
+          </div>
+          <div class="dsp-grp">
+            <div class="dsp-grp-t">2 · Reportes</div>
+            <div class="dsp-btnrow">
+              <button class="dsp-btn" onclick="despReporte()">Reporte por Estado y Ciudad</button>
+              <button class="dsp-btn" onclick="despAbrirGuardados()">📄 Guardados</button>
+            </div>
+          </div>
+          <div class="dsp-grp">
+            <div class="dsp-grp-t">3 · Despacho</div>
+            <button class="dsp-btn ok block" onclick="despDespachar()" id="despBtnDespachar">Marcar despachados</button>
+          </div>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-          <button class="btn btn-s btn-sm" onclick="despReporte()">Reporte de bultos por Estado y Ciudad</button>
-          <button class="btn btn-s btn-sm" onclick="despAbrirGuardados()">📄 Reportes guardados</button>
-          <button class="btn btn-p btn-sm" style="background:#1E7B4F" onclick="despDespachar()" id="despBtnDespachar">Marcar despachados</button>
-        </div>
-        <div id="despLista"><div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Cargando...</div></div>
+
+        <div class="dsp-sec">Pedidos</div>
+        <div id="despLista"><div class="dsp-empty">Cargando...</div></div>
       </div>
     </div>
 
@@ -1858,6 +2099,28 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 </div>
 
 <!-- MODAL FICHA COMPLETA DE CLIENTE -->
+<div class="modal-bg dsp-scope" id="mCobrosVend">
+  <div class="modal" style="max-width:860px">
+    <div class="dsp-mhead"><div><h3 id="cvTitulo">Cobros del vendedor</h3><div class="dsp-sub" id="cvSub" style="margin-top:2px"></div></div><button class="dsp-x" onclick="cerrarModal('mCobrosVend')">✕</button></div>
+    <div id="cvStats" class="dsp-stats"></div>
+    <div class="dsp-grid" style="margin-bottom:12px">
+      <div class="dsp-f dsp-span2"><label>Buscar cliente o documento</label><input type="text" id="cvBuscar" oninput="cvRender()" placeholder="Nombre del cliente o N° de documento..."></div>
+      <div class="dsp-f"><label>Ordenar por</label>
+        <select id="cvOrden" onchange="cvRender()">
+          <option value="fecha">Fecha de pago (reciente primero)</option>
+          <option value="cobrado">Monto cobrado (mayor primero)</option>
+          <option value="desc">Descuento (mayor primero)</option>
+          <option value="dias">Dias de cobro (mayor primero)</option>
+          <option value="cliente">Cliente (A-Z)</option>
+        </select></div>
+    </div>
+    <div id="cvLista" class="dsp-bodyscroll" style="max-height:52vh"></div>
+    <div class="dsp-mfoot">
+      <div class="dsp-btnrow"><button class="dsp-btn" onclick="cvExcel()">Excel de este vendedor</button></div>
+      <div class="dsp-btnrow"><button class="dsp-btn" onclick="cerrarModal('mCobrosVend')">Cerrar</button></div>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="mFichaCliente" style="z-index:235">
   <div class="modal" style="max-width:640px">
     <h3 id="fichaCliTitulo">Ficha del cliente</h3>
@@ -2185,46 +2448,49 @@ h2{font-size:16px;font-weight:700;color:var(--azul)}
 </div>
 
 <!-- MODAL DETALLE DE CARGA DE CUENTAS POR COBRAR -->
-<div class="modal-bg" id="mTransportes">
-  <div class="modal" style="max-width:560px">
-    <h3>Transportes</h3>
-    <p style="font-size:12px;color:#666;margin-bottom:8px">Crea aqui los transportes. Luego asignalos con el boton 🚚 del <strong>estado</strong>, de la <strong>ciudad</strong> o del <strong>cliente</strong> en el listado de Despacho. Prioridad: cliente, luego ciudad, luego estado.</p>
-    <input type="hidden" id="trEditId">
-    <div class="field"><label>Nombre del transporte</label><input type="text" id="trNombre" maxlength="60" placeholder="Ej: MRW, Zoom, Tealca, Transporte Perez..."></div>
-    <div class="field"><label>Telefono / contacto (opcional)</label><input type="text" id="trContacto" maxlength="80" placeholder="Ej: 0412-0000000 Juan"></div>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button class="btn btn-p" id="trBtnGuardar" onclick="trGuardar()">Agregar transporte</button>
-      <button class="btn btn-s" onclick="trLimpiar()">Limpiar</button>
-    </div>
-    <div id="trLista" style="max-height:42vh;overflow-y:auto"></div>
-    <div style="margin-top:12px"><button class="btn btn-s" onclick="cerrarModal('mTransportes')">Cerrar</button></div>
-  </div>
-</div>
-<div class="modal-bg" id="mTranspAsignar">
-  <div class="modal">
-    <h3 id="taTitulo">Asignar transporte</h3>
-    <div id="taInfo" style="font-size:12px;color:#666;margin-bottom:10px"></div>
-    <div class="field"><label>Transporte</label><select id="taSel"></select></div>
-    <label id="taCascadaWrap" style="display:none;gap:8px;align-items:flex-start;font-size:12px;margin-bottom:10px"><input type="checkbox" id="taCascada" checked style="margin-top:2px"><span id="taCascadaTxt"></span></label>
-    <div style="font-size:11px;color:#888;margin-bottom:10px">¿No esta en la lista? Cierra esto y usa "Administrar transportes".</div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-p" onclick="taGuardar()">Guardar</button>
-      <button class="btn btn-s" onclick="cerrarModal('mTranspAsignar')">Cancelar</button>
-    </div>
-  </div>
-</div>
-<div class="modal-bg" id="mDespGuardados">
+<div class="modal-bg dsp-scope" id="mTransportes">
   <div class="modal" style="max-width:600px">
-    <h3>Reportes de despacho guardados</h3>
-    <div id="despGuardadosLista" style="max-height:66vh;overflow-y:auto"></div>
-    <div style="margin-top:14px"><button class="btn btn-s" onclick="cerrarModal('mDespGuardados')">Cerrar</button></div>
+    <div class="dsp-mhead"><h3>Transportes</h3><button class="dsp-x" onclick="cerrarModal('mTransportes')">✕</button></div>
+    <p class="dsp-note">Crea aqui los transportes y luego asignalos con el boton 🚚 del <strong>estado</strong>, de la <strong>ciudad</strong> o del <strong>cliente</strong> en el listado. Prioridad: cliente, luego ciudad, luego estado.</p>
+    <input type="hidden" id="trEditId">
+    <div class="dsp-grid" style="margin-bottom:12px">
+      <div class="dsp-f"><label>Nombre del transporte</label><input type="text" id="trNombre" maxlength="60" placeholder="Ej: MRW, Zoom, Tealca..."></div>
+      <div class="dsp-f"><label>Telefono / contacto (opcional)</label><input type="text" id="trContacto" maxlength="80" placeholder="Ej: 0412-0000000 Juan"></div>
+    </div>
+    <div class="dsp-btnrow" style="margin-bottom:6px">
+      <button class="dsp-btn pri" id="trBtnGuardar" onclick="trGuardar()">Agregar transporte</button>
+      <button class="dsp-btn" onclick="trLimpiar()">Limpiar</button>
+    </div>
+    <div class="dsp-sec">Transportes creados</div>
+    <div id="trLista" class="dsp-bodyscroll" style="max-height:42vh"></div>
+    <div class="dsp-mfoot" style="justify-content:flex-end"><button class="dsp-btn" onclick="cerrarModal('mTransportes')">Cerrar</button></div>
   </div>
 </div>
-<div class="modal-bg" id="mDespReporte">
-  <div class="modal" style="max-width:680px">
-    <h3 id="despReporteTitulo">Bultos por Estado y Ciudad</h3>
-    <div id="despReporteContenido" style="max-height:62vh;overflow-y:auto"></div>
-    <div id="despReporteBotones" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"></div>
+<div class="modal-bg dsp-scope" id="mTranspAsignar">
+  <div class="modal" style="max-width:460px">
+    <div class="dsp-mhead"><h3 id="taTitulo">Asignar transporte</h3><button class="dsp-x" onclick="cerrarModal('mTranspAsignar')">✕</button></div>
+    <div id="taInfo" class="dsp-note"></div>
+    <div class="dsp-f" style="margin-bottom:12px"><label>Transporte</label><select id="taSel"></select></div>
+    <label id="taCascadaWrap" class="dsp-check" style="display:none;align-items:flex-start;height:auto;margin-bottom:12px;line-height:1.4"><input type="checkbox" id="taCascada" checked style="margin-top:2px"><span id="taCascadaTxt"></span></label>
+    <div class="dsp-note" style="margin-bottom:0">¿No esta en la lista? Cierra esto y usa "Transportes".</div>
+    <div class="dsp-mfoot" style="justify-content:flex-end">
+      <button class="dsp-btn" onclick="cerrarModal('mTranspAsignar')">Cancelar</button>
+      <button class="dsp-btn pri" onclick="taGuardar()">Guardar</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg dsp-scope" id="mDespGuardados">
+  <div class="modal" style="max-width:640px">
+    <div class="dsp-mhead"><h3>Reportes de despacho guardados</h3><button class="dsp-x" onclick="cerrarModal('mDespGuardados')">✕</button></div>
+    <div id="despGuardadosLista" class="dsp-bodyscroll" style="max-height:66vh"></div>
+    <div class="dsp-mfoot" style="justify-content:flex-end"><button class="dsp-btn" onclick="cerrarModal('mDespGuardados')">Cerrar</button></div>
+  </div>
+</div>
+<div class="modal-bg dsp-scope" id="mDespReporte">
+  <div class="modal" style="max-width:760px">
+    <div class="dsp-mhead"><h3 id="despReporteTitulo">Bultos por Estado y Ciudad</h3><button class="dsp-x" onclick="cerrarModal('mDespReporte')">✕</button></div>
+    <div id="despReporteContenido" class="dsp-bodyscroll"></div>
+    <div id="despReporteBotones" class="dsp-mfoot"></div>
   </div>
 </div>
 <div class="modal-bg" id="mDetalleCargaCxC">
@@ -4260,7 +4526,7 @@ function fusionarDescuentosConBase(base, nuevos){
 }
 function cargarDescuentosConfig(doc){
   try{
-    if(doc && doc.exists){ DESCUENTOS_FACTURA=JSON.parse(doc.data().data||'[]'); }
+    if(doc && doc.exists){ DESCUENTOS_FACTURA=JSON.parse(doc.data().data||'[]'); cxcGuardarMeta('desc',doc); }
   }catch(e){}
   try{ renderDescuentosAdmin(); }catch(e){}
 }
@@ -7919,11 +8185,65 @@ var ULTIMO_REPORTE_COBROS_DESCUENTOS={lista:[], periodo:''};
 // directo (sumaDocsOriginal). Los pagos de antes no lo tenian guardado -
 // para esos se reconstruye matematicamente a partir del "esperado" (que
 // siempre vino con el descuento ya restado) y el % que se uso.
-function montoOriginalPago(p){
-  if(p.sumaDocsOriginal!==undefined && p.sumaDocsOriginal!==null) return p.sumaDocsOriginal;
+// Descuento REAL otorgado en un pago = lo que se acredito a los documentos
+// por encima del dinero depositado, SOLO por el % de descuento. NO incluye
+// el saldo que queda pendiente cuando el pago es un abono (antes se tomaba
+// "total de los documentos - lo cobrado" y un abono parcial aparecia como
+// descuento), ni el IVA retenido.
+function descuentoRealPago(p){
   var pct=p.descuentoPct||0;
-  if(pct>=100) return p.montoEsperado||p.montoUSD;
-  return (p.montoEsperado||p.montoUSD)/(1-pct/100);
+  if(pct<=0) return 0;
+  var cash=p.montoUSD||0;
+  if(pct>=100){
+    var base=(p.sumaDocsOriginal!==undefined&&p.sumaDocsOriginal!==null)?p.sumaDocsOriginal:(p.montoEsperado||cash);
+    return Math.max(0,Math.round((base-cash)*100)/100);
+  }
+  return Math.round(cash*pct/(100-pct)*100)/100;
+}
+// Dias de cobro de UN cobro: dias entre la emision de sus documentos y la
+// fecha del pago (si el cobro cubre varios documentos, se pondera por el
+// monto de cada documento). null si no hay fecha de emision conocida.
+function diasCobroPago(p){
+  var sw=0, sd=0, sinPeso=[];
+  (p.documentos||[]).forEach(function(d){
+    var em=d.emision||buscarEmisionDocumento(d.numero)||'';
+    var dias=em?diasEntreEmisionYPago(em,p.fecha):null;
+    if(dias===null) return;
+    var w=Math.abs(d.saldo||0);
+    sinPeso.push(dias);
+    if(w>0){ sw+=w; sd+=dias*w; }
+  });
+  if(sw>0) return sd/sw;
+  if(sinPeso.length) return sinPeso.reduce(function(a,b){return a+b;},0)/sinPeso.length;
+  return null;
+}
+// Dias promedio de cobro SIMPLE (igual que la ficha del cliente): promedio de
+// los dias de todos los documentos cobrados, sin ponderar por monto.
+function diasPromSimple(lista){
+  var arr=[];
+  (lista||[]).forEach(function(p){
+    (p.documentos||[]).forEach(function(d){
+      var em=d.emision||buscarEmisionDocumento(d.numero)||'';
+      var x=em?diasEntreEmisionYPago(em,p.fecha):null;
+      if(x!==null) arr.push(x);
+    });
+  });
+  return arr.length?Math.round(arr.reduce(function(a,b){return a+b;},0)/arr.length*10)/10:null;
+}
+// Dias promedio de cobro PONDERADO por lo cobrado: cada cobro pesa segun el
+// dinero que entro (montoUSD). Devuelve {dias, base}: base = $ cobrados con dato.
+function diasPromPonderado(lista){
+  var sw=0, sd=0;
+  (lista||[]).forEach(function(p){
+    var d=diasCobroPago(p), w=p.montoUSD||0;
+    if(d===null || w<=0) return;
+    sw+=w; sd+=d*w;
+  });
+  return sw>0?{dias:Math.round(sd/sw*10)/10, base:sw}:null;
+}
+// Valor "a precio lleno" de lo cobrado: dinero depositado + descuento real
+function montoOriginalPago(p){
+  return Math.round(((p.montoUSD||0)+descuentoRealPago(p))*100)/100;
 }
 
 function generarReporteCobrosDescuentos(){
@@ -7958,7 +8278,8 @@ function generarReporteCobrosDescuentos(){
     for(var i=0;i<lista.length;i++){
       var p=lista[i];
       var vid=p.vendedor||'??';
-      if(!porVendCob[vid]) porVendCob[vid]={nombre:p.vendedorNombre||('VEND '+vid), cobrado:0, descuentoMonto:0, original:0, pagos:0};
+      if(!porVendCob[vid]) porVendCob[vid]={nombre:p.vendedorNombre||('VEND '+vid), cobrado:0, descuentoMonto:0, original:0, pagos:0, lista:[]};
+      porVendCob[vid].lista.push(p);
       var original=montoOriginalPago(p);
       var descMonto=Math.max(0, Math.round((original-p.montoUSD)*100)/100);
       porVendCob[vid].cobrado+=p.montoUSD;
@@ -7975,19 +8296,22 @@ function generarReporteCobrosDescuentos(){
       porPctDesc[pctKey].descuentoMonto+=descMonto;
     }
 
+    var dpTotal=diasPromPonderado(lista), dsTotal=diasPromSimple(lista);
     var html='<div class="metrics" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
       '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica('$'+Math.round(totalCobrado),16)+';color:var(--verde)">$'+formatearNumeroConMiles(totalCobrado,0)+'</div><div class="lbl">Total cobrado</div></div>'+
       '<div class="metric"><div class="num" style="font-size:'+fontSizeParaMetrica('$'+Math.round(totalDescuentoMonto),16)+';color:var(--rojo)">$'+formatearNumeroConMiles(totalDescuentoMonto,0)+'</div><div class="lbl">Total en descuentos ('+(totalOriginal>0?(Math.round(totalDescuentoMonto/totalOriginal*1000)/10):0)+'% del original)</div></div>'+
       '<div class="metric"><div class="num" style="font-size:18px">'+lista.length+'</div><div class="lbl">Pagos confirmados</div></div>'+
+      '<div class="metric"><div class="num" style="font-size:18px">'+(dsTotal!==null?dsTotal+' d':'-')+'</div><div class="lbl">Dias prom. de cobro (simple)</div></div>'+
+      '<div class="metric"><div class="num" style="font-size:18px">'+(dpTotal?dpTotal.dias+' d':'-')+'</div><div class="lbl">Dias prom. de cobro (ponderado por $ cobrado)</div></div>'+
     '</div>';
 
-    html+='<div style="font-weight:700;font-size:12px;color:#666;margin:10px 0 6px">Por vendedor</div>';
+    html+='<div style="font-weight:700;font-size:12px;color:#666;margin:10px 0 6px">Por vendedor <span style="font-weight:400;color:#999">· toca un vendedor para ver su detalle</span></div>';
     var vidsCob=Object.keys(porVendCob).sort(function(a,b){return porVendCob[b].cobrado-porVendCob[a].cobrado;});
     for(var i=0;i<vidsCob.length;i++){
       var d=porVendCob[vidsCob[i]];
       var pctSobreOriginal=d.original>0?(Math.round(d.descuentoMonto/d.original*1000)/10):0;
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--borde)">'+
-        '<div><strong style="font-size:13px">VEND '+vidsCob[i]+' - '+d.nombre+'</strong><div style="font-size:11px;color:#888">'+d.pagos+' pago'+(d.pagos!==1?'s':'')+'</div></div>'+
+      html+='<div class="cv-vend-row" data-v="'+escUbic(vidsCob[i])+'" onclick="abrirCobrosVendedor(this.getAttribute(&quot;data-v&quot;))" title="Ver el detalle de cobros de este vendedor">'+
+        '<div><strong style="font-size:13px">VEND '+escUbic(vidsCob[i])+' - '+escUbic(d.nombre)+'</strong><div style="font-size:11px;color:#888">'+d.pagos+' pago'+(d.pagos!==1?'s':'')+(function(){ var dv=diasPromPonderado(d.lista), ds=diasPromSimple(d.lista); return dv?' · dias prom.: '+ds+' d simple / '+dv.dias+' d ponderado':''; })()+'</div><div class="cv-vend-go">Ver detalle ›</div></div>'+
         '<div style="text-align:right"><strong style="font-size:14px;color:var(--verde)">$'+formatearNumeroConMiles(d.cobrado,2)+'</strong><div style="font-size:11px;color:var(--rojo)">-$'+formatearNumeroConMiles(d.descuentoMonto,2)+' dcto. ('+pctSobreOriginal+'% del original)</div></div>'+
       '</div>';
     }
@@ -8151,6 +8475,96 @@ function generarReporteCobrosDescuentos(){
   });
 }
 
+// ═══ DETALLE DE COBROS POR VENDEDOR (Reportes → Cobros y Descuentos) ═══
+var CVD={vid:'',nombre:'',periodo:'',pagos:[],vista:[]};
+function abrirCobrosVendedor(vid){
+  var lista=(ULTIMO_REPORTE_COBROS_DESCUENTOS.lista||[]).filter(function(p){ return (p.vendedor||'??')===vid; });
+  if(!lista.length){ toast('Este vendedor no tiene pagos en el periodo'); return; }
+  CVD.vid=vid; CVD.nombre=lista[0].vendedorNombre||''; CVD.periodo=ULTIMO_REPORTE_COBROS_DESCUENTOS.periodo||'';
+  CVD.pagos=lista.map(function(p){
+    var original=montoOriginalPago(p);
+    var desc=Math.max(0,Math.round((original-(p.montoUSD||0))*100)/100);
+    var docs=(p.documentos||[]).map(function(d){
+      var emision=d.emision||buscarEmisionDocumento(d.numero)||'';
+      return {numero:d.numero, emision:emision, dias:emision?diasEntreEmisionYPago(emision,p.fecha):null, saldo:d.saldo||0};
+    });
+    var dd=docs.map(function(d){ return d.dias; }).filter(function(x){ return x!==null; });
+    var pend=(p.montoAbonado!==undefined&&p.montoAbonado!==null&&p.sumaDocsOriginal!==undefined&&p.sumaDocsOriginal!==null)?Math.round((p.sumaDocsOriginal-p.montoAbonado)*100)/100:0;
+    return {diasPago:diasCobroPago(p), pend:pend>0.01?pend:0, id:p.id, fecha:p.fecha, clienteId:p.clienteId, cliente:p.clienteNombre||String(p.clienteId||''), cobrado:p.montoUSD||0, original:original, desc:desc,
+      pct:p.descuentoPct||0, docs:docs, docsRaw:(p.documentos||[]), diasMax:dd.length?Math.max.apply(null,dd):-1, diasLista:dd};
+  });
+  document.getElementById('cvTitulo').textContent='VEND '+vid+(CVD.nombre?' - '+CVD.nombre:'');
+  document.getElementById('cvSub').textContent='Cobros confirmados · '+CVD.periodo;
+  document.getElementById('cvBuscar').value='';
+  document.getElementById('cvOrden').value='fecha';
+  document.getElementById('mCobrosVend').classList.add('open');
+  cvRender();
+}
+function cvFmtFecha(iso){ var s=String(iso||''); return s.length>=10&&s.charAt(4)==='-'?s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4):s; }
+function cvFiltrados(){
+  var q=(document.getElementById('cvBuscar').value||'').trim().toLowerCase();
+  var ord=document.getElementById('cvOrden').value;
+  var v=CVD.pagos.filter(function(p){
+    if(!q) return true;
+    if(String(p.cliente).toLowerCase().indexOf(q)>=0 || String(p.clienteId).toLowerCase().indexOf(q)>=0) return true;
+    return p.docs.some(function(d){ return String(d.numero).toLowerCase().indexOf(q)>=0; });
+  });
+  v.sort(function(a,b){
+    if(ord==='cobrado') return b.cobrado-a.cobrado;
+    if(ord==='desc') return b.desc-a.desc;
+    if(ord==='dias') return b.diasMax-a.diasMax;
+    if(ord==='cliente') return String(a.cliente).localeCompare(String(b.cliente),'es');
+    return (b.fecha||'')>(a.fecha||'')?1:((b.fecha||'')<(a.fecha||'')?-1:0);
+  });
+  return v;
+}
+function cvRender(){
+  var v=cvFiltrados(); CVD.vista=v;
+  var cobrado=0, desc=0, orig=0, ndocs=0, dias=[];
+  v.forEach(function(p){ cobrado+=p.cobrado; desc+=p.desc; orig+=p.original; ndocs+=p.docs.length; p.diasLista.forEach(function(x){ dias.push(x); }); });
+  var dpv=diasPromPonderado(v.map(function(x){ return {documentos:x.docsRaw, fecha:x.fecha, montoUSD:x.cobrado}; }));
+  var prom=dpv?dpv.dias:null;
+  var promS=diasPromSimple(v.map(function(x){ return {documentos:x.docsRaw, fecha:x.fecha, montoUSD:x.cobrado}; }));
+  var pctD=orig>0?Math.round(desc/orig*1000)/10:0;
+  var pctC=cobrado>0?Math.round(desc/cobrado*1000)/10:0;
+  var st=function(n,l,c){ return '<div class="dsp-stat"><div class="n"'+(c?' style="color:'+c+'"':'')+'>'+n+'</div><div class="l">'+l+'</div></div>'; };
+  document.getElementById('cvStats').innerHTML=
+    st('$'+formatearNumeroConMiles(cobrado,2),'Total cobrado','var(--verde)')+
+    st('$'+formatearNumeroConMiles(desc,2),'Descuentos otorgados ('+pctD+'% del original)','var(--rojo)')+
+    st(pctC+'%','Descuento sobre lo cobrado','var(--rojo)')+
+    st(v.length,'Pagos')+st(ndocs,'Documentos')+st(promS===null?'-':promS+' d','Dias prom. de cobro (simple)')+st(prom===null?'-':prom+' d','Dias prom. de cobro (ponderado por $ cobrado)');
+  var cont=document.getElementById('cvLista');
+  if(!v.length){ cont.innerHTML='<div class="rp-empty">No hay pagos con ese criterio</div>'; return; }
+  var colorDias=function(d){ return d===null?'#bbb':(d>60?'var(--rojo)':(d>30?'var(--ambar)':'var(--verde)')); };
+  cont.innerHTML=v.map(function(p){
+    var money='<div class="cob">$'+formatearNumeroConMiles(p.cobrado,2)+'</div>'+
+      (p.desc>0?'<div class="dsc">-$'+formatearNumeroConMiles(p.desc,2)+(p.pct?' · '+p.pct+'%':'')+'</div><div class="org">de $'+formatearNumeroConMiles(p.original,2)+'</div>':'<div class="sin">Sin descuento</div>');
+    var docs=p.docs.length?
+      '<div class="cv-dh"><span>Documento</span><span>Emision</span><span class="r">Dias</span><span class="r">Monto doc.</span></div>'+
+      p.docs.map(function(d){
+        return '<div class="cv-dr"><b>'+escUbic(d.numero)+'</b><span>'+escUbic(d.emision||'-')+'</span><span class="r" style="font-weight:700;color:'+colorDias(d.dias)+'">'+(d.dias===null?'-':d.dias+' d')+'</span><span class="r">$'+formatearNumeroConMiles(d.saldo,2)+'</span></div>';
+      }).join(''):'<div class="dsp-meta" style="padding:8px 0">Sin detalle de documentos (pago antiguo)</div>';
+    return '<div class="cv-pago" data-id="'+escUbic(p.id)+'" onclick="abrirDetallePagoCobro(this.getAttribute(&quot;data-id&quot;),event)" title="Ver el detalle de este cobro"><div class="cv-ph"><div style="min-width:0"><a class="cv-cli" data-c="'+escUbic(p.clienteId)+'" onclick="verFichaCliente(this.getAttribute(&quot;data-c&quot;))">'+escUbic(p.cliente)+'</a>'+
+      '<div class="dsp-meta">Pago '+escUbic(cvFmtFecha(p.fecha))+' · Cod '+escUbic(p.clienteId)+(p.diasPago!==null&&p.diasPago!==undefined?' · Cobrado a '+(Math.round(p.diasPago*10)/10)+' d':'')+(p.pend?' · <b style="color:var(--ambar)">Abono</b> · queda pendiente $'+formatearNumeroConMiles(p.pend,2):'')+'</div></div><div class="cv-money">'+money+'<div class="cv-go">Ver detalle ›</div></div></div><div class="cv-docs">'+docs+'</div></div>';
+  }).join('');
+}
+function cvExcel(){
+  var v=CVD.vista; if(!v||!v.length){ toast('No hay pagos para exportar'); return; }
+  var filas=[['Cobros del vendedor VEND '+CVD.vid+(CVD.nombre?' - '+CVD.nombre:'')],[CVD.periodo],[],
+    ['Fecha de pago','Cliente','Documento','Emision','Dias de cobro','Monto doc.','Cobrado del pago','Descuento $','% Descuento']];
+  v.forEach(function(p){
+    if(!p.docs.length) filas.push([cvFmtFecha(p.fecha),p.cliente,'','','','',Math.round(p.cobrado*100)/100,p.desc,p.pct+'%']);
+    p.docs.forEach(function(d,idx){
+      filas.push([cvFmtFecha(p.fecha),p.cliente,d.numero,d.emision,d.dias===null?'':d.dias,Math.round(d.saldo*100)/100,idx===0?Math.round(p.cobrado*100)/100:'',idx===0?p.desc:'',idx===0?p.pct+'%':'']);
+    });
+  });
+  var wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols']=[{wch:13},{wch:34},{wch:12},{wch:12},{wch:12},{wch:13},{wch:16},{wch:13},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Cobros vendedor');
+  XLSX.writeFile(wb,'cobros_vend_'+CVD.vid+'_'+String(CVD.periodo).replace(/[\/ ]/g,'_')+'.xlsx');
+  toast('Excel generado');
+}
+
 function descargarExcelCobrosDescuentos(){
   var lista=ULTIMO_REPORTE_COBROS_DESCUENTOS.lista;
   if(!lista || lista.length===0){ toast('Genera el reporte primero'); return; }
@@ -8158,7 +8572,7 @@ function descargarExcelCobrosDescuentos(){
     ['Cobros y Descuentos'],
     [ULTIMO_REPORTE_COBROS_DESCUENTOS.periodo],
     [],
-    ['Fecha','Vendedor','Cliente','Monto Original','% Descuento','Monto Descuento','Monto Cobrado','Forma de pago']
+    ['Fecha','Vendedor','Cliente','Monto Original','% Descuento','Monto Descuento','Monto Cobrado','Forma de pago','Dias de cobro']
   ];
   for(var i=0;i<lista.length;i++){
     var p=lista[i];
@@ -8169,7 +8583,8 @@ function descargarExcelCobrosDescuentos(){
     }).join(' + ');
     filas.push([
       p.fecha, 'VEND '+(p.vendedor||'??')+' - '+(p.vendedorNombre||''), p.clienteNombre,
-      Math.round(original*100)/100, (p.descuentoPct||0)+'%', descMonto, p.montoUSD, formaPagoTxt
+      Math.round(original*100)/100, (p.descuentoPct||0)+'%', descMonto, p.montoUSD, formaPagoTxt,
+      (function(){ var dd=diasCobroPago(p); return dd===null?'':Math.round(dd*10)/10; })()
     ]);
   }
   filas.push([]);
@@ -8187,6 +8602,9 @@ function descargarExcelCobrosDescuentos(){
   filas.push(['Total de descuentos otorgados', Math.round(totDesc*100)/100]);
   filas.push(['Monto original de los documentos', Math.round(totOriginal*100)/100]);
   filas.push(['% que representa el descuento del original', (totOriginal>0?(Math.round(totDesc/totOriginal*1000)/10):0)+'%']);
+  var dpX=diasPromPonderado(lista);
+  filas.push(['Dias promedio de cobro (simple, por documento)', diasPromSimple(lista)===null?'':diasPromSimple(lista)]);
+  filas.push(['Dias promedio de cobro (ponderado por $ cobrado)', dpX?dpX.dias:'']);
 
   // Cuentas por Cobrar (saldo pendiente actual, mismo filtro de vendedor
   // que el resto de este reporte - no tiene rango de fecha, es la foto de
@@ -8222,7 +8640,7 @@ function descargarExcelCobrosDescuentos(){
 
   var wb=XLSX.utils.book_new();
   var ws=XLSX.utils.aoa_to_sheet(filas);
-  ws['!cols']=[{wch:12},{wch:22},{wch:30},{wch:14},{wch:12},{wch:14},{wch:14},{wch:18}];
+  ws['!cols']=[{wch:12},{wch:22},{wch:30},{wch:14},{wch:12},{wch:14},{wch:14},{wch:18},{wch:13}];
   ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}},{s:{r:1,c:0},e:{r:1,c:7}}];
   XLSX.utils.book_append_sheet(wb, ws, 'Cobros y Descuentos');
   XLSX.writeFile(wb, 'cobros_descuentos_'+ULTIMO_REPORTE_COBROS_DESCUENTOS.periodo.replace(/[\/ ]/g,'_')+'.xlsx', {cellStyles:true});
@@ -10479,21 +10897,21 @@ function despAbrirTransportes(){
 }
 function despRenderTransportes(){
   var cont=document.getElementById('trLista'); if(!cont) return;
-  if(!TRANSP.lista.length){ cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:12px">Aun no hay transportes. Agrega el primero arriba.</div>'; return; }
+  if(!TRANSP.lista.length){ cont.innerHTML='<div class="rp-empty">Aun no hay transportes. Agrega el primero arriba.</div>'; return; }
   var mapa=mapaClientesUbic();
   var html='';
   TRANSP.lista.slice().sort(function(a,b){ return a.nombre.localeCompare(b.nombre,'es'); }).forEach(function(t){
     var est=Object.keys(TRANSP.asig.estados).filter(function(k){ return TRANSP.asig.estados[k]===t.id; });
     var ciu=Object.keys(TRANSP.asig.ciudades).filter(function(k){ return TRANSP.asig.ciudades[k]===t.id; }).map(function(k){ var x=k.split('|'); return x[1]+' ('+x[0]+')'; });
     var cli=Object.keys(TRANSP.asig.clientes).filter(function(k){ return TRANSP.asig.clientes[k]===t.id; }).map(function(k){ return (mapa[k]&&mapa[k].nombre)||k; });
-    html+='<div style="border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin-bottom:6px">'+
-      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><strong style="font-size:13px">'+escUbic(t.nombre)+'</strong>'+(t.contacto?'<div style="font-size:11px;color:#666">'+escUbic(t.contacto)+'</div>':'')+'</div>'+
-      '<div style="white-space:nowrap"><button class="btn btn-s btn-sm" data-id="'+escUbic(t.id)+'" onclick="trEditar(this.getAttribute(&quot;data-id&quot;))">Editar</button> <button class="btn btn-s btn-sm" style="color:var(--rojo)" data-id="'+escUbic(t.id)+'" onclick="trEliminar(this.getAttribute(&quot;data-id&quot;))">Eliminar</button></div></div>'+
-      '<div style="font-size:11px;color:#555;margin-top:4px">'+
-        (est.length?'<div><strong>Estados:</strong> '+escUbic(est.join(', '))+'</div>':'')+
-        (ciu.length?'<div><strong>Ciudades:</strong> '+escUbic(ciu.join(', '))+'</div>':'')+
-        (cli.length?'<div><strong>Clientes ('+cli.length+'):</strong> '+escUbic(cli.slice(0,6).join(', ')+(cli.length>6?'...':''))+'</div>':'')+
-        (!est.length&&!ciu.length&&!cli.length?'<span style="color:#aaa">Sin asignaciones todavia (asignalo desde el listado con el boton de transporte).</span>':'')+
+    html+='<div class="dsp-item">'+
+      '<div class="dsp-item-h"><div style="min-width:0"><div class="dsp-item-t">🚚 '+escUbic(t.nombre)+'</div>'+(t.contacto?'<div class="dsp-item-s">'+escUbic(t.contacto)+'</div>':'')+'</div>'+
+      '<div class="dsp-btnrow" style="flex-wrap:nowrap"><button class="dsp-btn sm" data-id="'+escUbic(t.id)+'" onclick="trEditar(this.getAttribute(&quot;data-id&quot;))">Editar</button><button class="dsp-btn sm danger" data-id="'+escUbic(t.id)+'" onclick="trEliminar(this.getAttribute(&quot;data-id&quot;))">Eliminar</button></div></div>'+
+      '<div class="dsp-pills">'+
+        (est.length?'<span class="dsp-pill"><b>Estados:</b> '+escUbic(est.join(', '))+'</span>':'')+
+        (ciu.length?'<span class="dsp-pill"><b>Ciudades:</b> '+escUbic(ciu.join(', '))+'</span>':'')+
+        (cli.length?'<span class="dsp-pill"><b>Clientes ('+cli.length+'):</b> '+escUbic(cli.slice(0,6).join(', ')+(cli.length>6?'...':''))+'</span>':'')+
+        (!est.length&&!ciu.length&&!cli.length?'<span style="font-size:12px;color:#aaa">Sin asignaciones todavia (asignalo desde el listado con el boton 🚚).</span>':'')+
       '</div></div>';
   });
   cont.innerHTML=html;
@@ -10596,24 +11014,22 @@ function despRender(){
     var idE=TRANSP.asig.estados[it.est], nomE=idE?despNombreTransp(idE):'';
     if(it.est!==estAct){
       estAct=it.est; ciuAct=null;
-      html+='<div style="background:var(--azul);color:#fff;font-weight:700;font-size:13px;padding:6px 10px;border-radius:6px;margin:12px 0 4px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
-        '<span>'+escUbic(it.est)+' <span style="font-weight:400;opacity:.95">— '+despTxtStats(despStats(porE[it.est]),'#FFD27A')+'</span></span>'+
+      html+='<div class="dsp-estado"><div><div class="nm">'+escUbic(it.est)+'</div><div class="mt">'+despTxtStats(despStats(porE[it.est]),'#FFD27A')+'</div></div>'+
         (it.est!==UBIC_SIN?despBtnTransp('estado',it.est,'Estado '+it.est,nomE,false,true):'')+'</div>';
     }
     if(it.ciu!==ciuAct){
       ciuAct=it.ciu;
       var kC=it.est+'|'+it.ciu, idC=TRANSP.asig.ciudades[kC], nomC=idC?despNombreTransp(idC):'', hered=false;
       if(!nomC && nomE){ nomC=nomE; hered=true; }
-      html+='<div style="font-size:12px;font-weight:700;color:var(--azul);padding:4px 2px;border-bottom:1px solid var(--borde);margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
-        '<span>'+escUbic(it.ciu)+' <span style="font-weight:400;color:#666">— '+despTxtStats(despStats(porC[kC]),'#b26a00')+'</span></span>'+
+      html+='<div class="dsp-ciudad"><div><div class="nm">'+escUbic(it.ciu)+'</div><div class="mt">'+despTxtStats(despStats(porC[kC]),'#b26a00')+'</div></div>'+
         (it.est!==UBIC_SIN?despBtnTransp('ciudad',kC,'Ciudad '+it.ciu+' ('+it.est+')',nomC,hered,false):'')+'</div>';
     }
     html+=despFila(it.p, prodPorId, it.tr);
   });
   if(!items.length) {
     var _tr=despVal('despFiltroTransp')||'', _bu=despVal('despFiltroBulto')||'todos';
-    var _extra=(_tr||_bu!=='todos')?('<div style="margin-top:8px;color:#666">Filtros activos: '+(_tr?('Transporte '+(_tr==='__sin'?'sin transporte':escUbic(despNombreTransp(_tr)||_tr))):'')+((_tr&&_bu!=='todos')?' · ':'')+(_bu!=='todos'?('Bultos: '+escUbic(_bu)):'')+'</div><button class="btn btn-s btn-sm" style="margin-top:8px" onclick="despLimpiarFiltrosVacio()">Quitar filtros de transporte y bultos</button>'):'';
-    html='<div style="color:#aaa;font-size:13px;text-align:center;padding:14px">No hay pedidos con este filtro'+_extra+'</div>';
+    var _extra=(_tr||_bu!=='todos')?('<div style="margin-top:8px;color:#666">Filtros activos: '+(_tr?('Transporte '+(_tr==='__sin'?'sin transporte':escUbic(despNombreTransp(_tr)||_tr))):'')+((_tr&&_bu!=='todos')?' · ':'')+(_bu!=='todos'?('Bultos: '+escUbic(_bu)):'')+'</div><button class="dsp-btn" style="margin-top:10px" onclick="despLimpiarFiltrosVacio()">Quitar filtros de transporte y bultos</button>'):'';
+    html='<div class="dsp-empty">No hay pedidos con este filtro'+_extra+'</div>';
   }
   cont.innerHTML=html;
   despActualizarBarra(lista);
@@ -10631,30 +11047,30 @@ function despFila(p, prodPorId, tr){
   if(p.modificadoDespuesDespacho) tag+=' <span class="tag" style="font-size:10px;background:#FCE4D6;color:#9C4221;font-weight:700">Modificado despues de despachar</span>';
   var ctrl;
   if(esDesp){
-    ctrl='<button onclick="despDeshacer(this.getAttribute(&quot;data-k&quot;))" data-k="'+ka+'" style="background:none;border:1px solid var(--rojo);color:var(--rojo);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer">Deshacer</button>';
+    ctrl='<button class="dsp-undo" onclick="despDeshacer(this.getAttribute(&quot;data-k&quot;))" data-k="'+ka+'">Deshacer</button>';
   } else {
-    ctrl='<span style="font-size:11px;color:#666">Bultos:</span> <input type="text" inputmode="numeric" data-k="'+ka+'" value="'+escUbic(despBultoEfectivo(p))+'" maxlength="4" placeholder="0" oninput="despBultoCambio(this)" style="width:64px;padding:5px 6px;border:1px solid var(--borde);border-radius:6px;font-size:14px;font-weight:700;text-align:center">';
+    ctrl='<label class="dsp-bl" style="text-transform:none;letter-spacing:0;margin:0">Bultos <input class="dsp-bin" type="text" inputmode="numeric" data-k="'+ka+'" value="'+escUbic(despBultoEfectivo(p))+'" maxlength="4" placeholder="0" oninput="despBultoCambio(this)"></label>';
   }
   var cid=(p.cliente&&p.cliente.id)||'';
   var lineaTr;
   if(esDesp){
-    lineaTr=tr?'<div style="font-size:11px;color:#1B2A6B">🚚 '+escUbic(tr.nombre)+'</div>':'';
+    lineaTr=tr?'<div class="dsp-trline">🚚 '+escUbic(tr.nombre)+'</div>':'';
   } else {
     var nivTxt=tr?({cliente:'cliente',ciudad:'ciudad',estado:'estado'}[tr.nivel]||''):'';
-    lineaTr='<div style="font-size:11px;color:#1B2A6B;margin-top:1px">'+(tr?'🚚 '+escUbic(tr.nombre)+' <span style="color:#888">(por '+nivTxt+')</span>':'<span style="color:#b26a00">🚚 Sin transporte</span>')+
-      ' <a href="#" data-n="cliente" data-c="'+escUbic(cid)+'" data-e="'+escUbic('Cliente '+((p.cliente&&p.cliente.nombre)||'')+' ('+cid+')')+'" onclick="despAbrirAsignar(this);return false" style="color:var(--azul);text-decoration:underline">'+(TRANSP.asig.clientes[cid]?'cambiar':'asignar')+' a este cliente</a></div>';
+    lineaTr='<div class="dsp-trline">'+(tr?'🚚 '+escUbic(tr.nombre)+' <span style="color:#888">(por '+nivTxt+')</span>':'<span style="color:#b26a00">🚚 Sin transporte</span>')+
+      ' <a href="#" data-n="cliente" data-c="'+escUbic(cid)+'" data-e="'+escUbic('Cliente '+((p.cliente&&p.cliente.nombre)||'')+' ('+cid+')')+'" onclick="despAbrirAsignar(this);return false">'+(TRANSP.asig.clientes[cid]?'cambiar':'asignar')+' a este cliente</a></div>';
   }
-  return '<div style="padding:8px 2px;border-bottom:1px solid var(--borde)">'+
-    '<div style="display:flex;gap:8px;align-items:flex-start">'+
-      '<input type="checkbox" data-k="'+ka+'" '+(DESP.sel[k]&&!esDesp?'checked':'')+(esDesp?' disabled':'')+' onchange="despToggleSel(this)" style="width:17px;height:17px;margin-top:2px;flex-shrink:0">'+
-      '<div style="flex:1;min-width:0">'+
-        '<div style="display:flex;justify-content:space-between;gap:6px"><strong style="font-size:13px">'+escUbic((p.cliente&&p.cliente.nombre)||'')+'</strong><span style="font-size:11px;color:#888;white-space:nowrap">'+escUbic(p.fecha||'')+'</span></div>'+
-        '<div style="font-size:11px;color:#666">Cod '+escUbic(cid)+' · VEND '+escUbic(p.vendedor||'')+' · Pedido: '+(p.bultos||0)+' btos · $'+formatearNumeroConMiles(p.monto||0,2)+'</div>'+
-        '<div style="font-size:11px;color:#888;margin:2px 0">'+escUbic(itemsTxt)+'</div>'+
+  return '<div class="dsp-ped">'+
+      '<input type="checkbox" data-k="'+ka+'" '+(DESP.sel[k]&&!esDesp?'checked':'')+(esDesp?' disabled':'')+' onchange="despToggleSel(this)">'+
+      '<div style="min-width:0">'+
+        '<div class="dsp-nm">'+escUbic((p.cliente&&p.cliente.nombre)||'')+'</div>'+
+        '<div class="dsp-meta">Cod '+escUbic(cid)+' · VEND '+escUbic(p.vendedor||'')+' · Pedido: '+(p.bultos||0)+' btos · <strong>$'+formatearNumeroConMiles(p.monto||0,2)+'</strong></div>'+
+        (itemsTxt?'<div class="dsp-items">'+escUbic(itemsTxt)+'</div>':'')+
         lineaTr+
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px"><div>'+tag+'</div><div>'+ctrl+'</div></div>'+
+        '<div class="dsp-tags">'+tag+'</div>'+
       '</div>'+
-    '</div></div>';
+      '<div class="dsp-side"><div class="dsp-fecha">'+escUbic(p.fecha||'')+'</div><div>'+ctrl+'</div></div>'+
+    '</div>';
 }
 function despBultoCambio(el){
   var k=el.getAttribute('data-k');
@@ -10685,8 +11101,13 @@ function despActualizarBarra(lista){
   lista.forEach(function(p){ if(p.despachado) desp++; var q=despBultosCant(p); if(q) conBulto++; btos+=q; monto+=p.monto||0; });
   var nSel=despSeleccionados().length, nDirty=Object.keys(DESP.dirty).length;
   var r=document.getElementById('despResumen');
-  if(r) r.innerHTML='<strong>'+lista.length+'</strong> pedido(s) · <strong>'+btos+' bultos cargados</strong> · $'+formatearNumeroConMiles(monto,2)+' · '+conBulto+' con bultos cargados · '+desp+' despachado(s)'+
-    (nDirty?' · <span style="color:var(--ambar);font-weight:700">'+nDirty+' sin guardar</span>':'');
+  if(r) r.innerHTML=
+    '<div class="dsp-stat"><div class="n">'+lista.length+'</div><div class="l">Pedidos</div></div>'+
+    '<div class="dsp-stat"><div class="n">'+btos+'</div><div class="l">Bultos cargados</div></div>'+
+    '<div class="dsp-stat"><div class="n">'+conBulto+'<span style="font-size:13px;font-weight:600;color:#6b7194"> / '+lista.length+'</span></div><div class="l">Pedidos con bultos</div></div>'+
+    '<div class="dsp-stat"><div class="n">$'+formatearNumeroConMiles(monto,2)+'</div><div class="l">Monto</div></div>'+
+    '<div class="dsp-stat"><div class="n">'+desp+'</div><div class="l">Despachados</div></div>'+
+    (nDirty?'<div class="dsp-stat warn"><div class="n">'+nDirty+'</div><div class="l">Sin guardar</div></div>':'');
   var bg=document.getElementById('despBtnGuardar'); if(bg) bg.textContent='Guardar bultos'+(nDirty?' ('+nDirty+')':'');
   var bd=document.getElementById('despBtnDespachar'); if(bd) bd.textContent='Marcar despachados'+(nSel?' ('+nSel+')':'');
 }
@@ -10818,9 +11239,8 @@ function despTxtStats(st, colorSin){
     (st.sin?' · <span style="color:'+colorSin+'">'+st.sin+' sin bultos cargados</span>':'');
 }
 function despBtnTransp(nivel, clave, etiqueta, nombre, heredado, sobreAzul){
-  var estilo=sobreAzul?'background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.5)':'background:#fff;color:var(--azul);border:1px solid var(--azul)';
   var txt=nombre?('🚚 '+escUbic(nombre)+(heredado?' <span style="opacity:.75">(del estado)</span>':'')):'🚚 Asignar transporte';
-  return '<button data-n="'+nivel+'" data-c="'+escUbic(clave)+'" data-e="'+escUbic(etiqueta)+'" onclick="despAbrirAsignar(this)" style="'+estilo+';border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;white-space:nowrap">'+txt+'</button>';
+  return '<button data-n="'+nivel+'" data-c="'+escUbic(clave)+'" data-e="'+escUbic(etiqueta)+'" onclick="despAbrirAsignar(this)" class="dsp-tr'+(sobreAzul?' on-azul':'')+'">'+txt+'</button>';
 }
 // Abre el selector de transporte para un estado, una ciudad o un cliente.
 // Al asignar a un estado (o ciudad) se puede aplicar a todas sus ciudades y
@@ -10934,8 +11354,38 @@ function despArmarReporte(rows){
 }
 function despTxtBultos(n){ return n+' bulto'+(n!==1?'s':''); }
 // modo 'pantalla' (modal) o 'imprimir' (blanco y negro, para papel)
+function despHtmlReportePantalla(R, meta){
+  var fmtF=function(v){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(v||''); return m?(m[3]+'/'+m[2]+'/'+m[1]):v; };
+  var h='<div class="rp-meta">'+
+    '<div><b>Periodo</b>'+escUbic(fmtF(meta.desde)||'inicio')+' al '+escUbic(fmtF(meta.hasta)||'hoy')+'</div>'+
+    '<div><b>Mostrando</b>'+escUbic(meta.filtro||'')+'</div>'+
+    '<div><b>Transporte</b>'+escUbic(meta.transpFiltro||'Todos')+'</div>'+
+    (meta.creado?'<div class="rp-gen">Generado: '+escUbic(despFmtFechaHora(new Date(meta.creado)))+(meta.por?' por '+escUbic(meta.por):'')+'</div>':'')+'</div>';
+  if(!R.tot.rows.length) return h+'<div class="rp-empty">No hay pedidos con bultos cargados para este filtro</div>';
+  h+='<div class="dsp-stats" style="grid-template-columns:repeat(3,minmax(0,1fr))">'+
+    '<div class="dsp-stat"><div class="n">'+R.tot.rows.length+'</div><div class="l">Pedidos</div></div>'+
+    '<div class="dsp-stat"><div class="n">'+R.tot.qty+'</div><div class="l">Bultos</div></div>'+
+    '<div class="dsp-stat"><div class="n">$'+formatearNumeroConMiles(R.tot.monto,2)+'</div><div class="l">Monto</div></div></div>';
+  var nT=Object.keys(R.porTransp).sort(despOrdenTransp);
+  h+='<div class="rp-box"><div class="dsp-grp-t" style="margin-bottom:4px">Resumen por transporte</div>'+
+    nT.map(function(n){ var x=R.porTransp[n]; return '<div class="rp-trow"><span>🚚 '+escUbic(n)+'</span><span>'+x.rows.length+' pedido(s) · <strong>'+despTxtBultos(x.qty)+'</strong></span></div>'; }).join('')+'</div>';
+  R.estados.forEach(function(E){
+    h+='<div class="dsp-estado" style="margin-top:14px"><div><div class="nm">'+escUbic(E.nombre)+'</div><div class="mt">'+E.rows.length+' pedido(s) · <strong>'+despTxtBultos(E.qty)+'</strong> · $'+formatearNumeroConMiles(E.monto,2)+'</div></div></div>';
+    E.lstCiudades.forEach(function(C){
+      h+='<div class="dsp-ciudad"><div><div class="nm">'+escUbic(C.nombre)+'</div><div class="mt">'+C.rows.length+' pedido(s) · <strong>'+despTxtBultos(C.qty)+'</strong></div></div></div>';
+      C.rows.forEach(function(r){
+        h+='<div class="rp-row">'+
+          '<div class="rp-qty"><b>'+r.qty+'</b><small>bulto'+(r.qty!==1?'s':'')+'</small></div>'+
+          '<div style="min-width:0"><div class="dsp-nm">'+escUbic(r.cnom)+'</div><div class="dsp-meta">Cod '+escUbic(r.cid)+' · VEND '+escUbic(r.vend)+' · 🚚 '+escUbic(r.transp)+'</div></div>'+
+          '<div class="rp-r"><span>'+escUbic(r.fecha)+'</span><span class="mon">$'+formatearNumeroConMiles(r.monto,2)+'</span>'+(r.desp?'<span class="dsp-badge ok">Despachado</span>':'<span class="dsp-badge pen">Pendiente</span>')+'</div></div>';
+      });
+    });
+  });
+  return h;
+}
 function despHtmlReporte(R, meta, modo){
-  var imp=(modo==='imprimir');
+  if(modo!=='imprimir') return despHtmlReportePantalla(R, meta);
+  var imp=true;
   var estHdr=imp?'border:1.5px solid #000;background:#e6e6e6;color:#000;font-weight:700;font-size:13px;padding:5px 8px;margin:14px 0 4px':'background:var(--azul);color:#fff;font-weight:700;font-size:13px;padding:6px 10px;border-radius:6px;margin:12px 0 4px';
   var ciuHdr=imp?'font-size:12px;font-weight:700;margin:8px 0 2px;border-bottom:1px solid #000':'font-size:12px;font-weight:700;color:var(--azul);margin:8px 0 2px';
   var sub=imp?'#333':'#666', brd=imp?'#999':'var(--borde)';
@@ -10971,7 +11421,7 @@ function despSelectTranspReporte(){
   var v=despVal('despFiltroTransp');
   var o='<option value=""'+(v===''?' selected':'')+'>Todos los transportes</option><option value="__sin"'+(v==='__sin'?' selected':'')+'>Sin transporte</option>';
   TRANSP.lista.slice().sort(function(a,b){ return a.nombre.localeCompare(b.nombre,'es'); }).forEach(function(t){ o+='<option value="'+escUbic(t.id)+'"'+(v===t.id?' selected':'')+'>'+escUbic(t.nombre)+'</option>'; });
-  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:12px;font-weight:700">🚚 Transporte:</label><select onchange="despReporteFiltroTransp(this.value)" style="flex:1;padding:6px;border:1px solid var(--borde);border-radius:6px;font-size:13px">'+o+'</select></div>';
+  return '<div class="dsp-f" style="margin-bottom:14px"><label>🚚 Transporte del reporte</label><select onchange="despReporteFiltroTransp(this.value)">'+o+'</select></div>';
 }
 function despMetaVivo(){
   return {nombre:'', desde:despVal('despDesde'), hasta:despVal('despHasta'),
@@ -11022,20 +11472,21 @@ function despMostrarReporte(){
   var h='';
   if(vivo) h+=despSelectTranspReporte();
   else if(entry){
-    h+='<div style="font-size:12px;margin-bottom:8px;padding:6px 10px;border-radius:6px;'+(entry.estado==='despachado'?'background:#E6F4EC;color:#1E7B4F':(entry.estado==='parcial'?'background:#FCE4D6;color:#9C4221':'background:#FFF3CD;color:#856404'))+'">'+
+    h+='<div class="dsp-banner '+(entry.estado==='despachado'?'ok':(entry.estado==='parcial'?'par':'pen'))+'">'+
       (entry.estado==='despachado'?'<strong>Despachado</strong> el '+escUbic(entry.fechaDespacho||'')+(entry.despachadoPor?' por '+escUbic(entry.despachadoPor):''):(entry.estado==='parcial'?'<strong>Despachado parcialmente</strong>: quedaron pedidos pendientes':'<strong>Pendiente de despacho</strong>'))+'</div>';
   }
   h+=despHtmlReporte(R,meta,'pantalla');
   document.getElementById('despReporteContenido').innerHTML=h;
-  var b='<button class="btn btn-s" onclick="despImprimir()">🖨 Imprimir</button><button class="btn btn-s" onclick="despReporteExcel()">Excel</button>';
+  var prim='', sec='<button class="dsp-btn" onclick="despImprimir()">🖨 Imprimir</button><button class="dsp-btn" onclick="despReporteExcel()">Excel</button>';
   if(R.tot.rows.length){
-    if(vivo) b='<button class="btn btn-p" onclick="despGuardarReporte(false)">Guardar reporte</button><button class="btn btn-p" style="background:#1E7B4F" onclick="despGuardarReporte(true)">Guardar y marcar despachado</button>'+b;
+    if(vivo) prim='<button class="dsp-btn pri" onclick="despGuardarReporte(false)">Guardar reporte</button><button class="dsp-btn ok" onclick="despGuardarReporte(true)">Guardar y marcar despachado</button>';
     else {
-      if(entry && entry.estado!=='despachado') b='<button class="btn btn-p" style="background:#1E7B4F" onclick="despDespacharReporte()">Marcar todo como despachado</button>'+b;
-      b+='<button class="btn btn-s" style="color:var(--rojo)" onclick="despEliminarReporte(DESPREP.id)">Eliminar</button>';
+      if(entry && entry.estado!=='despachado') prim='<button class="dsp-btn ok" onclick="despDespacharReporte()">Marcar todo como despachado</button>';
+      sec+='<button class="dsp-btn danger" onclick="despEliminarReporte(DESPREP.id)">Eliminar</button>';
     }
   }
-  b+='<button class="btn btn-s" onclick="cerrarModal(\'mDespReporte\')">Cerrar</button>';
+  sec+='<button class="dsp-btn" onclick="cerrarModal(\'mDespReporte\')">Cerrar</button>';
+  var b='<div class="dsp-btnrow">'+prim+'</div><div class="dsp-btnrow">'+sec+'</div>';
   document.getElementById('despReporteBotones').innerHTML=b;
 }
 // ── Impresion (mismo formato, en blanco y negro) ──
@@ -11139,16 +11590,16 @@ function despAbrirGuardados(){
 }
 function despRenderGuardados(){
   var cont=document.getElementById('despGuardadosLista'); if(!cont) return;
-  if(!DESPIDX.length){ cont.innerHTML='<div style="color:#aaa;font-size:13px;text-align:center;padding:14px">Aun no hay reportes guardados. Genera un reporte y usa "Guardar reporte".</div>'; return; }
+  if(!DESPIDX.length){ cont.innerHTML='<div class="rp-empty">Aun no hay reportes guardados. Genera un reporte y usa "Guardar reporte".</div>'; return; }
   cont.innerHTML=DESPIDX.map(function(e){
-    var chip=e.estado==='despachado'?'<span class="tag" style="background:#1E7B4F;color:#fff;font-size:10px">Despachado</span>':(e.estado==='parcial'?'<span class="tag" style="background:#FCE4D6;color:#9C4221;font-size:10px">Parcial</span>':'<span class="tag" style="background:#FFF3CD;color:#856404;font-size:10px">Pendiente</span>');
-    return '<div style="border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin-bottom:6px">'+
-      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><strong style="font-size:13px">'+escUbic(e.nombre)+'</strong>'+chip+'</div>'+
-      '<div style="font-size:11px;color:#666;margin-top:2px">'+escUbic(despFmtFechaHora(new Date(e.creado)))+(e.por?' · '+escUbic(e.por):'')+'</div>'+
-      '<div style="font-size:11px;color:#555">'+e.pedidos+' pedido(s) · <strong>'+despTxtBultos(e.bultos)+'</strong> · $'+formatearNumeroConMiles(e.monto||0,2)+' · Transporte: '+escUbic(e.transpFiltro||'Todos')+'</div>'+
-      (e.estado==='despachado'&&e.fechaDespacho?'<div style="font-size:11px;color:#1E7B4F">Despachado el '+escUbic(e.fechaDespacho)+'</div>':'')+
-      '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn btn-p btn-sm" data-id="'+escUbic(e.id)+'" onclick="despAbrirGuardado(this.getAttribute(&quot;data-id&quot;))">Ver / Imprimir</button>'+
-      '<button class="btn btn-s btn-sm" style="color:var(--rojo)" data-id="'+escUbic(e.id)+'" onclick="despEliminarReporte(this.getAttribute(&quot;data-id&quot;))">Eliminar</button></div></div>';
+    var chip=e.estado==='despachado'?'<span class="dsp-badge ok">Despachado</span>':(e.estado==='parcial'?'<span class="dsp-badge par">Parcial</span>':'<span class="dsp-badge pen">Pendiente</span>');
+    return '<div class="dsp-item">'+
+      '<div class="dsp-item-h"><div class="dsp-item-t">'+escUbic(e.nombre)+'</div>'+chip+'</div>'+
+      '<div class="dsp-item-s">'+escUbic(despFmtFechaHora(new Date(e.creado)))+(e.por?' · '+escUbic(e.por):'')+'</div>'+
+      '<div class="dsp-pills"><span class="dsp-pill"><b>'+e.pedidos+'</b> pedido(s)</span><span class="dsp-pill"><b>'+despTxtBultos(e.bultos)+'</b></span><span class="dsp-pill">$'+formatearNumeroConMiles(e.monto||0,2)+'</span><span class="dsp-pill">🚚 '+escUbic(e.transpFiltro||'Todos')+'</span></div>'+
+      (e.estado==='despachado'&&e.fechaDespacho?'<div class="dsp-item-s" style="color:#1E7B4F">Despachado el '+escUbic(e.fechaDespacho)+'</div>':'')+
+      '<div class="dsp-item-b"><button class="dsp-btn sm pri" data-id="'+escUbic(e.id)+'" onclick="despAbrirGuardado(this.getAttribute(&quot;data-id&quot;))">Ver / Imprimir</button>'+
+      '<button class="dsp-btn sm danger" data-id="'+escUbic(e.id)+'" onclick="despEliminarReporte(this.getAttribute(&quot;data-id&quot;))">Eliminar</button></div></div>';
   }).join('');
 }
 function despAbrirGuardado(id){
@@ -11325,6 +11776,7 @@ function adminTab(tab){
         if(docs[2] && docs[2].exists) CUENTAS_COBRAR_FISCAL=JSON.parse(docs[2].data().data||'[]');
         if(docs[3] && docs[3].exists) DESCUENTOS_FACTURA=JSON.parse(docs[3].data().data||'[]');
       }catch(e){}
+      cxcGuardarMeta('real',docs[1]); cxcGuardarMeta('fiscal',docs[2]); cxcGuardarMeta('desc',docs[3]);
       renderResumenCxC();
     }).catch(function(){
       toast('No se pudo actualizar desde Firebase, mostrando la ultima version conocida');
@@ -16897,10 +17349,13 @@ function _cargarExcelCxCInterno(file, tipo, input){
     var docConfig=(tipo==='real'?'cuentas_cobrar_real':'cuentas_cobrar_fiscal');
     var baseActualizada=(tipo==='real'?CUENTAS_COBRAR_REAL:CUENTAS_COBRAR_FISCAL);
     estadoEl.innerHTML='<span style="color:#aaa">Guardando base '+nombreBase+'...</span>';
+    var metaAhora=new Date().toISOString();
     db.collection('config').doc(docConfig).set({
       data:JSON.stringify(baseActualizada),
-      actualizado:new Date().toISOString()
+      actualizado:metaAhora, por:VEND?VEND.codigo:''
     }).then(function(){
+      CXC_META[tipo]={fecha:metaAhora,por:VEND?VEND.codigo:''};
+      try{ renderMetaCargasCxC(); }catch(e){}
       estadoEl.innerHTML='<span style="color:#aaa">Cruzando bases real y fiscal...</span>';
       var fusion=fusionarBasesRealFiscal(CUENTAS_COBRAR_REAL, CUENTAS_COBRAR_FISCAL);
       reconciliarCxC(fusion.resultado,function(docsFinal,mantenidos,mantenidosList,liberadosList){
@@ -17004,6 +17459,7 @@ function cargarExcelDescuentos(input){
         data:JSON.stringify(fus.resultado), actualizado:new Date().toISOString(), por:VEND?VEND.codigo:''
       }).then(function(){
         DESCUENTOS_FACTURA=fus.resultado;
+        CXC_META.desc={fecha:new Date().toISOString(),por:VEND?VEND.codigo:''}; try{ renderMetaCargasCxC(); }catch(e){}
         var resumenArch=docs.length+' facturas en el archivo ('+objetivoArchivo+' al 35%'+(ignoradosArchivo?', '+ignoradosArchivo+' con otro porcentaje, no generan documento':'')+') — '+fus.nuevosList.length+' nuevas, '+fus.actualizadosList.length+' ya existian'+(diag&&diag.invalidas?' — '+diag.invalidas+' filas sin fecha/monto omitidas':'');
         if(CUENTAS_COBRAR_FISCAL.length===0){
           estadoEl.innerHTML='<span style="color:var(--verde);font-weight:600">✓ '+resumenArch+'.</span><div style="color:var(--ambar);margin-top:4px">Aun no hay facturas fiscales cargadas: los descuentos se aplicaran cuando cargues la base fiscal.</div>';
@@ -17048,6 +17504,7 @@ function renderDescuentosAdmin(){
   var res=document.getElementById('cxcDescResumen'), lista=document.getElementById('cxcDescLista');
   if(!res||!lista) return;
   var objetivo=DESCUENTOS_FACTURA.filter(esDescuentoObjetivo).length;
+  try{ renderMetaCargasCxC(); }catch(e){}
   res.textContent='Descuentos guardados: '+DESCUENTOS_FACTURA.length+' ('+objetivo+' al 35%)';
   if(DESCUENTOS_FACTURA.length===0){ lista.innerHTML='<div style="font-size:12px;color:#aaa">Aun no has cargado el archivo de descuentos.</div>'; return; }
   var docPorNumero={};
@@ -17124,6 +17581,30 @@ function recalcularCruceCxC(){
   });
 }
 
+// ═══ Ultima carga de cada base (Cuentas x Cobrar) ═══
+var CXC_META={real:null,fiscal:null,desc:null};
+function cxcGuardarMeta(clave,doc){
+  try{ var d=doc&&doc.exists?doc.data():null; CXC_META[clave]=d?{fecha:d.actualizado||'',por:d.por||''}:null; }catch(e){}
+}
+function cxcFmtFechaHora(iso){
+  if(!iso) return '';
+  var d=new Date(iso); if(isNaN(d.getTime())) return '';
+  var dd=('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
+  var hh=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+  return dd+' '+hh;
+}
+function renderMetaCargasCxC(){
+  var items=[['cxMetaReal','real',CUENTAS_COBRAR_REAL],['cxMetaFiscal','fiscal',CUENTAS_COBRAR_FISCAL],['cxMetaDesc','desc',DESCUENTOS_FACTURA]];
+  items.forEach(function(it){
+    var el=document.getElementById(it[0]); if(!el) return;
+    var n=(it[2]||[]).length, m=CXC_META[it[1]];
+    if(!n && !(m&&m.fecha)){ el.className='cx-last vacio'; el.textContent='Sin cargas registradas'; return; }
+    var f=m&&m.fecha?cxcFmtFechaHora(m.fecha):'';
+    el.className='cx-last';
+    el.innerHTML='Última carga: <b>'+(f||'fecha no registrada')+'</b>'+(m&&m.por?' · VEND '+escUbic(m.por):'')+'<br><b>'+formatearNumeroConMiles(n,0)+'</b> documento'+(n===1?'':'s')+' guardado'+(n===1?'':'s');
+  });
+}
+
 function renderResumenCxC(){
   var pendientes=CUENTAS_COBRAR.filter(function(d){ return d.saldo>0.009; });
   var totalDocs=pendientes.length;
@@ -17131,6 +17612,7 @@ function renderResumenCxC(){
   for(var i=0;i<pendientes.length;i++) totalSaldo+=pendientes[i].saldo;
   var elD=document.getElementById('cxcResumDocs'); if(elD){ elD.textContent=totalDocs; ajustarFontMetrica('cxcResumDocs',18); }
   var elS=document.getElementById('cxcResumSaldo'); if(elS){ elS.textContent=totalSaldo<0?('($'+formatearNumeroConMiles(Math.abs(totalSaldo),2)+')'):('$'+formatearNumeroConMiles(totalSaldo,2)); ajustarFontMetrica('cxcResumSaldo',18); }
+  try{ renderMetaCargasCxC(); }catch(e){}
   renderListaCxCAdmin();
 }
 
@@ -17717,9 +18199,9 @@ function renderListaCxCAdmin(){
   var el=document.getElementById('cxcListaCompleta');
   if(!el) return;
   var btnCr=document.getElementById('btnVerCrucesCxC');
-  if(btnCr) btnCr.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'inline-block':'none';
+  if(btnCr) btnCr.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'inline-flex':'none';
   var btnDep=document.getElementById('btnDepurarCxC');
-  if(btnDep) btnDep.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'inline-block':'none';
+  if(btnDep) btnDep.style.display=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'))?'inline-flex':'none';
   var qEl=document.getElementById('cxcBusqDoc');
   var q=qEl?qEl.value.toLowerCase():'';
   var docs=CUENTAS_COBRAR.filter(function(d){ return Math.abs(d.saldo)>0.009; });
@@ -17782,14 +18264,14 @@ function renderListaCxCAdmin(){
         origenTxt+=' <span class="tag" style="background:#E3F2FD;color:#1565C0;font-size:9px" title="'+d.cruces.map(function(c){ return 'Cruce de $'+c.monto+' con Doc.'+c.con+' ('+c.fecha+')'; }).join(' | ').replace(/"/g,'&quot;')+'">Cruce interno</span>';
       }
       var puedeBorrarDoc=(VEND && (VEND.codigo==='01'||VEND.codigo==='20'));
-      html+='<div style="padding:8px 0;border-bottom:1px solid var(--borde);font-size:13px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
-        '<div style="flex:1">'+
+      html+='<div class="cx-row">'+
+        '<div class="cx-rowin">'+
+        '<div class="cx-rowmain">'+
         '<div style="font-weight:600">'+nombre+' <span style="font-weight:400;color:#888">(Cod: '+d.clienteId+')</span>'+origenTxt+'</div>'+
         '<div style="font-size:11px;color:#888">Doc.'+d.numero+' | VEND '+d.vendedor+' | Vence: '+d.vencimiento+diasTxt+'</div>'+
         '<div style="font-size:13px;font-weight:700;color:'+(esCredito?'var(--verde)':'var(--azul)')+'">'+(esCredito?'($'+formatearNumeroConMiles(Math.abs(d.saldo),2)+')':'$'+formatearNumeroConMiles(d.saldo,2))+'</div>'+
         '</div>'+
-        (puedeBorrarDoc?'<div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end"><button class="btn btn-s btn-sm" style="color:var(--verde)" onclick="abrirCruzarDocs(\''+d.numero+'\')">Cruzar</button><button class="btn btn-s btn-sm" style="color:var(--azul)" onclick="confirmarEditarSaldoCxC(\''+d.numero+'\')">Editar saldo</button><button class="btn btn-s btn-sm" style="color:var(--rojo)" onclick="confirmarEliminarDocCxC(\''+d.numero+'\')">Eliminar</button></div>':'')+
+        (puedeBorrarDoc?'<div class="cx-rowbtns"><button class="btn btn-s btn-sm" style="color:var(--verde)" onclick="abrirCruzarDocs(\''+d.numero+'\')">Cruzar</button><button class="btn btn-s btn-sm" style="color:var(--azul)" onclick="confirmarEditarSaldoCxC(\''+d.numero+'\')">Editar saldo</button><button class="btn btn-s btn-sm" style="color:var(--rojo)" onclick="confirmarEliminarDocCxC(\''+d.numero+'\')">Eliminar</button></div>':'')+
         '</div>'+
       '</div>';
     }
@@ -19376,6 +19858,8 @@ function abrirDetallePagoCobro(pagoId, ev){
   // Si el toque fue sobre un boton, enlace o imagen, que haga lo suyo y no abra el detalle
   if(ev && ev.target && ev.target.closest && ev.target.closest('button, a, img')) return;
   var p=PAGOS_COBRANZA.find(function(x){return x.id===pagoId;});
+  if(!p){ p=(PAGOS_COBRANZA_TODOS||[]).find(function(x){return x.id===pagoId;}); }
+  if(!p){ p=((ULTIMO_REPORTE_COBROS_DESCUENTOS&&ULTIMO_REPORTE_COBROS_DESCUENTOS.lista)||[]).find(function(x){return x.id===pagoId;}); }
   if(!p){ toast('Pago no encontrado'); return; }
   var $=function(n){ return '$'+formatearNumeroConMiles(n||0,2); };
   var fila=function(etq, val){ return '<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px solid #f0f0f0"><span style="color:#888">'+etq+'</span><span style="text-align:right;font-weight:600">'+val+'</span></div>'; };
@@ -20544,7 +21028,7 @@ function cerrarSesion(){
 // archivo version.json con el mismo numero que APP_VERSION. Al abrir la app
 // y al cerrar sesion (pantalla de PIN, sin trabajo en curso) se compara: si
 // el publicado es distinto, la app se recarga sola con la version nueva.
-var APP_VERSION='2026-11-19-1655';
+var APP_VERSION='2026-11-21-2258';
 function revisarVersionApp(){
   try{
     if(typeof fetch!=='function') return;
