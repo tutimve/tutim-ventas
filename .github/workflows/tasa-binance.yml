@@ -1,13 +1,14 @@
 # Registra la tasa USDT/VES (Binance P2P, via Vzla.io) tres veces al dia:
-#   8:30 am, 1:00 pm y 5:00 pm hora de Caracas (UTC-4), todos los dias.
+#   ~8:30 am, ~1:00 pm y ~5:00 pm hora de Caracas (UTC-4), todos los dias.
 # El token vive SOLO en el secreto del repositorio VZLA_TOKEN; nunca en el codigo.
 name: Tasa Binance
 
 on:
   schedule:
-    - cron: '30 12 * * *'   # 8:30 am Caracas
-    - cron: '0 17 * * *'    # 1:00 pm Caracas
-    - cron: '0 21 * * *'    # 5:00 pm Caracas
+    # Minutos "raros" a proposito: GitHub retrasa o salta corridas en horas redondas
+    - cron: '37 12 * * *'   # ~8:37 am Caracas
+    - cron: '7 17 * * *'    # ~1:07 pm Caracas
+    - cron: '7 21 * * *'    # ~5:07 pm Caracas
   workflow_dispatch:         # permite correrlo a mano desde la pestana Actions
 
 permissions:
